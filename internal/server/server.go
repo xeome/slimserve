@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"slimserve/internal/config"
+	"slimserve/internal/logger"
 
 	"github.com/gin-gonic/gin"
 )
@@ -43,6 +44,9 @@ func New(cfg *config.Config) *Server {
 // setupRoutes configures the server routes
 func (s *Server) setupRoutes() {
 	handler := NewHandler(s.config)
+
+	// Add logging middleware
+	s.engine.Use(logger.Middleware())
 
 	// Add access control middleware for file serving (but skip for static assets)
 	s.engine.Use(s.accessControlMiddleware())

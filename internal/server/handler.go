@@ -9,10 +9,10 @@ import (
 	"sort"
 	"strings"
 
-	"slimserve/internal/files"
-	"slimserve/web"
-
 	"slimserve/internal/config"
+	"slimserve/internal/files"
+	"slimserve/internal/logger"
+	"slimserve/web"
 
 	"github.com/gin-gonic/gin"
 )
@@ -89,12 +89,14 @@ func (h *Handler) ServeFiles(c *gin.Context) {
 	// Map absolute URL path to relative filesystem path
 	relPath := strings.TrimPrefix(cleanPath, "/")
 
-	// Check for hidden files/directories (components starting with ".")
-	pathComponents := strings.Split(strings.Trim(cleanPath, "/"), "/")
-	for _, component := range pathComponents {
-		if component != "" && strings.HasPrefix(component, ".") {
-			c.AbortWithStatus(http.StatusForbidden)
-			return
+	// Check for hidden files/directories (components starting with ".") if enabled
+	if h.config.DisableDotFiles {
+		pathComponents := strings.Split(strings.Trim(cleanPath, "/"), "/")
+		for _, component := range pathComponents {
+			if component != "" && strings.HasPrefix(component, ".") {
+				c.AbortWithStatus(http.StatusForbidden)
+				return
+			}
 		}
 	}
 
@@ -147,12 +149,18 @@ func (h *Handler) ServeFiles(c *gin.Context) {
 func (h *Handler) serveDirectory(c *gin.Context, fullPath, requestPath string) {
 	entries, err := os.ReadDir(fullPath)
 	if err != nil {
+		logger.Log.Error().Err(err).Str("path", fullPath).Msg("Error reading directory")
 		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
 
 	var files []FileItem
 	for _, entry := range entries {
+		// Skip dot files if configured to do so
+		if h.config.DisableDotFiles && strings.HasPrefix(entry.Name(), ".") {
+			continue
+		}
+
 		info, err := entry.Info()
 		if err != nil {
 			continue
@@ -197,6 +205,7 @@ func (h *Handler) serveDirectory(c *gin.Context, fullPath, requestPath string) {
 		return
 	}
 	if err := h.tmpl.ExecuteTemplate(c.Writer, "listing.html", data); err != nil {
+		logger.Log.Error().Err(err).Str("template", "listing.html").Msg("Error executing template")
 		c.AbortWithStatus(http.StatusInternalServerError)
 	}
 }

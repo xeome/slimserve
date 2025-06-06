@@ -10,7 +10,9 @@ import (
 	"mime"
 	"os"
 	"path/filepath"
+	"slimserve/internal/logger"
 	"strings"
+	"time"
 )
 
 // Generate creates a thumbnail for the given source file path with the specified maximum dimension.
@@ -23,14 +25,19 @@ import (
 // Supported formats: JPEG, PNG, GIF (detected via MIME type)
 // Files larger than 5MB are skipped to prevent memory issues.
 func Generate(srcPath string, maxDim int) (string, error) {
+	start := time.Now()
+	logger.Debugf("Starting thumbnail generation for %s (max dimension: %d)", srcPath, maxDim)
+
 	// Check file size first - skip if > 5MB
 	info, err := os.Stat(srcPath)
 	if err != nil {
+		logger.Errorf("Failed to stat source file %s: %v", srcPath, err)
 		return "", fmt.Errorf("failed to stat source file: %w", err)
 	}
 
 	const maxFileSize = 5 * 1024 * 1024 // 5MB
 	if info.Size() > maxFileSize {
+		logger.Errorf("File too large for thumbnail generation: %s (%d bytes)", srcPath, info.Size())
 		return "", fmt.Errorf("file too large for thumbnail generation: %d bytes", info.Size())
 	}
 
@@ -73,15 +80,19 @@ func Generate(srcPath string, maxDim int) (string, error) {
 	// Check if cached thumbnail exists and is newer than source
 	if thumbInfo, err := os.Stat(thumbPath); err == nil {
 		if thumbInfo.ModTime().After(info.ModTime()) || thumbInfo.ModTime().Equal(info.ModTime()) {
+			logger.Debugf("Using cached thumbnail for %s", srcPath)
 			return thumbPath, nil
 		}
 	}
 
 	// Generate thumbnail
 	if err := generateThumbnail(srcPath, thumbPath, maxDim, outputExt); err != nil {
+		logger.Errorf("Failed to generate thumbnail for %s: %v", srcPath, err)
 		return "", fmt.Errorf("failed to generate thumbnail: %w", err)
 	}
 
+	duration := time.Since(start)
+	logger.Infof("Thumbnail generated successfully for %s (took %v)", srcPath, duration)
 	return thumbPath, nil
 }
 

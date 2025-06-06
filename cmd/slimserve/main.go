@@ -6,6 +6,7 @@ import (
 	"log"
 
 	"slimserve/internal/config"
+	"slimserve/internal/logger"
 	"slimserve/internal/server"
 )
 
@@ -36,12 +37,17 @@ func main() {
 		cfg.Directories = []string(dirs) // preserve default ["."]
 	}
 
+	// Initialize logger
+	if err := logger.Init(cfg); err != nil {
+		log.Fatalf("Failed to initialize logger: %v", err)
+	}
+
 	srv := server.New(cfg)
 
 	addr := fmt.Sprintf(":%d", *port)
-	log.Printf("Starting SlimServe on %s, serving directories: %v", addr, cfg.Directories)
+	logger.Infof("Starting SlimServe on %s, serving directories: %v", addr, cfg.Directories)
 
 	if err := srv.Run(addr); err != nil {
-		log.Fatal("Failed to start server:", err)
+		logger.Log.Fatal().Err(err).Msg("Failed to start server")
 	}
 }
