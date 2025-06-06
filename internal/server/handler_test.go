@@ -114,6 +114,33 @@ func TestHandler_ServeFiles(t *testing.T) {
 			path:           "/test/../../../etc/passwd",
 			expectedStatus: http.StatusForbidden,
 		},
+		{
+			name:           "static_favicon_ico",
+			path:           "/static/favicon.ico",
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "static_main_js",
+			path:           "/static/js/main.js",
+			expectedStatus: http.StatusOK,
+			checkContains:  []string{"slimserveUI"},
+		},
+		{
+			name:           "static_custom_css",
+			path:           "/static/css/custom.css",
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "static_heroicons_js",
+			path:           "/static/js/heroicons.js",
+			expectedStatus: http.StatusOK,
+			checkContains:  []string{"window.heroicons", "outline"},
+		},
+		{
+			name:           "non_existent_static_file",
+			path:           "/static/nonexistent.js",
+			expectedStatus: http.StatusNotFound,
+		},
 	}
 
 	for _, tt := range tests {

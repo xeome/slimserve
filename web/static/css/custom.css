@@ -1,0 +1,138 @@
+/* Theme transition and icon visibility */
+html,
+body {
+    transition: background-color 300ms ease-in-out, color 300ms ease-in-out;
+}
+
+/* Default state - show moon icon (for switching to dark), hide sun icon */
+.icon-moon {
+    display: inline-block;
+}
+
+.icon-sun {
+    display: none;
+}
+
+/* Dark theme - show sun icon (for switching to light), hide moon icon */
+html[data-theme="dark"] .icon-sun {
+    display: inline-block;
+}
+
+html[data-theme="dark"] .icon-moon {
+    display: none;
+}
+
+/* SlimServe Custom Styles - Tailwind Compatible */
+
+/* Additional utilities and overrides */
+
+/* Smooth transitions for theme changes */
+* {
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+/* File download hint */
+.file-row-hint {
+    position: relative;
+}
+
+.file-row-hint::after {
+    content: "Ctrl+Click to download";
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--background);
+    border: 1px solid var(--border);
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    border-radius: 0.25rem;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+    z-index: 50;
+}
+
+.file-row-hint:hover::after {
+    opacity: 1;
+}
+
+/* Scrollbar styling for dark theme */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--background);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--muted);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--muted-foreground);
+}
+
+/* Focus styles for accessibility */
+.focus\:ring-2:focus {
+    box-shadow: 0 0 0 2px var(--ring);
+}
+
+/* Print styles */
+@media print {
+    .no-print {
+        display: none !important;
+    }
+}
+
+/* Container and table styles for better layout and alignment */
+.slimserve-container {
+    max-width: 90rem;
+}
+
+@media (max-width: 1280px) {
+    .slimserve-container {
+        max-width: 100%;
+    }
+}
+
+.slimserve-table th,
+.slimserve-table td {
+    padding-left: 1rem;
+    padding-right: 1rem;
+    vertical-align: middle;
+    text-align: left;
+}
+
+.slimserve-table {
+    table-layout: fixed;
+    width: 100%;
+
+    /* List view filename truncation */
+    .slimserve-table td.truncate {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* Grid view card square aspect ratio and polish */
+    .grid-card {
+        aspect-ratio: 1 / 1;
+        display: flex;
+        flex-direction: column;
+    }
+
+    /* Grid card content adjustments */
+    .grid-card>h3 {
+        margin-top: auto;
+        padding: 0 0.5rem;
+        text-align: center;
+    }
+
+    /* Subtle card hover polish */
+    /* Already applied via utility classes in template */
+}

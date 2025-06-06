@@ -1,44 +1,82 @@
 {{define "base"}}
 <!DOCTYPE html>
-<html lang="en" data-mode="dark">
+<html lang="en">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="SlimServe - Lightweight File Server">
-    <title>{{if .Title}}{{.Title}} - {{end}}SlimServe</title>
-    <!-- Local FrankenUI & UIkit with CDN fallback -->
-    <link rel="stylesheet" href="/static/css/theme.css">
-    <link rel="stylesheet" href="/static/css/franken-ui.min.css"
-        onerror="this.onerror=null;this.href='https://cdn.jsdelivr.net/gh/franken-ui/franken-ui@2.0.0/dist/franken-ui.min.css'">
-    <link rel="stylesheet" href="/static/css/utilities.css"
-        onerror="this.onerror=null;this.href='https://cdn.jsdelivr.net/npm/franken-ui@2.0.0/dist/css/utilities.min.css'">
-    <script src="/static/js/core.iife.js" type="module"
-        onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/franken-ui@2.0.0/dist/js/core.iife.js'"></script>
-    <script src="/static/js/icon.iife.js" type="module"
-        onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/franken-ui@2.0.0/dist/js/icon.iife.js'"></script>
-    <script src="/static/js/main.js" type="module"></script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="description" content="SlimServe – Lightweight File Server" />
+    <title>{{if .Title}}{{.Title}} — {{end}}SlimServe</title>
+
+    <!-- Theme variables -->
+    <link rel="stylesheet" href="/static/css/theme.css" />
+
+    <!-- Tailwind CSS 4 with custom configuration -->
+    <!-- TODO: Replace CDN Tailwind with built CSS for production -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="icon" href="/static/favicon.ico" sizes="any">
+    <style type="text/tailwindcss">
+        @theme {
+            --color-background: hsl(var(--background));
+            --color-foreground: hsl(var(--foreground));
+            --color-card: hsl(var(--card));
+            --color-card-foreground: hsl(var(--card-foreground));
+            --color-popover: hsl(var(--popover));
+            --color-popover-foreground: hsl(var(--popover-foreground));
+            --color-primary: hsl(var(--primary));
+            --color-primary-foreground: hsl(var(--primary-foreground));
+            --color-secondary: hsl(var(--secondary));
+            --color-secondary-foreground: hsl(var(--secondary-foreground));
+            --color-muted: hsl(var(--muted));
+            --color-muted-foreground: hsl(var(--muted-foreground));
+            --color-accent: hsl(var(--accent));
+            --color-accent-foreground: hsl(var(--accent-foreground));
+            --color-destructive: hsl(var(--destructive));
+            --color-destructive-foreground: hsl(var(--destructive-foreground));
+            --color-border: hsl(var(--border));
+            --color-input: hsl(var(--input));
+            --color-ring: hsl(var(--ring));
+            --border-radius: var(--radius);
+        }
+    </style>
+
+    <!-- Custom styles -->
+    <link rel="stylesheet" href="/static/css/custom.css" />
+
+    <!-- Main JS -->
+    <script src="/static/js/main.js"></script>
+
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+    <!-- Local Heroicons fallback -->
+    <script src="/static/js/heroicons.js"></script>
 </head>
 
-<body class="min-h-screen bg-background text-foreground antialiased">
+<body class="bg-background font-geist-sans text-foreground antialiased">
+
     <!-- Theme Toggle Button -->
     <button id="theme-toggle"
-        class="fixed top-4 right-4 z-50 uk-btn uk-btn-default uk-btn-small flex items-center space-x-1 shadow-lg"
-        title="Toggle theme">
-        <svg id="theme-icon-dark" class="w-4 h-4 hidden" fill="currentColor" viewBox="0 0 20 20">
-            <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path>
+        class="fixed top-4 right-4 z-50 p-2 px-3 rounded-md border border-border bg-background hover:bg-accent hover:text-accent-foreground transition-colors"
+        title="Toggle theme" aria-label="Toggle theme" aria-pressed="false">
+        <!-- Moon icon (for dark theme) -->
+        <svg class="icon-moon h-4 w-4 transition-transform" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+            <path d="M17.293 13.293A8 8 0 016.707 2.707a8 8 0 1010.586 10.586z" />
         </svg>
-        <svg id="theme-icon-light" class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-            <path fill-rule="evenodd"
-                d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z"
-                clip-rule="evenodd"></path>
+        <!-- Sun icon (for light theme) -->
+        <svg class="icon-sun h-4 w-4 transition-transform" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+            <path fill-rule="evenodd" clip-rule="evenodd"
+                d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" />
         </svg>
     </button>
 
-    <main class="container mx-auto max-w-7xl px-4 py-6">
-        {{template "content" .}}
+    <!-- Main Content Container -->
+    <main class="min-h-screen md:bg-muted px-4 md:px-10">
+        <!-- Content Area, centered horizontally with max-width -->
+        <div class="md:bg-muted flex min-h-screen items-center justify-center p-4 md:p-10">
+            {{template "content" .}}
+        </div>
     </main>
-
 </body>
 
 </html>

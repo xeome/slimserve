@@ -314,6 +314,8 @@ func (h *Handler) serveStaticFile(c *gin.Context, requestPath string) {
 		c.Header("Content-Type", "image/gif")
 	case ".svg":
 		c.Header("Content-Type", "image/svg+xml")
+	case ".ico":
+		c.Header("Content-Type", "image/x-icon")
 	default:
 		c.Header("Content-Type", "application/octet-stream")
 	}

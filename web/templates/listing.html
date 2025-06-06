@@ -3,132 +3,294 @@
 {{end}}
 
 {{define "content"}}
-<!-- Header -->
-<header class="mb-6">
-    <div class="flex items-center justify-between flex-wrap gap-4">
-        <div>
-            <h1 class="uk-h2 m-0">{{.Title}}</h1>
-            <nav class="mt-2">
-                <ul class="flex items-center space-x-2 text-sm text-muted-foreground">
-                    <li><a href="/" class="uk-link flex items-center"><svg class="w-4 h-4" fill="currentColor"
-                                viewBox="0 0 20 20">
-                                <path
-                                    d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z">
-                                </path>
-                            </svg></a></li>
-                    {{range .PathSegments}}
-                    <li><span class="text-muted-foreground">/</span></li>
-                    <li><a href="{{.URL}}" class="uk-link">{{.Name}}</a></li>
-                    {{end}}
-                </ul>
-            </nav>
-        </div>
-        <div class="text-muted-foreground">
-            {{len .Files}} items
-        </div>
-    </div>
-</header>
+<div class="slimserve-container w-full max-w-7xl bg-card border border-border rounded-lg shadow-sm"
+    x-data="slimserveUI()">
 
-<!-- Controls -->
-<section class="mb-6">
-    <div class="flex items-center justify-between flex-wrap gap-4">
-        <!-- View Toggle -->
-        <div class="uk-tab" data-uk-tab>
-            <ul class="flex space-x-1">
-                <li><a href="#" data-view="grid"
-                        class="flex items-center space-x-2 px-3 py-2 rounded text-muted-foreground hover:text-foreground transition-colors"><svg
-                            class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                            <path
-                                d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z">
-                            </path>
-                        </svg><span>Grid</span></a></li>
-                <li class="uk-active"><a href="#" data-view="list"
-                        class="flex items-center space-x-2 px-3 py-2 rounded bg-primary text-primary-foreground"><svg
-                            class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd"
-                                d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z"
-                                clip-rule="evenodd"></path>
-                        </svg><span>List</span></a></li>
-            </ul>
-        </div>
-        <!-- Filter Controls -->
-        <div class="uk-filter" data-uk-filter="target: .file-container">
-            <div class="flex space-x-1">
-                <a href="#" data-uk-filter-control class="uk-btn uk-btn-primary uk-btn-small">All</a>
-                <a href="#" data-uk-filter-control="[data-type='folder']"
-                    class="uk-btn uk-btn-default uk-btn-small">Folders</a>
-                <a href="#" data-uk-filter-control="[data-type='image']"
-                    class="uk-btn uk-btn-default uk-btn-small">Images</a>
-                <a href="#" data-uk-filter-control="[data-type='document']"
-                    class="uk-btn uk-btn-default uk-btn-small">Documents</a>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- File List/Grid -->
-<section id="grid-view" class="file-container">
-    <div class="space-y-2">
-        {{range .Files}}
-        <div data-type="{{.Type}}"
-            class="fr-widget border-border bg-card text-card-foreground border p-4 flex items-center justify-between hover:bg-accent/50 transition-colors">
-            <div class="flex items-center space-x-3 flex-1 min-w-0">
-                <div class="flex-shrink-0">
-                    {{if eq .Icon "folder"}}
-                    <svg class="w-5 h-5 text-primary" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"></path>
-                    </svg>
-                    {{else if eq .Icon "image"}}
-                    <svg class="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-                        <path fill-rule="evenodd"
-                            d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z"
-                            clip-rule="evenodd"></path>
-                    </svg>
-                    {{else}}
-                    <svg class="w-5 h-5 text-muted-foreground" fill="currentColor" viewBox="0 0 20 20">
-                        <path fill-rule="evenodd"
-                            d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z"
-                            clip-rule="evenodd"></path>
-                    </svg>
-                    {{end}}
-                </div>
-                <div class="min-w-0 flex-1">
-                    <a href="{{.URL}}" class="uk-link font-medium block truncate">{{.Name}}</a>
-                    <p class="text-muted-foreground text-sm">{{.Size}}, {{.ModTime}}</p>
-                </div>
-            </div>
-            <div class="flex-shrink-0">
-                {{if .IsFolder}}
-                <a href="{{.URL}}" class="uk-btn uk-btn-primary uk-btn-small flex items-center space-x-1">
-                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"></path>
-                    </svg>
-                    <span>Open</span>
-                </a>
-                {{else}}
-                <a href="{{.URL}}" class="uk-btn uk-btn-default uk-btn-small flex items-center space-x-1" download>
-                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                        <path fill-rule="evenodd"
-                            d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z"
-                            clip-rule="evenodd"></path>
-                    </svg>
-                    <span>Download</span>
-                </a>
+    <!-- Header Section -->
+    <header class="p-6 border-b border-border">
+        <div class="flex items-center justify-between flex-wrap gap-4">
+            <div class="flex-1 min-w-0">
+                <h1 class="text-2xl font-semibold text-foreground mb-2">{{.Title}}</h1>
+                {{if .PathSegments}}
+                <nav aria-label="Breadcrumb">
+                    <ol class="flex items-center space-x-2 text-sm text-muted-foreground">
+                        <li>
+                            <a href="/" class="hover:text-foreground transition-colors" aria-label="Home">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M8 5a2 2 0 012-2h4a2 2 0 012 2v3H8V5z" />
+                                </svg>
+                            </a>
+                        </li>
+                        {{range .PathSegments}}
+                        <li class="flex items-center">
+                            <svg class="h-4 w-4 text-muted-foreground mx-2" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd"
+                                    d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
+                                    clip-rule="evenodd" />
+                            </svg>
+                            <a href="{{.URL}}" class="hover:text-foreground transition-colors">{{.Name}}</a>
+                        </li>
+                        {{end}}
+                    </ol>
+                </nav>
                 {{end}}
             </div>
+            <div class="flex-shrink-0">
+                <span
+                    class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-secondary text-secondary-foreground">
+                    {{len .Files}} items
+                </span>
+            </div>
         </div>
-        {{end}}
-    </div>
-</section>
+    </header>
 
-<!-- Empty State -->
-{{if not .Files}}
-<div class="text-center py-12">
-    <svg class="w-16 h-16 mx-auto text-muted-foreground mb-4" fill="currentColor" viewBox="0 0 20 20">
-        <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"></path>
-    </svg>
-    <h3 class="uk-h4 mb-2">This folder is empty</h3>
-    <p class="text-muted-foreground">No files or folders to display</p>
+    <!-- Toolbar Section -->
+    <section class="p-6 border-b border-border">
+        <div class="flex items-center justify-between flex-wrap gap-4 mb-4">
+
+            <!-- View Toggle -->
+            <div class="flex rounded-md border border-border bg-background p-1">
+                <button @click="setView('grid')"
+                    :class="view === 'grid' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'"
+                    class="flex items-center px-3 py-1.5 text-sm font-medium rounded-sm transition-colors">
+                    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <rect x="3" y="3" width="7" height="7" />
+                        <rect x="14" y="3" width="7" height="7" />
+                        <rect x="14" y="14" width="7" height="7" />
+                        <rect x="3" y="14" width="7" height="7" />
+                    </svg>
+                    <span class="hidden sm:inline">Grid</span>
+                </button>
+                <button @click="setView('list')"
+                    :class="view === 'list' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'"
+                    class="flex items-center px-3 py-1.5 text-sm font-medium rounded-sm transition-colors">
+                    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                    </svg>
+                    <span class="hidden sm:inline">List</span>
+                </button>
+            </div>
+
+            <!-- Filter Buttons -->
+            <div class="flex flex-wrap gap-2" role="group" aria-label="Filter files">
+                <button @click="setFilter('all')"
+                    :class="filter === 'all' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'"
+                    class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors">
+                    All
+                </button>
+                <button @click="setFilter('folder')"
+                    :class="filter === 'folder' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'"
+                    class="flex items-center px-3 py-1.5 text-sm font-medium rounded-md transition-colors">
+                    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M8 5a2 2 0 012-2h4a2 2 0 012 2v3H8V5z" />
+                    </svg>
+                    Folders
+                </button>
+                <button @click="setFilter('image')"
+                    :class="filter === 'image' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'"
+                    class="flex items-center px-3 py-1.5 text-sm font-medium rounded-md transition-colors">
+                    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    Images
+                </button>
+                <button @click="setFilter('document')"
+                    :class="filter === 'document' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'"
+                    class="flex items-center px-3 py-1.5 text-sm font-medium rounded-md transition-colors">
+                    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Documents
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- File Listing Container -->
+    <div class="p-6">
+
+        <!-- List View (Table) -->
+        <div x-show="view === 'list'" class="overflow-x-auto sm:overflow-visible">
+            {{if .Files}}
+            <table class="slimserve-table min-w-full table-fixed w-full">
+                <thead>
+                    <tr class="border-b border-border text-left">
+                        <th class="w-12 px-4 pb-3 text-sm font-medium text-muted-foreground text-left">Type</th>
+                        <th class="px-4 pb-3 text-sm font-medium text-muted-foreground text-left">Name</th>
+                        <th class="px-4 pb-3 text-sm font-medium text-muted-foreground text-left hidden sm:table-cell">
+                            Size</th>
+                        <th class="px-4 pb-3 text-sm font-medium text-muted-foreground text-left hidden md:table-cell">
+                            Modified</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-border">
+                    {{range .Files}}
+                    <tr x-show="filter === 'all' || filter === '{{.Type}}'"
+                        class="hover:bg-muted/50 transition-colors cursor-pointer group"
+                        @click="window.location.href='{{.URL}}'">
+
+                        <td class="px-4 py-3 text-left">
+                            {{if eq .Icon "folder"}}
+                            <svg class="h-5 w-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M8 5a2 2 0 012-2h4a2 2 0 012 2v3H8V5z" />
+                            </svg>
+                            {{else if eq .Icon "image"}}
+                            <svg class="h-5 w-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            {{else if eq .Icon "file-pdf"}}
+                            <svg class="h-5 w-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                            </svg>
+                            {{else if eq .Icon "file-text"}}
+                            <svg class="h-5 w-5 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            {{else if eq .Icon "archive"}}
+                            <svg class="h-5 w-5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                            </svg>
+                            {{else if eq .Icon "video"}}
+                            <svg class="h-5 w-5 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                            {{else if eq .Icon "audio"}}
+                            <svg class="h-5 w-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                            </svg>
+                            {{else}}
+                            <svg class="h-5 w-5 text-muted-foreground" fill="none" stroke="currentColor"
+                                viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            {{end}}
+                        </td>
+
+                        <td title="{{.Name}}"
+                            class="truncate px-4 py-3 font-medium text-foreground group-hover:text-primary text-left">
+                            {{.Name}}
+                        </td>
+
+                        <td class="px-4 py-3 text-sm text-muted-foreground text-left hidden sm:table-cell">{{.Size}}
+                        </td>
+
+                        <td class="px-4 py-3 text-sm text-muted-foreground text-left hidden md:table-cell">{{.ModTime}}
+                        </td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+            {{else}}
+            <!-- Empty State for List View -->
+            <div class="text-center py-12">
+                <svg class="mx-auto h-12 w-12 text-muted-foreground" fill="none" stroke="currentColor"
+                    viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M8 5a2 2 0 012-2h4a2 2 0 012 2v3H8V5z" />
+                </svg>
+                <h3 class="mt-2 text-sm font-medium text-foreground">This folder is empty</h3>
+                <p class="mt-1 text-sm text-muted-foreground">No files or folders to display</p>
+            </div>
+            {{end}}
+        </div>
+
+        <!-- Grid View -->
+        <div x-show="view === 'grid'" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            {{range .Files}}
+            <div x-show="filter === 'all' || filter === '{{.Type}}'" class="group">
+                <a href="{{.URL}}" class="block">
+                    <div
+                        class="bg-card border border-border rounded-lg p-3 hover:bg-accent hover:border-accent-foreground/20 transition-colors transition-transform duration-200 transform hover:scale-105 hover:shadow-lg grid-card">
+                        <div class="flex justify-center mb-3">
+                            {{if eq .Icon "folder"}}
+                            <svg class="h-8 w-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M8 5a2 2 0 012-2h4a2 2 0 012 2v3H8V5z" />
+                            </svg>
+                            {{else if eq .Icon "image"}}
+                            <svg class="h-8 w-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            {{else if eq .Icon "file-pdf"}}
+                            <svg class="h-8 w-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                            </svg>
+                            {{else if eq .Icon "file-text"}}
+                            <svg class="h-8 w-8 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            {{else if eq .Icon "archive"}}
+                            <svg class="h-8 w-8 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                            </svg>
+                            {{else if eq .Icon "video"}}
+                            <svg class="h-8 w-8 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                            {{else if eq .Icon "audio"}}
+                            <svg class="h-8 w-8 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                            </svg>
+                            {{else}}
+                            <svg class="h-8 w-8 text-muted-foreground" fill="none" stroke="currentColor"
+                                viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            {{end}}
+                        </div>
+                        <h3 title="{{.Name}}"
+                            class="text-sm font-medium text-foreground truncate group-hover:text-primary">{{.Name}}</h3>
+                        <p class="text-xs text-muted-foreground mt-1">{{.Size}}</p>
+                    </div>
+                </a>
+            </div>
+            {{end}}
+
+            <!-- Empty State for Grid View -->
+            {{if not .Files}}
+            <div class="col-span-full text-center py-12">
+                <svg class="mx-auto h-12 w-12 text-muted-foreground" fill="none" stroke="currentColor"
+                    viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M8 5a2 2 0 012-2h4a2 2 0 012 2v3H8V5z" />
+                </svg>
+                <h3 class="mt-2 text-sm font-medium text-foreground">This folder is empty</h3>
+                <p class="mt-1 text-sm text-muted-foreground">No files or folders to display</p>
+            </div>
+            {{end}}
+        </div>
+    </div>
 </div>
-{{end}}
 {{end}}

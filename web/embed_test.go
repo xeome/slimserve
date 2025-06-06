@@ -8,10 +8,10 @@ import (
 )
 
 func TestEmbeddedAssets(t *testing.T) {
-	// Test that CSS file is embedded
-	cssFile, err := TemplateFS.ReadFile("static/css/main.css")
+	// Test that CSS files are embedded
+	cssFile, err := TemplateFS.ReadFile("static/css/theme.css")
 	if err != nil {
-		t.Fatalf("Failed to read embedded CSS file: %v", err)
+		t.Fatalf("Failed to read embedded theme CSS file: %v", err)
 	}
 
 	if len(cssFile) == 0 {
