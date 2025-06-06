@@ -1,0 +1,256 @@
+/* ------------------------------------------------------------------
+   SHADCN-STYLE PALETTE – BLACK BACKGROUND, DARK-BLUE ACCENT
+   ------------------------------------------------------------------ */
+
+:root {
+    /* ---------- Core surfaces ---------- */
+    --background: 0 0% 0%;
+    /* #000 */
+    --foreground: 218 9% 90%;
+    /* light grey-blue on black */
+
+    --card: 0 0% 4%;
+    /* #0a0a0a */
+    --card-foreground: var(--foreground);
+
+    --popover: 0 0% 6%;
+    --popover-foreground: var(--foreground);
+
+    /* ---------- Brand / interactive ---------- */
+    --primary: 217 90% 56%;
+    /* 🌌  blue-600  (#2563eb)  */
+    --primary-foreground: 0 0% 100%;
+
+    /* ---------- Support / subtle surfaces ---- */
+    --secondary: 218 13% 18%;
+    /* blue-tinted “elevated” grey   */
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 218 10% 14%;
+    /* quiet backgrounds / skeletons */
+    --muted-foreground: 218 12% 55%;
+
+    --accent: 217 26% 24%;
+    /* slightly lighter than `muted` */
+    --accent-foreground: var(--foreground);
+
+    --destructive: 0 85% 55%;
+    /* red — leave as-is */
+    --destructive-foreground: 0 0% 100%;
+
+    /* ---------- Borders, inputs, focus ring -- */
+    --border: 215 12% 20%;
+    --input: var(--border);
+    --ring: var(--primary);
+
+    /* ---------- Radius ---------------------- */
+    --radius: 0.5rem;
+}
+
+/* ------------------------------------------------------------------
+   OPTIONAL LIGHT THEME
+   ------------------------------------------------------------------ */
+.light {
+    --background: 0 0% 100%;
+    --foreground: 222 47% 11%;
+    /* slate-900 */
+
+    --card: var(--background);
+    --card-foreground: var(--foreground);
+
+    --popover: var(--background);
+    --popover-foreground: var(--foreground);
+
+    --primary: 217 90% 56%;
+    /* same blue */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 210 40% 96%;
+    /* slate-100 */
+    --secondary-foreground: 222 47% 11%;
+
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+
+    --accent: 210 40% 96%;
+    --accent-foreground: 222 47% 11%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214 32% 91%;
+    --input: var(--border);
+    --ring: var(--primary);
+}
+
+/* ------------------------------------------------------------------
+   THEME TOGGLE BUTTON
+   ------------------------------------------------------------------ */
+
+#theme-toggle {
+    backdrop-filter: blur(8px);
+    background-color: hsl(var(--card) / 0.8);
+    border: 1px solid hsl(var(--border) / 0.5);
+    transition: all 0.2s ease;
+}
+
+#theme-toggle:hover {
+    background-color: hsl(var(--accent));
+    transform: scale(1.05);
+}
+
+/* ------------------------------------------------------------------
+   VIEW LAYOUTS - GRID AND LIST VIEWS
+   ------------------------------------------------------------------ */
+
+/* Default list view - vertical stack */
+.file-container .space-y-2>div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+}
+
+/* Grid view - responsive grid layout */
+.file-container.grid-view .space-y-2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1rem;
+}
+
+.file-container.grid-view .space-y-2>div {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    margin-bottom: 0;
+    min-height: 120px;
+}
+
+.file-container.grid-view .space-y-2>div .flex.items-center {
+    flex-direction: column;
+    text-align: center;
+    padding: 1rem;
+}
+
+.file-container.grid-view .space-y-2>div .flex-shrink-0:last-child {
+    margin-top: auto;
+    padding: 0 1rem 1rem;
+}
+
+/* List view specific - horizontal layout */
+.file-container.list-view .space-y-2>div {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+
+    /* Container spacing for mobile */
+    .container {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+
+    /* Mobile header layout */
+    .mb-6 .flex {
+        flex-direction: column;
+        align-items: flex-start !important;
+        gap: 1rem;
+    }
+
+    /* Mobile controls - stack vertically */
+    .mb-6:nth-of-type(2) .flex {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 1rem;
+    }
+
+    /* View toggle and filter buttons full width on mobile */
+    .uk-tab,
+    .uk-filter>div {
+        width: 100%;
+    }
+
+    .uk-tab ul,
+    .uk-filter>div {
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+
+    /* Grid view - single column on mobile */
+    .file-container.grid-view .space-y-2 {
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+    }
+
+    /* File cards - optimize for mobile */
+    .file-container .space-y-2>div {
+        padding: 0.75rem;
+        flex-direction: column;
+        align-items: stretch;
+        text-align: center;
+        gap: 0.75rem;
+    }
+
+    .file-container .space-y-2>div .flex.items-center {
+        flex-direction: column;
+        text-align: center;
+        gap: 0.5rem;
+        align-items: center;
+    }
+
+    .file-container .space-y-2>div .flex-shrink-0:last-child {
+        margin-top: 0;
+        align-self: center;
+    }
+
+    /* Mobile typography */
+    .uk-h2 {
+        font-size: 1.5rem;
+    }
+
+    /* Breadcrumb mobile optimization */
+    nav ul {
+        flex-wrap: wrap;
+        gap: 0.25rem;
+    }
+
+    /* Theme toggle mobile positioning */
+    #theme-toggle {
+        top: 1rem;
+        right: 1rem;
+        scale: 0.9;
+    }
+}
+
+/* Small mobile devices */
+@media (max-width: 480px) {
+    .container {
+        padding-left: 0.75rem;
+        padding-right: 0.75rem;
+    }
+
+    /* Even smaller buttons on tiny screens */
+    .uk-btn-small {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+    }
+
+    /* Compact file cards */
+    .file-container .space-y-2>div {
+        padding: 0.5rem;
+    }
+
+    /* Stack filter buttons vertically on very small screens */
+    .uk-filter>div {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .uk-filter>div>a {
+        width: 100%;
+        text-align: center;
+    }
+}
