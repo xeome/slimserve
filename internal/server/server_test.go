@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slimserve/internal/config"
 	"strings"
 	"testing"
 	"time"
@@ -33,7 +34,13 @@ func TestServerIntegration(t *testing.T) {
 	}
 
 	// Create server
-	srv := New([]string{tmpDir})
+	cfg := &config.Config{
+		Host:            "localhost",
+		Port:            8080,
+		Directories:     []string{tmpDir},
+		DisableDotFiles: true,
+	}
+	srv := New(cfg)
 
 	// Find available port
 	listener, err := net.Listen("tcp", ":0")
@@ -141,4 +148,23 @@ func TestServerIntegration(t *testing.T) {
 			t.Fatalf("Expected status 403 for path traversal attempt, got %d", resp.StatusCode)
 		}
 	})
+}
+
+func TestServerWithEmptyDirectories(t *testing.T) {
+	// Test that server handles empty Directories config gracefully
+	cfg := &config.Config{
+		Host:            "localhost",
+		Port:            8080,
+		Directories:     []string{}, // Empty directories
+		DisableDotFiles: true,
+	}
+	srv := New(cfg)
+
+	// Verify the server config was updated to include current directory
+	if len(srv.config.Directories) == 0 {
+		t.Error("Server config should have been updated with default directory")
+	}
+	if srv.config.Directories[0] != "." {
+		t.Errorf("Expected default directory to be '.', got '%s'", srv.config.Directories[0])
+	}
 }

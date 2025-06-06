@@ -9,14 +9,18 @@ import (
 	"sort"
 	"strings"
 
+	"slimserve/internal/files"
 	"slimserve/web"
+
+	"slimserve/internal/config"
 
 	"github.com/gin-gonic/gin"
 )
 
 type Handler struct {
-	allowedRoots []string
+	config       *config.Config
 	tmpl         *template.Template
+	allowedRoots []string
 }
 
 type FileItem struct {
@@ -43,12 +47,13 @@ type ListingData struct {
 	CurrentPath  string        `json:"current_path"`
 }
 
-func NewHandler(allowedRoots []string) *Handler {
+func NewHandler(cfg *config.Config) *Handler {
 	tmpl := template.Must(template.ParseFS(web.TemplateFS, "templates/*.html"))
 
 	return &Handler{
-		allowedRoots: allowedRoots,
+		config:       cfg,
 		tmpl:         tmpl,
+		allowedRoots: cfg.Directories,
 	}
 }
 
@@ -57,17 +62,18 @@ func (h *Handler) ServeFiles(c *gin.Context) {
 	if requestPath == "" {
 		requestPath = "/"
 	}
-	// DEBUG: Log requestPath every time ServeFiles is called
-	println("[DEBUG] ServeFiles requestPath:", requestPath)
-	println("[DEBUG] ServeFiles: Entered ServeFiles handler")
-
+	// If root is requested, serve directory listing of first allowed root directly
+	if requestPath == "/" {
+		if len(h.allowedRoots) > 0 {
+			h.serveDirectory(c, h.allowedRoots[0], "/")
+			return
+		}
+	}
 	// Handle static assets from embedded FS - bypass all other checks
 	if strings.HasPrefix(requestPath, "/static/") {
-		println("[DEBUG] Detected static asset, serving from embed FS:", requestPath)
 		h.serveStaticFile(c, requestPath)
 		return
 	}
-	println("[DEBUG] ServeFiles: Not a static asset, continuing with regular file serving")
 
 	// Basic path traversal protection - deny any path containing ".."
 	if strings.Contains(requestPath, "..") {
@@ -80,6 +86,8 @@ func (h *Handler) ServeFiles(c *gin.Context) {
 	if cleanPath == "." {
 		cleanPath = "/"
 	}
+	// Map absolute URL path to relative filesystem path
+	relPath := strings.TrimPrefix(cleanPath, "/")
 
 	// Check for hidden files/directories (components starting with ".")
 	pathComponents := strings.Split(strings.Trim(cleanPath, "/"), "/")
@@ -90,9 +98,15 @@ func (h *Handler) ServeFiles(c *gin.Context) {
 		}
 	}
 
+	// Check for thumbnail request
+	if c.Query("thumb") == "1" {
+		h.serveThumbnail(c, cleanPath)
+		return
+	}
+
 	// Try to find the file in one of the allowed roots
 	for _, root := range h.allowedRoots {
-		fullPath := filepath.Join(root, cleanPath)
+		fullPath := filepath.Join(root, relPath)
 
 		// Additional security check - ensure resolved path is within allowed root
 		absPath, err := filepath.Abs(fullPath)
@@ -178,6 +192,10 @@ func (h *Handler) serveDirectory(c *gin.Context, fullPath, requestPath string) {
 	}
 
 	c.Header("Content-Type", "text/html")
+	if c.Request.Method == http.MethodHead {
+		c.Status(http.StatusOK)
+		return
+	}
 	if err := h.tmpl.ExecuteTemplate(c.Writer, "listing.html", data); err != nil {
 		c.AbortWithStatus(http.StatusInternalServerError)
 	}
@@ -258,8 +276,8 @@ func isImageFile(fileName string) bool {
 }
 
 func buildThumbnailURL(basePath, fileName string) string {
-	// For now, return empty - will implement thumbnail generation later
-	return ""
+	fileURL := buildFileURL(basePath, fileName)
+	return fileURL + "?thumb=1"
 }
 
 func buildPathSegments(requestPath string) []PathSegment {
@@ -289,15 +307,12 @@ func buildPathSegments(requestPath string) []PathSegment {
 func (h *Handler) serveStaticFile(c *gin.Context, requestPath string) {
 	// Remove leading slash and serve from embedded FS
 	filePath := strings.TrimPrefix(requestPath, "/")
-	println("[DEBUG] serveStaticFile: trying to read file:", filePath)
 
 	fileData, err := web.TemplateFS.ReadFile(filePath)
 	if err != nil {
-		println("[DEBUG] serveStaticFile: error reading file:", err.Error())
 		c.AbortWithStatus(http.StatusNotFound)
 		return
 	}
-	println("[DEBUG] serveStaticFile: successfully read file, size:", len(fileData))
 
 	// Set appropriate content type based on file extension
 	ext := filepath.Ext(filePath)
@@ -320,5 +335,64 @@ func (h *Handler) serveStaticFile(c *gin.Context, requestPath string) {
 		c.Header("Content-Type", "application/octet-stream")
 	}
 
+	if c.Request.Method == http.MethodHead {
+		c.Status(http.StatusOK)
+		return
+	}
 	c.Data(http.StatusOK, c.GetHeader("Content-Type"), fileData)
+}
+
+// serveThumbnail handles thumbnail requests
+func (h *Handler) serveThumbnail(c *gin.Context, requestPath string) {
+	// Try to find the file in one of the allowed roots
+	for _, root := range h.allowedRoots {
+		fullPath := filepath.Join(root, requestPath)
+
+		// Additional security check - ensure resolved path is within allowed root
+		absPath, err := filepath.Abs(fullPath)
+		if err != nil {
+			continue
+		}
+
+		rootPath := filepath.Clean(root)
+		if !strings.HasSuffix(rootPath, string(filepath.Separator)) {
+			rootPath += string(filepath.Separator)
+		}
+
+		if !strings.HasPrefix(absPath+string(filepath.Separator), rootPath) && absPath != filepath.Clean(root) {
+			continue // Path is outside allowed root
+		}
+
+		// Check if file exists and is an image
+		info, err := os.Stat(fullPath)
+		if err != nil {
+			continue // Try next root
+		}
+
+		if info.IsDir() {
+			continue // Can't thumbnail a directory
+		}
+
+		// Check if it's an image file
+		if !isImageFile(filepath.Base(fullPath)) {
+			// Fallback to serving original file
+			c.File(fullPath)
+			return
+		}
+
+		// Generate thumbnail
+		thumbPath, err := files.Generate(fullPath, 200)
+		if err != nil {
+			// Fallback to serving original file on error
+			c.File(fullPath)
+			return
+		}
+
+		// Serve the thumbnail
+		c.File(thumbPath)
+		return
+	}
+
+	// File not found in any allowed root
+	c.AbortWithStatus(http.StatusNotFound)
 }

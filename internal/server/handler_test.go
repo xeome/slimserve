@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slimserve/internal/config"
 	"strings"
 	"testing"
 
@@ -36,7 +37,13 @@ func TestHandler_ServeFiles(t *testing.T) {
 	}
 
 	// Create handler
-	handler := NewHandler([]string{tmpDir})
+	cfg := &config.Config{
+		Host:            "localhost",
+		Port:            8080,
+		Directories:     []string{tmpDir},
+		DisableDotFiles: true,
+	}
+	handler := NewHandler(cfg)
 
 	// Set gin to test mode
 	gin.SetMode(gin.TestMode)
@@ -220,7 +227,13 @@ func TestHandler_ServeDirectory(t *testing.T) {
 	}
 
 	// Create handler
-	handler := NewHandler([]string{tmpDir})
+	cfg := &config.Config{
+		Host:            "localhost",
+		Port:            8080,
+		Directories:     []string{tmpDir},
+		DisableDotFiles: true,
+	}
+	handler := NewHandler(cfg)
 	gin.SetMode(gin.TestMode)
 
 	tests := []struct {
@@ -297,7 +310,13 @@ func TestHandler_ServeDirectory(t *testing.T) {
 
 func TestHandler_ServeDirectory_Error(t *testing.T) {
 	// Test error handling in serveDirectory
-	handler := NewHandler([]string{"/nonexistent-directory"})
+	cfg := &config.Config{
+		Host:            "localhost",
+		Port:            8080,
+		Directories:     []string{"/nonexistent-directory"},
+		DisableDotFiles: true,
+	}
+	handler := NewHandler(cfg)
 	gin.SetMode(gin.TestMode)
 
 	w := httptest.NewRecorder()
@@ -311,4 +330,80 @@ func TestHandler_ServeDirectory_Error(t *testing.T) {
 	if w.Code != http.StatusInternalServerError {
 		t.Errorf("Expected status 500 for non-existent directory, got %d", w.Code)
 	}
+}
+func TestHandler_HeadRequest_StaticAndDirectory(t *testing.T) {
+	// Config: static assets via embedded FS, directory via tempdir
+	cfg := &config.Config{
+		Host:            "localhost",
+		Port:            8080,
+		Directories:     []string{"."}, // Dir testing only - static test below uses embedded
+		DisableDotFiles: true,
+	}
+	handler := NewHandler(cfg)
+	gin.SetMode(gin.TestMode)
+
+	t.Run("HEAD static asset returns 200 and correct headers", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest("HEAD", "/static/css/theme.css", nil)
+		c.Params = gin.Params{
+			{Key: "path", Value: "/static/css/theme.css"},
+		}
+		handler.ServeFiles(c)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected 200, got %d", w.Code)
+		}
+		ctype := w.Header().Get("Content-Type")
+		if !strings.Contains(ctype, "text/css") {
+			t.Errorf("Expected Content-Type text/css, got %q", ctype)
+		}
+		if w.Body.Len() != 0 {
+			t.Errorf("Expected zero-length body for HEAD, got %d bytes", w.Body.Len())
+		}
+	})
+
+	t.Run("HEAD on directory returns 200 and headers but no body", func(t *testing.T) {
+		tmpDir, err := os.MkdirTemp("", "slimserve-head-dir-test")
+		if err != nil {
+			t.Fatal("Failed to create temp dir:", err)
+		}
+		defer os.RemoveAll(tmpDir)
+		cfg := &config.Config{
+			Host:            "localhost",
+			Port:            8081,
+			Directories:     []string{tmpDir},
+			DisableDotFiles: true,
+		}
+		handler := NewHandler(cfg)
+
+		subDir := filepath.Join(tmpDir, "subdir-abc")
+		err = os.Mkdir(subDir, 0755)
+		if err != nil {
+			t.Fatal("Failed to make subdir:", err)
+		}
+		testFile := filepath.Join(subDir, "foo.txt")
+		if err := os.WriteFile(testFile, []byte("bar"), 0644); err != nil {
+			t.Fatal("Failed to write test file:", err)
+		}
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest("HEAD", "/subdir-abc", nil)
+		c.Params = gin.Params{
+			{Key: "path", Value: "/subdir-abc"},
+		}
+		handler.ServeFiles(c)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected 200 for HEAD dir, got %d", w.Code)
+		}
+		ctype := w.Header().Get("Content-Type")
+		if !strings.Contains(ctype, "text/html") {
+			t.Errorf("Expected Content-Type text/html for dir, got %q", ctype)
+		}
+		if w.Body.Len() != 0 {
+			t.Errorf("Expected zero-length body for HEAD directory, got %d bytes", w.Body.Len())
+		}
+	})
 }

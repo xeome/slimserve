@@ -8,13 +8,25 @@
     <meta name="description" content="SlimServe – Lightweight File Server" />
     <title>{{if .Title}}{{.Title}} — {{end}}SlimServe</title>
 
-    <!-- Theme variables -->
+    <!-- Theme variables (must load before Tailwind for CSS custom properties) -->
     <link rel="stylesheet" href="/static/css/theme.css" />
 
-    <!-- Tailwind CSS 4 with custom configuration -->
-    <!-- TODO: Replace CDN Tailwind with built CSS for production -->
-    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <link rel="icon" href="/static/favicon.ico" sizes="any">
+
+    <!-- Custom styles -->
+    <link rel="stylesheet" href="/static/css/custom.css" />
+
+    <!-- Tailwind -->
+    <script src="/static/js/tailwind.js"></script>
+
+    <!-- Main JS -->
+    <script src="/static/js/main.js"></script>
+
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+    <!-- Local Heroicons fallback -->
+    <script src="/static/js/heroicons.js"></script>
     <style type="text/tailwindcss">
         @theme {
             --color-background: hsl(var(--background));
@@ -39,18 +51,6 @@
             --border-radius: var(--radius);
         }
     </style>
-
-    <!-- Custom styles -->
-    <link rel="stylesheet" href="/static/css/custom.css" />
-
-    <!-- Main JS -->
-    <script src="/static/js/main.js"></script>
-
-    <!-- Alpine.js -->
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-
-    <!-- Local Heroicons fallback -->
-    <script src="/static/js/heroicons.js"></script>
 </head>
 
 <body class="bg-background font-geist-sans text-foreground antialiased">

@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slimserve/internal/config"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -52,7 +53,13 @@ func TestAccessControlSecurity(t *testing.T) {
 	}
 
 	// Create server with multiple allowed roots
-	srv := New([]string{allowedDir1, allowedDir2})
+	cfg := &config.Config{
+		Host:            "localhost",
+		Port:            8080,
+		Directories:     []string{allowedDir1, allowedDir2},
+		DisableDotFiles: true,
+	}
+	srv := New(cfg)
 	gin.SetMode(gin.TestMode)
 
 	tests := []struct {
@@ -168,7 +175,13 @@ func TestMultipleAllowedRoots(t *testing.T) {
 	}
 
 	// Create server with multiple roots
-	srv := New([]string{root1, root2})
+	cfg := &config.Config{
+		Host:            "localhost",
+		Port:            8080,
+		Directories:     []string{root1, root2},
+		DisableDotFiles: true,
+	}
+	srv := New(cfg)
 	gin.SetMode(gin.TestMode)
 
 	tests := []struct {
@@ -256,7 +269,13 @@ func TestAccessControlMiddleware(t *testing.T) {
 	}
 
 	// Test direct middleware functionality
-	srv := New([]string{allowedDir})
+	cfg := &config.Config{
+		Host:            "localhost",
+		Port:            8080,
+		Directories:     []string{allowedDir},
+		DisableDotFiles: true,
+	}
+	srv := New(cfg)
 	middleware := srv.accessControlMiddleware()
 
 	tests := []struct {

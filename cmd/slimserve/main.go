@@ -4,8 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"os"
 
+	"slimserve/internal/config"
 	"slimserve/internal/server"
 )
 
@@ -30,19 +30,16 @@ func main() {
 	flag.Var(&dirs, "dirs", "Directory to serve (can be specified multiple times)")
 	flag.Parse()
 
-	// If no directories specified, default to current working directory
-	if len(dirs) == 0 {
-		cwd, err := os.Getwd()
-		if err != nil {
-			log.Fatal("Failed to get current working directory:", err)
-		}
-		dirs = append(dirs, cwd)
+	cfg := config.Default()
+	cfg.Port = *port
+	if len(dirs) > 0 {
+		cfg.Directories = []string(dirs) // preserve default ["."]
 	}
 
-	srv := server.New([]string(dirs))
+	srv := server.New(cfg)
 
 	addr := fmt.Sprintf(":%d", *port)
-	log.Printf("Starting SlimServe on %s, serving directories: %v", addr, dirs)
+	log.Printf("Starting SlimServe on %s, serving directories: %v", addr, cfg.Directories)
 
 	if err := srv.Run(addr); err != nil {
 		log.Fatal("Failed to start server:", err)

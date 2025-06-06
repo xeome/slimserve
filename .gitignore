@@ -1,3 +1,6 @@
 .kilocode
 slimserve
 *.log
+
+# Tailwind CSS input file (generated output is committed)
+web/static/css/tailwind.input.css
