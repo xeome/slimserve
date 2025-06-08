@@ -9,6 +9,7 @@ import (
 
 	"slimserve/internal/config"
 	"slimserve/internal/logger"
+	"slimserve/internal/security"
 
 	"github.com/gin-gonic/gin"
 )
@@ -18,6 +19,7 @@ type Server struct {
 	config *config.Config
 	engine *gin.Engine
 	server *http.Server
+	roots  []*security.RootFS
 }
 
 // New creates a new server instance with the given configuration
@@ -25,6 +27,17 @@ func New(cfg *config.Config) *Server {
 	if len(cfg.Directories) == 0 {
 		// Default to current directory when none provided
 		cfg.Directories = []string{"."}
+	}
+
+	// Build RootFS instances from configured directories
+	var roots []*security.RootFS
+	for _, dir := range cfg.Directories {
+		root, err := security.NewRootFS(dir)
+		if err != nil {
+			logger.Log.Warn().Err(err).Str("directory", dir).Msg("Failed to create RootFS for directory")
+			continue
+		}
+		roots = append(roots, root)
 	}
 
 	gin.SetMode(gin.ReleaseMode)
@@ -35,6 +48,7 @@ func New(cfg *config.Config) *Server {
 	srv := &Server{
 		config: cfg,
 		engine: engine,
+		roots:  roots,
 	}
 
 	srv.setupRoutes()
@@ -43,7 +57,7 @@ func New(cfg *config.Config) *Server {
 
 // setupRoutes configures the server routes
 func (s *Server) setupRoutes() {
-	handler := NewHandler(s.config)
+	handler := NewHandler(s.config, s.roots)
 
 	// Add logging middleware
 	s.engine.Use(logger.Middleware())
@@ -148,6 +162,14 @@ func (s *Server) Stop(ctx context.Context) error {
 	if s.server == nil {
 		return nil
 	}
+
+	// Close all RootFS instances
+	for _, root := range s.roots {
+		if err := root.Close(); err != nil {
+			logger.Log.Warn().Err(err).Msg("Failed to close RootFS")
+		}
+	}
+
 	return s.server.Shutdown(ctx)
 }
 

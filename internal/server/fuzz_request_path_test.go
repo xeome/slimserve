@@ -419,36 +419,37 @@ func FuzzStaticAssets(f *testing.F) {
 		f.Add(seed)
 	}
 
-	f.Fuzz(func(t *testing.T, path string) {
-		t.Parallel()
+	// Create single shared server outside the fuzz closure
+	tmpDir, err := os.MkdirTemp("", "slimserve-static-fuzz-*")
+	if err != nil {
+		f.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
 
+	cfg := &config.Config{
+		Port:            8080,
+		Host:            "localhost",
+		Directories:     []string{tmpDir},
+		DisableDotFiles: true,
+	}
+
+	server := New(cfg)
+	ts := httptest.NewServer(server)
+	defer ts.Close()
+
+	// Capture server URL for use in closure
+	serverURL := ts.URL
+
+	f.Fuzz(func(t *testing.T, path string) {
 		// Ensure we're testing static paths
 		if !strings.HasPrefix(path, "/static/") {
 			path = "/static/" + strings.TrimPrefix(path, "/")
 		}
 
-		// Create temporary directory (not needed for static assets but for consistency)
-		tmpDir, err := os.MkdirTemp("", "slimserve-static-fuzz-*")
-		if err != nil {
-			t.Fatalf("Failed to create temp dir: %v", err)
-		}
-		defer os.RemoveAll(tmpDir)
-
-		cfg := &config.Config{
-			Port:            8080,
-			Host:            "localhost",
-			Directories:     []string{tmpDir},
-			DisableDotFiles: true,
-		}
-
-		server := New(cfg)
-		ts := httptest.NewServer(server)
-		defer ts.Close()
-
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 
-		requestURL := ts.URL + path
+		requestURL := serverURL + path
 		req, err := http.NewRequestWithContext(ctx, "GET", requestURL, nil)
 		if err != nil {
 			t.Skipf("Failed to create request for path %q: %v", path, err)

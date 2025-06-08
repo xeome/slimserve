@@ -47,6 +47,48 @@ func TestEmbeddedAssets(t *testing.T) {
 	}
 }
 
+// TestEmbeddedJavaScriptAssets verifies JS files are properly embedded
+func TestEmbeddedJavaScriptAssets(t *testing.T) {
+	jsFiles := []struct {
+		path        string
+		minSizeKB   int
+		maxSizeMB   int
+		description string
+	}{
+		{"static/js/tailwind.js", 100, 5, "Tailwind CSS framework"},
+		{"static/js/heroicons.js", 1, 1, "Heroicons SVG library"},
+		{"static/js/main.js", 0, 1, "Main application JS"},
+	}
+
+	for _, jsFile := range jsFiles {
+		t.Run(jsFile.path, func(t *testing.T) {
+			content, err := TemplateFS.ReadFile(jsFile.path)
+			if err != nil {
+				t.Fatalf("Failed to read embedded JS file %s: %v", jsFile.path, err)
+			}
+
+			if len(content) == 0 {
+				t.Fatalf("JS file %s is empty", jsFile.path)
+			}
+
+			// Check minimum size
+			if len(content) < jsFile.minSizeKB*1024 {
+				t.Errorf("JS file %s too small: %d bytes (expected min %dKB for %s)",
+					jsFile.path, len(content), jsFile.minSizeKB, jsFile.description)
+			}
+
+			// Check maximum size
+			if len(content) > jsFile.maxSizeMB*1024*1024 {
+				t.Errorf("JS file %s too large: %d bytes (expected max %dMB for %s)",
+					jsFile.path, len(content), jsFile.maxSizeMB, jsFile.description)
+			}
+
+			t.Logf("✓ %s embedded successfully: %d bytes (%s)",
+				jsFile.path, len(content), jsFile.description)
+		})
+	}
+}
+
 // TestWCAGColorContrast verifies WCAG AA compliance for color palette
 func TestWCAGColorContrast(t *testing.T) {
 	// WCAG AA requires contrast ratio of at least 4.5:1 for normal text

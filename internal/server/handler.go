@@ -12,6 +12,7 @@ import (
 	"slimserve/internal/config"
 	"slimserve/internal/files"
 	"slimserve/internal/logger"
+	"slimserve/internal/security"
 	"slimserve/web"
 
 	"github.com/gin-gonic/gin"
@@ -21,6 +22,7 @@ type Handler struct {
 	config       *config.Config
 	tmpl         *template.Template
 	allowedRoots []string
+	roots        []*security.RootFS
 }
 
 type FileItem struct {
@@ -47,13 +49,14 @@ type ListingData struct {
 	CurrentPath  string        `json:"current_path"`
 }
 
-func NewHandler(cfg *config.Config) *Handler {
+func NewHandler(cfg *config.Config, roots []*security.RootFS) *Handler {
 	tmpl := template.Must(template.ParseFS(web.TemplateFS, "templates/*.html"))
 
 	return &Handler{
 		config:       cfg,
 		tmpl:         tmpl,
 		allowedRoots: cfg.Directories,
+		roots:        roots,
 	}
 }
 
@@ -62,26 +65,22 @@ func (h *Handler) ServeFiles(c *gin.Context) {
 	if requestPath == "" {
 		requestPath = "/"
 	}
+
 	// If root is requested, serve directory listing of first allowed root directly
 	if requestPath == "/" {
-		if len(h.allowedRoots) > 0 {
-			h.serveDirectory(c, h.allowedRoots[0], "/")
+		if len(h.roots) > 0 {
+			h.serveDirectoryFromRoot(c, h.roots[0], ".", "/")
 			return
 		}
 	}
+
 	// Handle static assets from embedded FS - bypass all other checks
 	if strings.HasPrefix(requestPath, "/static/") {
 		h.serveStaticFile(c, requestPath)
 		return
 	}
 
-	// Basic path traversal protection - deny any path containing ".."
-	if strings.Contains(requestPath, "..") {
-		c.AbortWithStatus(http.StatusForbidden)
-		return
-	}
-
-	// Clean and join with root directory
+	// Clean and convert to relative path
 	cleanPath := filepath.Clean(requestPath)
 	if cleanPath == "." {
 		cleanPath = "/"
@@ -102,43 +101,38 @@ func (h *Handler) ServeFiles(c *gin.Context) {
 
 	// Check for thumbnail request
 	if c.Query("thumb") == "1" {
-		h.serveThumbnail(c, cleanPath)
+		h.serveThumbnailFromRoot(c, relPath)
 		return
 	}
 
-	// Try to find the file in one of the allowed roots
-	for _, root := range h.allowedRoots {
-		fullPath := filepath.Join(root, relPath)
-
-		// Additional security check - ensure resolved path is within allowed root
-		absPath, err := filepath.Abs(fullPath)
-		if err != nil {
-			continue
-		}
-
-		rootPath := filepath.Clean(root)
-		if !strings.HasSuffix(rootPath, string(filepath.Separator)) {
-			rootPath += string(filepath.Separator)
-		}
-
-		if !strings.HasPrefix(absPath+string(filepath.Separator), rootPath) && absPath != filepath.Clean(root) {
-			continue // Path is outside allowed root
-		}
-
-		// Check if file/directory exists
-		info, err := os.Stat(fullPath)
+	// Try to find the file in one of the RootFS instances
+	for _, root := range h.roots {
+		// Use RootFS.Stat for traversal-resistant file access
+		info, err := root.Stat(relPath)
 		if err != nil {
 			continue // Try next root
 		}
 
 		// If it's a file, serve it
 		if !info.IsDir() {
-			c.File(fullPath)
+			file, err := root.Open(relPath)
+			if err != nil {
+				continue
+			}
+			defer file.Close()
+
+			// Get file info for headers
+			fileInfo, err := file.Stat()
+			if err != nil {
+				continue
+			}
+
+			http.ServeContent(c.Writer, c.Request, fileInfo.Name(), fileInfo.ModTime(), file)
 			return
 		}
 
 		// If it's a directory, show listing
-		h.serveDirectory(c, fullPath, cleanPath)
+		h.serveDirectoryFromRoot(c, root, relPath, cleanPath)
 		return
 	}
 
@@ -146,14 +140,8 @@ func (h *Handler) ServeFiles(c *gin.Context) {
 	c.AbortWithStatus(http.StatusNotFound)
 }
 
-func (h *Handler) serveDirectory(c *gin.Context, fullPath, requestPath string) {
-	entries, err := os.ReadDir(fullPath)
-	if err != nil {
-		logger.Log.Error().Err(err).Str("path", fullPath).Msg("Error reading directory")
-		c.AbortWithStatus(http.StatusInternalServerError)
-		return
-	}
-
+// buildListingData creates a directory listing from entries, shared by both listing methods
+func (h *Handler) buildListingData(entries []os.DirEntry, requestPath string) ListingData {
 	var files []FileItem
 	for _, entry := range entries {
 		// Skip dot files if configured to do so
@@ -192,12 +180,49 @@ func (h *Handler) serveDirectory(c *gin.Context, fullPath, requestPath string) {
 		return strings.ToLower(files[i].Name) < strings.ToLower(files[j].Name)
 	})
 
-	data := ListingData{
+	return ListingData{
 		Title:        filepath.Base(requestPath),
 		PathSegments: buildPathSegments(requestPath),
 		Files:        files,
 		CurrentPath:  requestPath,
 	}
+}
+
+func (h *Handler) serveDirectory(c *gin.Context, fullPath, requestPath string) {
+	entries, err := os.ReadDir(fullPath)
+	if err != nil {
+		logger.Log.Error().Err(err).Str("path", fullPath).Msg("Error reading directory")
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
+
+	data := h.buildListingData(entries, requestPath)
+
+	c.Header("Content-Type", "text/html")
+	if c.Request.Method == http.MethodHead {
+		c.Status(http.StatusOK)
+		return
+	}
+	if err := h.tmpl.ExecuteTemplate(c.Writer, "listing.html", data); err != nil {
+		logger.Log.Error().Err(err).Str("template", "listing.html").Msg("Error executing template")
+		c.AbortWithStatus(http.StatusInternalServerError)
+	}
+}
+
+func (h *Handler) serveDirectoryFromRoot(c *gin.Context, root *security.RootFS, relPath, requestPath string) {
+	// Handle empty or root path cases
+	if relPath == "" {
+		relPath = "."
+	}
+
+	entries, err := root.ReadDir(relPath)
+	if err != nil {
+		logger.Log.Error().Err(err).Str("path", relPath).Msg("Error reading directory")
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
+
+	data := h.buildListingData(entries, requestPath)
 
 	c.Header("Content-Type", "text/html")
 	if c.Request.Method == http.MethodHead {
@@ -228,24 +253,59 @@ func formatSize(size int64) string {
 	return fmt.Sprintf("%.1f GB", float64(size)/(1024*1024*1024))
 }
 
+// FileTypeInfo holds both type and icon for a file extension
+type FileTypeInfo struct {
+	Type string
+	Icon string
+}
+
+// fileExtMap maps file extensions to their type and icon
+var fileExtMap = map[string]FileTypeInfo{
+	// Images
+	".jpg":  {Type: "image", Icon: "image"},
+	".jpeg": {Type: "image", Icon: "image"},
+	".png":  {Type: "image", Icon: "image"},
+	".gif":  {Type: "image", Icon: "image"},
+	".webp": {Type: "image", Icon: "image"},
+	".svg":  {Type: "image", Icon: "image"},
+
+	// Videos
+	".mp4":  {Type: "video", Icon: "video"},
+	".avi":  {Type: "video", Icon: "video"},
+	".mkv":  {Type: "video", Icon: "video"},
+	".mov":  {Type: "video", Icon: "video"},
+	".webm": {Type: "video", Icon: "video"},
+
+	// Audio
+	".mp3":  {Type: "audio", Icon: "audio"},
+	".wav":  {Type: "audio", Icon: "audio"},
+	".flac": {Type: "audio", Icon: "audio"},
+	".ogg":  {Type: "audio", Icon: "audio"},
+
+	// Documents
+	".pdf":  {Type: "document", Icon: "file-pdf"},
+	".doc":  {Type: "document", Icon: "file-text"},
+	".docx": {Type: "document", Icon: "file-text"},
+	".txt":  {Type: "document", Icon: "file-text"},
+	".md":   {Type: "document", Icon: "file-text"},
+
+	// Archives
+	".zip": {Type: "file", Icon: "archive"},
+	".tar": {Type: "file", Icon: "archive"},
+	".gz":  {Type: "file", Icon: "archive"},
+	".rar": {Type: "file", Icon: "archive"},
+}
+
 func determineFileType(entry os.DirEntry) string {
 	if entry.IsDir() {
 		return "folder"
 	}
 
 	ext := strings.ToLower(filepath.Ext(entry.Name()))
-	switch ext {
-	case ".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg":
-		return "image"
-	case ".mp4", ".avi", ".mkv", ".mov", ".webm":
-		return "video"
-	case ".mp3", ".wav", ".flac", ".ogg":
-		return "audio"
-	case ".pdf", ".doc", ".docx", ".txt", ".md":
-		return "document"
-	default:
-		return "file"
+	if info, exists := fileExtMap[ext]; exists {
+		return info.Type
 	}
+	return "file"
 }
 
 func getFileIcon(entry os.DirEntry) string {
@@ -254,24 +314,10 @@ func getFileIcon(entry os.DirEntry) string {
 	}
 
 	ext := strings.ToLower(filepath.Ext(entry.Name()))
-	switch ext {
-	case ".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg":
-		return "image"
-	case ".mp4", ".avi", ".mkv", ".mov", ".webm":
-		return "video"
-	case ".mp3", ".wav", ".flac", ".ogg":
-		return "audio"
-	case ".pdf":
-		return "file-pdf"
-	case ".doc", ".docx":
-		return "file-text"
-	case ".txt", ".md":
-		return "file-text"
-	case ".zip", ".tar", ".gz", ".rar":
-		return "archive"
-	default:
-		return "file"
+	if info, exists := fileExtMap[ext]; exists {
+		return info.Icon
 	}
+	return "file"
 }
 
 func isImageFile(fileName string) bool {
@@ -351,29 +397,12 @@ func (h *Handler) serveStaticFile(c *gin.Context, requestPath string) {
 	c.Data(http.StatusOK, c.GetHeader("Content-Type"), fileData)
 }
 
-// serveThumbnail handles thumbnail requests
-func (h *Handler) serveThumbnail(c *gin.Context, requestPath string) {
-	// Try to find the file in one of the allowed roots
-	for _, root := range h.allowedRoots {
-		fullPath := filepath.Join(root, requestPath)
-
-		// Additional security check - ensure resolved path is within allowed root
-		absPath, err := filepath.Abs(fullPath)
-		if err != nil {
-			continue
-		}
-
-		rootPath := filepath.Clean(root)
-		if !strings.HasSuffix(rootPath, string(filepath.Separator)) {
-			rootPath += string(filepath.Separator)
-		}
-
-		if !strings.HasPrefix(absPath+string(filepath.Separator), rootPath) && absPath != filepath.Clean(root) {
-			continue // Path is outside allowed root
-		}
-
+// serveThumbnailFromRoot handles thumbnail requests using RootFS
+func (h *Handler) serveThumbnailFromRoot(c *gin.Context, relPath string) {
+	// Try to find the file in one of the RootFS instances
+	for _, root := range h.roots {
 		// Check if file exists and is an image
-		info, err := os.Stat(fullPath)
+		info, err := root.Stat(relPath)
 		if err != nil {
 			continue // Try next root
 		}
@@ -383,17 +412,43 @@ func (h *Handler) serveThumbnail(c *gin.Context, requestPath string) {
 		}
 
 		// Check if it's an image file
-		if !isImageFile(filepath.Base(fullPath)) {
+		if !isImageFile(filepath.Base(relPath)) {
 			// Fallback to serving original file
-			c.File(fullPath)
+			file, err := root.Open(relPath)
+			if err != nil {
+				continue
+			}
+			defer file.Close()
+
+			fileInfo, err := file.Stat()
+			if err != nil {
+				continue
+			}
+
+			http.ServeContent(c.Writer, c.Request, fileInfo.Name(), fileInfo.ModTime(), file)
 			return
 		}
+
+		// For thumbnail generation, we still need the full path
+		// This is a temporary approach until we refactor the thumbnail subsystem
+		fullPath := filepath.Join(root.Path(), relPath)
 
 		// Generate thumbnail
 		thumbPath, err := files.Generate(fullPath, 200)
 		if err != nil {
 			// Fallback to serving original file on error
-			c.File(fullPath)
+			file, err := root.Open(relPath)
+			if err != nil {
+				continue
+			}
+			defer file.Close()
+
+			fileInfo, err := file.Stat()
+			if err != nil {
+				continue
+			}
+
+			http.ServeContent(c.Writer, c.Request, fileInfo.Name(), fileInfo.ModTime(), file)
 			return
 		}
 

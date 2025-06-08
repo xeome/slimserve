@@ -1,0 +1,54 @@
+# Git and version control
+.git
+.gitignore
+.github
+
+# Test files and test data
+*_test.go
+**/*_test.go
+/testdata
+testdata/
+
+# Development and documentation files
+README.md
+FUZZING.md
+LICENSE
+CHANGELOG.md
+*.md
+
+# Build artifacts and binaries
+slimserve
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Development configuration and tooling
+.kilocode/
+Makefile
+tailwind.config.js
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Node.js (if any frontend tooling exists)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Temporary files
+*.tmp
+*.temp
+.cache/

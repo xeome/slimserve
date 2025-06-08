@@ -11,9 +11,6 @@ import (
 	"time"
 )
 
-// Small embedded PNG fixture (16x16 red square)
-const testPNGBase64 = "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAAdgAAAHYBTnsmCAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAFYSURBVDiNpZM9SwNBEIafgYAgNhaClY1gZWFhZWsrWFnZ2lhYW9paW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tb"
-
 func TestGenerate(t *testing.T) {
 	// Create test image file
 	testDir := t.TempDir()
@@ -152,8 +149,8 @@ func TestGenerateLargeFile(t *testing.T) {
 	}
 	defer file.Close()
 
-	// Write 6MB of data to exceed the 5MB limit
-	data := make([]byte, 6*1024*1024)
+	// Write 11MB of data to exceed the 10MB limit
+	data := make([]byte, 11*1024*1024)
 	file.Write(data)
 	file.Close()
 

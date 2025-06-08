@@ -23,19 +23,19 @@ import (
 // Cached filename scheme: <sha1 of filePath + mtime + maxDim>.<ext>
 //
 // Supported formats: JPEG, PNG, GIF (detected via MIME type)
-// Files larger than 5MB are skipped to prevent memory issues.
+// Files larger than 10MB are skipped to prevent memory issues.
 func Generate(srcPath string, maxDim int) (string, error) {
 	start := time.Now()
 	logger.Debugf("Starting thumbnail generation for %s (max dimension: %d)", srcPath, maxDim)
 
-	// Check file size first - skip if > 5MB
+	// Check file size first - skip if > 10MB
 	info, err := os.Stat(srcPath)
 	if err != nil {
 		logger.Errorf("Failed to stat source file %s: %v", srcPath, err)
 		return "", fmt.Errorf("failed to stat source file: %w", err)
 	}
 
-	const maxFileSize = 5 * 1024 * 1024 // 5MB
+	const maxFileSize = 10 * 1024 * 1024 // 10MB
 	if info.Size() > maxFileSize {
 		logger.Errorf("File too large for thumbnail generation: %s (%d bytes)", srcPath, info.Size())
 		return "", fmt.Errorf("file too large for thumbnail generation: %d bytes", info.Size())

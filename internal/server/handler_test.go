@@ -5,20 +5,27 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"slimserve/internal/config"
 	"strings"
 	"testing"
 
+	"slimserve/internal/config"
+	"slimserve/internal/security"
+
 	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/require"
 )
 
-func TestHandler_ServeFiles(t *testing.T) {
+// Test helper functions
+
+// setupTestHandler creates a test handler with temporary directory and test files
+func setupTestHandler(t *testing.T) (*Handler, string, func()) {
+	t.Helper()
+
 	// Create temporary directory with test files
 	tmpDir, err := os.MkdirTemp("", "slimserve-handler-test")
 	if err != nil {
 		t.Fatal("Failed to create temp dir:", err)
 	}
-	defer os.RemoveAll(tmpDir)
 
 	// Create test files and directories
 	testFile := filepath.Join(tmpDir, "test.txt")
@@ -36,17 +43,56 @@ func TestHandler_ServeFiles(t *testing.T) {
 		t.Fatal("Failed to create nested file:", err)
 	}
 
-	// Create handler
+	// Create handler with RootFS
 	cfg := &config.Config{
 		Host:            "localhost",
 		Port:            8080,
 		Directories:     []string{tmpDir},
 		DisableDotFiles: true,
 	}
-	handler := NewHandler(cfg)
 
-	// Set gin to test mode
+	var roots []*security.RootFS
+	for _, dir := range cfg.Directories {
+		root, err := security.NewRootFS(dir)
+		require.NoError(t, err)
+		roots = append(roots, root)
+	}
+
+	handler := NewHandler(cfg, roots)
 	gin.SetMode(gin.TestMode)
+
+	// Return cleanup function
+	cleanup := func() {
+		for _, root := range roots {
+			root.Close()
+		}
+		os.RemoveAll(tmpDir)
+	}
+
+	return handler, tmpDir, cleanup
+}
+
+// createTestContext creates a Gin test context for the given path and method
+func createTestContext(path, method string) (*gin.Context, *httptest.ResponseRecorder) {
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+
+	requestURL := path
+	if requestURL == "" {
+		requestURL = "/"
+	}
+
+	c.Request = httptest.NewRequest(method, requestURL, nil)
+	c.Params = gin.Params{
+		{Key: "path", Value: path},
+	}
+
+	return c, w
+}
+
+func TestHandler_ServeFiles(t *testing.T) {
+	handler, _, cleanup := setupTestHandler(t)
+	defer cleanup()
 
 	tests := []struct {
 		name           string
@@ -104,22 +150,22 @@ func TestHandler_ServeFiles(t *testing.T) {
 		{
 			name:           "path_traversal_attempt",
 			path:           "/../etc/passwd",
-			expectedStatus: http.StatusForbidden,
+			expectedStatus: http.StatusNotFound, // os.Root returns 404 for out-of-bounds access
 		},
 		{
 			name:           "path_traversal_with_dotdot",
 			path:           "/subdir/../../../etc/passwd",
-			expectedStatus: http.StatusForbidden,
+			expectedStatus: http.StatusNotFound, // os.Root returns 404 for out-of-bounds access
 		},
 		{
 			name:           "path_traversal_simple",
 			path:           "/..",
-			expectedStatus: http.StatusForbidden,
+			expectedStatus: http.StatusNotFound, // os.Root returns 404 for out-of-bounds access
 		},
 		{
 			name:           "path_traversal_in_middle",
 			path:           "/test/../../../etc/passwd",
-			expectedStatus: http.StatusForbidden,
+			expectedStatus: http.StatusNotFound, // os.Root returns 404 for out-of-bounds access
 		},
 		{
 			name:           "static_favicon_ico",
@@ -152,19 +198,7 @@ func TestHandler_ServeFiles(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create test context
-			w := httptest.NewRecorder()
-			c, _ := gin.CreateTestContext(w)
-
-			// Handle empty path case for HTTP request
-			requestURL := tt.path
-			if requestURL == "" {
-				requestURL = "/"
-			}
-			c.Request = httptest.NewRequest("GET", requestURL, nil)
-			c.Params = gin.Params{
-				{Key: "path", Value: tt.path},
-			}
+			c, w := createTestContext(tt.path, "GET")
 
 			// Call handler
 			handler.ServeFiles(c)
@@ -233,7 +267,21 @@ func TestHandler_ServeDirectory(t *testing.T) {
 		Directories:     []string{tmpDir},
 		DisableDotFiles: true,
 	}
-	handler := NewHandler(cfg)
+
+	// Create RootFS instances
+	var roots []*security.RootFS
+	for _, dir := range cfg.Directories {
+		root, err := security.NewRootFS(dir)
+		require.NoError(t, err)
+		roots = append(roots, root)
+	}
+	defer func() {
+		for _, root := range roots {
+			root.Close()
+		}
+	}()
+
+	handler := NewHandler(cfg, roots)
 	gin.SetMode(gin.TestMode)
 
 	tests := []struct {
@@ -258,9 +306,7 @@ func TestHandler_ServeDirectory(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			w := httptest.NewRecorder()
-			c, _ := gin.CreateTestContext(w)
-			c.Request = httptest.NewRequest("GET", tt.requestPath, nil)
+			c, w := createTestContext(tt.requestPath, "GET")
 
 			// Determine full path for directory
 			var fullPath string
@@ -309,24 +355,44 @@ func TestHandler_ServeDirectory(t *testing.T) {
 }
 
 func TestHandler_ServeDirectory_Error(t *testing.T) {
-	// Test error handling in serveDirectory
+	// Create a temporary directory that we can then remove to test error handling
+	tmpDir, err := os.MkdirTemp("", "slimserve-error-test")
+	require.NoError(t, err)
+
 	cfg := &config.Config{
 		Host:            "localhost",
 		Port:            8080,
-		Directories:     []string{"/nonexistent-directory"},
+		Directories:     []string{tmpDir},
 		DisableDotFiles: true,
 	}
-	handler := NewHandler(cfg)
+
+	// Create RootFS instances
+	var roots []*security.RootFS
+	for _, dir := range cfg.Directories {
+		root, err := security.NewRootFS(dir)
+		require.NoError(t, err)
+		roots = append(roots, root)
+	}
+	defer func() {
+		for _, root := range roots {
+			root.Close()
+		}
+	}()
+
+	// Now remove the directory to create error condition
+	os.RemoveAll(tmpDir)
+
+	handler := NewHandler(cfg, roots)
 	gin.SetMode(gin.TestMode)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest("GET", "/", nil)
 
-	// Call serveDirectory with non-existent directory
-	handler.serveDirectory(c, "/nonexistent-directory", "/")
+	// Call serveDirectory with removed directory
+	handler.serveDirectory(c, tmpDir, "/")
 
-	// Should return 500 because directory doesn't exist
+	// Should return 500 because directory no longer exists
 	if w.Code != http.StatusInternalServerError {
 		t.Errorf("Expected status 500 for non-existent directory, got %d", w.Code)
 	}
@@ -339,7 +405,21 @@ func TestHandler_HeadRequest_StaticAndDirectory(t *testing.T) {
 		Directories:     []string{"."}, // Dir testing only - static test below uses embedded
 		DisableDotFiles: true,
 	}
-	handler := NewHandler(cfg)
+
+	// Create RootFS instances
+	var roots []*security.RootFS
+	for _, dir := range cfg.Directories {
+		root, err := security.NewRootFS(dir)
+		require.NoError(t, err)
+		roots = append(roots, root)
+	}
+	defer func() {
+		for _, root := range roots {
+			root.Close()
+		}
+	}()
+
+	handler := NewHandler(cfg, roots)
 	gin.SetMode(gin.TestMode)
 
 	t.Run("HEAD static asset returns 200 and correct headers", func(t *testing.T) {
@@ -375,7 +455,21 @@ func TestHandler_HeadRequest_StaticAndDirectory(t *testing.T) {
 			Directories:     []string{tmpDir},
 			DisableDotFiles: true,
 		}
-		handler := NewHandler(cfg)
+
+		// Create RootFS instances
+		var roots []*security.RootFS
+		for _, dir := range cfg.Directories {
+			root, err := security.NewRootFS(dir)
+			require.NoError(t, err)
+			roots = append(roots, root)
+		}
+		defer func() {
+			for _, root := range roots {
+				root.Close()
+			}
+		}()
+
+		handler := NewHandler(cfg, roots)
 
 		subDir := filepath.Join(tmpDir, "subdir-abc")
 		err = os.Mkdir(subDir, 0755)
