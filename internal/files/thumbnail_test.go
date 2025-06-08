@@ -1,6 +1,8 @@
 package files
 
 import (
+	"errors"
+	"fmt"
 	"image"
 	"image/color"
 	"image/png"
@@ -228,5 +230,223 @@ func TestGenerateAspectRatio(t *testing.T) {
 	// Should be 20x10 (scaled down proportionally, width was limiting factor)
 	if width != 20 || height != 10 {
 		t.Errorf("Unexpected thumbnail dimensions: %dx%d, expected 20x10", width, height)
+	}
+}
+
+func TestGenerateWithCacheLimit(t *testing.T) {
+	testDir := t.TempDir()
+	customCacheDir := filepath.Join(testDir, "cache")
+	os.Setenv("SLIMSERVE_CACHE_DIR", customCacheDir)
+	defer os.Unsetenv("SLIMSERVE_CACHE_DIR")
+
+	tests := []struct {
+		name         string
+		cacheLimitMB int
+		expectError  bool
+		errorType    error
+	}{
+		{
+			name:         "cache limit not exceeded",
+			cacheLimitMB: 100, // Large limit
+			expectError:  false,
+		},
+		{
+			name:         "cache limit exceeded - should prune and succeed",
+			cacheLimitMB: 2, // Small limit (2MB) - will trigger pruning but still succeed
+			expectError:  false,
+		},
+		{
+			name:         "unlimited cache",
+			cacheLimitMB: 0, // No limit
+			expectError:  false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			// For the cache limit exceeded test, pre-populate cache with large files
+			if strings.Contains(test.name, "cache limit exceeded") {
+				// Create multiple large fake thumbnail files in cache to exceed 2MB limit
+				err := os.MkdirAll(customCacheDir, 0755)
+				if err != nil {
+					t.Fatalf("Failed to create cache dir: %v", err)
+				}
+
+				// Create multiple 1MB files to ensure cache exceeds limit
+				for i := 0; i < 3; i++ {
+					largeCacheFile := filepath.Join(customCacheDir, fmt.Sprintf("fake_large_thumb_%d.jpg", i))
+					largeData := make([]byte, 1*1024*1024) // 1MB file each
+					err = os.WriteFile(largeCacheFile, largeData, 0644)
+					if err != nil {
+						t.Fatalf("Failed to create large cache file: %v", err)
+					}
+					// Set different modification times to test pruning order
+					modTime := time.Now().Add(-time.Duration(i) * time.Hour)
+					os.Chtimes(largeCacheFile, modTime, modTime)
+				}
+
+				// Verify cache size is above limit
+				cacheManager := NewCacheManager(customCacheDir)
+				cacheSize, err := cacheManager.SizeMB()
+				if err != nil {
+					t.Fatalf("Failed to get cache size: %v", err)
+				}
+				t.Logf("Cache size before test: %d MB, limit: %d MB", cacheSize, test.cacheLimitMB)
+				if cacheSize <= int64(test.cacheLimitMB) {
+					t.Fatalf("Cache size %d MB should be > limit %d MB for this test", cacheSize, test.cacheLimitMB)
+				}
+			}
+
+			// Create test image
+			testImagePath := filepath.Join(testDir, "test_"+test.name+".png")
+			img := image.NewRGBA(image.Rect(0, 0, 32, 32))
+			// Fill with red color
+			for y := 0; y < 32; y++ {
+				for x := 0; x < 32; x++ {
+					img.Set(x, y, color.RGBA{255, 0, 0, 255})
+				}
+			}
+
+			file, err := os.Create(testImagePath)
+			if err != nil {
+				t.Fatalf("Failed to create test image: %v", err)
+			}
+			defer file.Close()
+
+			if err := png.Encode(file, img); err != nil {
+				t.Fatalf("Failed to encode test image: %v", err)
+			}
+			file.Close()
+
+			// Generate thumbnail with cache limit
+			thumbPath, err := GenerateWithCacheLimit(testImagePath, 16, test.cacheLimitMB)
+
+			if test.expectError {
+				if err == nil {
+					t.Errorf("expected error but got none")
+					return
+				}
+				if !errors.Is(err, test.errorType) {
+					t.Errorf("expected error %v, got %v", test.errorType, err)
+					return
+				}
+				// For error case, thumbnail path should be empty
+				if thumbPath != "" {
+					t.Errorf("expected empty thumbnail path on error, got %s", thumbPath)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+					return
+				}
+				// Verify thumbnail was created
+				if _, err := os.Stat(thumbPath); os.IsNotExist(err) {
+					t.Errorf("thumbnail file was not created at %s", thumbPath)
+				}
+
+				// For cache limit exceeded test, verify cache size is within limit after generation
+				if strings.Contains(test.name, "cache limit exceeded") {
+					cacheManager := NewCacheManager(customCacheDir)
+					finalCacheSize, err := cacheManager.SizeMB()
+					if err != nil {
+						t.Errorf("Failed to get final cache size: %v", err)
+					} else {
+						t.Logf("Final cache size: %d MB, limit: %d MB", finalCacheSize, test.cacheLimitMB)
+						if finalCacheSize > int64(test.cacheLimitMB) {
+							t.Errorf("Cache size %d MB exceeds limit %d MB after generation", finalCacheSize, test.cacheLimitMB)
+						}
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestCacheSizeMB(t *testing.T) {
+	testDir := t.TempDir()
+	customCacheDir := filepath.Join(testDir, "cache")
+
+	// Initially empty cache should have size 0
+	cacheManager := NewCacheManager(customCacheDir)
+	size, err := cacheManager.SizeMB()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if size != 0 {
+		t.Errorf("expected empty cache size 0, got %d", size)
+	}
+
+	// Set cache dir for thumbnail generation
+	os.Setenv("SLIMSERVE_CACHE_DIR", customCacheDir)
+	defer os.Unsetenv("SLIMSERVE_CACHE_DIR")
+
+	// Create test image and thumbnail
+	testImagePath := filepath.Join(testDir, "test.png")
+	img := image.NewRGBA(image.Rect(0, 0, 32, 32))
+	file, err := os.Create(testImagePath)
+	if err != nil {
+		t.Fatalf("Failed to create test image: %v", err)
+	}
+	defer file.Close()
+
+	if err := png.Encode(file, img); err != nil {
+		t.Fatalf("Failed to encode test image: %v", err)
+	}
+	file.Close()
+
+	_, err = GenerateWithCacheLimit(testImagePath, 16, 0) // No limit
+	if err != nil {
+		t.Errorf("unexpected error creating thumbnail: %v", err)
+	}
+
+	// Cache should now have some size
+	size, err = cacheManager.SizeMB()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	// Size should be small but non-negative (thumbnail files are typically small, may be 0 MB due to rounding)
+	if size < 0 {
+		t.Errorf("expected non-negative cache size, got %d", size)
+	}
+}
+
+func TestBackwardCompatibility(t *testing.T) {
+	testDir := t.TempDir()
+	customCacheDir := filepath.Join(testDir, "cache")
+	os.Setenv("SLIMSERVE_CACHE_DIR", customCacheDir)
+	defer os.Unsetenv("SLIMSERVE_CACHE_DIR")
+
+	// Create test image
+	testImagePath := filepath.Join(testDir, "test.png")
+	img := image.NewRGBA(image.Rect(0, 0, 32, 32))
+	file, err := os.Create(testImagePath)
+	if err != nil {
+		t.Fatalf("Failed to create test image: %v", err)
+	}
+	defer file.Close()
+
+	if err := png.Encode(file, img); err != nil {
+		t.Fatalf("Failed to encode test image: %v", err)
+	}
+	file.Close()
+
+	// Test that the original Generate function still works (should have no cache limit)
+	thumbPath1, err := Generate(testImagePath, 16)
+	if err != nil {
+		t.Fatalf("Generate failed: %v", err)
+	}
+
+	// Test that GenerateWithCacheLimit with 0 limit works the same
+	thumbPath2, err := GenerateWithCacheLimit(testImagePath, 16, 0)
+	if err != nil {
+		t.Fatalf("GenerateWithCacheLimit failed: %v", err)
+	}
+
+	// Both should generate thumbnails (cache paths may differ due to timing, but both should exist)
+	if _, err := os.Stat(thumbPath1); os.IsNotExist(err) {
+		t.Errorf("thumbnail from Generate was not created at %s", thumbPath1)
+	}
+	if _, err := os.Stat(thumbPath2); os.IsNotExist(err) {
+		t.Errorf("thumbnail from GenerateWithCacheLimit was not created at %s", thumbPath2)
 	}
 }

@@ -100,6 +100,9 @@ func compareConfigs(t *testing.T, actual, expected Config) {
 	if actual.Password != expected.Password {
 		t.Errorf("Password: expected %q, got %q", expected.Password, actual.Password)
 	}
+	if actual.MaxThumbCacheMB != expected.MaxThumbCacheMB {
+		t.Errorf("MaxThumbCacheMB: expected %d, got %d", expected.MaxThumbCacheMB, actual.MaxThumbCacheMB)
+	}
 }
 
 func TestLoadConfigDefaults(t *testing.T) {
@@ -217,6 +220,7 @@ func TestLoadConfigEnvVars(t *testing.T) {
 				EnableAuth:      true,
 				Username:        "envuser",
 				Password:        "envpass",
+				MaxThumbCacheMB: 100, // Default value
 			},
 		},
 		{
@@ -234,6 +238,7 @@ func TestLoadConfigEnvVars(t *testing.T) {
 				EnableAuth:      false,         // Default
 				Username:        "",            // Default
 				Password:        "",            // Default
+				MaxThumbCacheMB: 100,           // Default
 			},
 		},
 		{
@@ -250,6 +255,7 @@ func TestLoadConfigEnvVars(t *testing.T) {
 				EnableAuth:      false,                                  // Default
 				Username:        "",                                     // Default
 				Password:        "",                                     // Default
+				MaxThumbCacheMB: 100,                                    // Default
 			},
 		},
 		{
@@ -266,6 +272,7 @@ func TestLoadConfigEnvVars(t *testing.T) {
 				EnableAuth:      false,
 				Username:        "",
 				Password:        "",
+				MaxThumbCacheMB: 100, // Default
 			},
 		},
 		{
@@ -283,6 +290,7 @@ func TestLoadConfigEnvVars(t *testing.T) {
 				EnableAuth:      false, // Default (invalid bool ignored)
 				Username:        "",
 				Password:        "",
+				MaxThumbCacheMB: 100, // Default
 			},
 		},
 	}
@@ -688,6 +696,7 @@ func clearSlimServeEnvVars() {
 		"SLIMSERVE_USERNAME",
 		"SLIMSERVE_PASSWORD",
 		"SLIMSERVE_CONFIG",
+		"SLIMSERVE_THUMB_CACHE_MB",
 	}
 
 	for _, envVar := range envVars {

@@ -8,5 +8,6 @@
     "log_level": "info",
     "enable_auth": false,
     "username": "",
-    "password": ""
+    "password": "",
+    "thumb_cache_mb": 100
 }

@@ -10,6 +10,7 @@ type Config struct {
 	EnableAuth      bool     `json:"enable_auth"`
 	Username        string   `json:"username"`
 	Password        string   `json:"password"`
+	MaxThumbCacheMB int      `json:"thumb_cache_mb"`
 }
 
 // Default returns a Config with default values
@@ -23,5 +24,6 @@ func Default() *Config {
 		EnableAuth:      false,
 		Username:        "",
 		Password:        "",
+		MaxThumbCacheMB: 100,
 	}
 }

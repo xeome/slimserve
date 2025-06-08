@@ -107,6 +107,12 @@ func loadFromEnv(cfg *Config) {
 	if password := os.Getenv("SLIMSERVE_PASSWORD"); password != "" {
 		cfg.Password = password
 	}
+
+	if thumbCache := os.Getenv("SLIMSERVE_THUMB_CACHE_MB"); thumbCache != "" {
+		if val, err := strconv.Atoi(thumbCache); err == nil {
+			cfg.MaxThumbCacheMB = val
+		}
+	}
 }
 
 // loadFromFlags loads configuration from CLI flags
@@ -138,6 +144,9 @@ func loadFromFlags(cfg *Config) {
 	}
 	if flag.Lookup("config") == nil {
 		flag.String("config", "", "Path to configuration file")
+	}
+	if flag.Lookup("thumb-cache-mb") == nil {
+		flag.Int("thumb-cache-mb", cfg.MaxThumbCacheMB, "Maximum thumbnail cache size in MB")
 	}
 
 	// Parse flags if not already parsed
@@ -186,5 +195,11 @@ func loadFromFlags(cfg *Config) {
 
 	if passwordFlag := flag.Lookup("password"); passwordFlag != nil && passwordFlag.Value.String() != passwordFlag.DefValue {
 		cfg.Password = passwordFlag.Value.String()
+	}
+
+	if thumbCacheFlag := flag.Lookup("thumb-cache-mb"); thumbCacheFlag != nil && thumbCacheFlag.Value.String() != thumbCacheFlag.DefValue {
+		if val, err := strconv.Atoi(thumbCacheFlag.Value.String()); err == nil {
+			cfg.MaxThumbCacheMB = val
+		}
 	}
 }

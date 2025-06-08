@@ -459,8 +459,8 @@ func (h *Handler) serveThumbnailFromRoot(c *gin.Context, relPath string) {
 		// This is a temporary approach until we refactor the thumbnail subsystem
 		fullPath := filepath.Join(root.Path(), relPath)
 
-		// Generate thumbnail
-		thumbPath, err := files.Generate(fullPath, 200)
+		// Generate thumbnail with cache size limit
+		thumbPath, err := files.GenerateWithCacheLimit(fullPath, 200, h.config.MaxThumbCacheMB)
 		if err != nil {
 			// Fallback to serving original file on error
 			if h.serveFileFromRoot(c, root, relPath) {

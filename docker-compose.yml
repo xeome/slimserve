@@ -12,11 +12,11 @@ services:
       - ./data:/data
       # Configuration file - customize as needed
       - ./example-config.json:/etc/slimserve/config.json:ro
-    environment:
+    # environment:
       # # Override config file location if needed
       # - CONFIG_FILE=/etc/slimserve/config.json
       # # Environment variables (override config file settings)
-      - SLIMSERVE_HOST=0.0.0.0
+      # - SLIMSERVE_HOST=0.0.0.0
       # - SLIMSERVE_PORT=8080
       # - SLIMSERVE_DIRS=/data
       # - SLIMSERVE_DOT_FILES=false  # Allow dot files (true=allow, false=block)
