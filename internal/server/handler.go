@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"html/template"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -243,14 +244,26 @@ func buildFileURL(basePath, fileName string) string {
 }
 
 func formatSize(size int64) string {
-	if size < 1024 {
-		return fmt.Sprintf("%d B", size)
-	} else if size < 1024*1024 {
-		return fmt.Sprintf("%.1f KB", float64(size)/1024)
-	} else if size < 1024*1024*1024 {
-		return fmt.Sprintf("%.1f MB", float64(size)/(1024*1024))
+	units := []struct {
+		threshold int64
+		unit      string
+		divisor   float64
+	}{
+		{1024 * 1024 * 1024, "GB", 1024 * 1024 * 1024},
+		{1024 * 1024, "MB", 1024 * 1024},
+		{1024, "KB", 1024},
+		{0, "B", 1},
 	}
-	return fmt.Sprintf("%.1f GB", float64(size)/(1024*1024*1024))
+
+	for _, u := range units {
+		if size >= u.threshold {
+			if u.unit == "B" {
+				return fmt.Sprintf("%d %s", size, u.unit)
+			}
+			return fmt.Sprintf("%.1f %s", float64(size)/u.divisor, u.unit)
+		}
+	}
+	return fmt.Sprintf("%d B", size)
 }
 
 // FileTypeInfo holds both type and icon for a file extension
@@ -259,41 +272,34 @@ type FileTypeInfo struct {
 	Icon string
 }
 
-// fileExtMap maps file extensions to their type and icon
+// fileExtMap maps file extensions to their type and icon for special cases
 var fileExtMap = map[string]FileTypeInfo{
-	// Images
-	".jpg":  {Type: "image", Icon: "image"},
-	".jpeg": {Type: "image", Icon: "image"},
-	".png":  {Type: "image", Icon: "image"},
-	".gif":  {Type: "image", Icon: "image"},
-	".webp": {Type: "image", Icon: "image"},
-	".svg":  {Type: "image", Icon: "image"},
-
-	// Videos
-	".mp4":  {Type: "video", Icon: "video"},
-	".avi":  {Type: "video", Icon: "video"},
-	".mkv":  {Type: "video", Icon: "video"},
-	".mov":  {Type: "video", Icon: "video"},
-	".webm": {Type: "video", Icon: "video"},
-
-	// Audio
-	".mp3":  {Type: "audio", Icon: "audio"},
-	".wav":  {Type: "audio", Icon: "audio"},
-	".flac": {Type: "audio", Icon: "audio"},
-	".ogg":  {Type: "audio", Icon: "audio"},
-
-	// Documents
+	// Archives and special files that don't have standard MIME types
+	".zip":  {Type: "file", Icon: "archive"},
+	".tar":  {Type: "file", Icon: "archive"},
+	".gz":   {Type: "file", Icon: "archive"},
+	".rar":  {Type: "file", Icon: "archive"},
 	".pdf":  {Type: "document", Icon: "file-pdf"},
+	".md":   {Type: "document", Icon: "file-text"},
 	".doc":  {Type: "document", Icon: "file-text"},
 	".docx": {Type: "document", Icon: "file-text"},
 	".txt":  {Type: "document", Icon: "file-text"},
-	".md":   {Type: "document", Icon: "file-text"},
+}
 
-	// Archives
-	".zip": {Type: "file", Icon: "archive"},
-	".tar": {Type: "file", Icon: "archive"},
-	".gz":  {Type: "file", Icon: "archive"},
-	".rar": {Type: "file", Icon: "archive"},
+// getFileTypeFromMime determines file type and icon based on MIME type
+func getFileTypeFromMime(mimeType string) (string, string) {
+	switch {
+	case strings.HasPrefix(mimeType, "image/"):
+		return "image", "image"
+	case strings.HasPrefix(mimeType, "video/"):
+		return "video", "video"
+	case strings.HasPrefix(mimeType, "audio/"):
+		return "audio", "audio"
+	case strings.HasPrefix(mimeType, "text/") || strings.Contains(mimeType, "document"):
+		return "document", "file-text"
+	default:
+		return "file", "file"
+	}
 }
 
 func determineFileType(entry os.DirEntry) string {
@@ -305,6 +311,14 @@ func determineFileType(entry os.DirEntry) string {
 	if info, exists := fileExtMap[ext]; exists {
 		return info.Type
 	}
+
+	// Use MIME type for common extensions
+	mimeType := mime.TypeByExtension(ext)
+	if mimeType != "" {
+		fileType, _ := getFileTypeFromMime(mimeType)
+		return fileType
+	}
+
 	return "file"
 }
 
@@ -317,17 +331,21 @@ func getFileIcon(entry os.DirEntry) string {
 	if info, exists := fileExtMap[ext]; exists {
 		return info.Icon
 	}
+
+	// Use MIME type for common extensions
+	mimeType := mime.TypeByExtension(ext)
+	if mimeType != "" {
+		_, icon := getFileTypeFromMime(mimeType)
+		return icon
+	}
+
 	return "file"
 }
 
 func isImageFile(fileName string) bool {
 	ext := strings.ToLower(filepath.Ext(fileName))
-	switch ext {
-	case ".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg":
-		return true
-	default:
-		return false
-	}
+	mimeType := mime.TypeByExtension(ext)
+	return strings.HasPrefix(mimeType, "image/")
 }
 
 func buildThumbnailURL(basePath, fileName string) string {
@@ -397,6 +415,23 @@ func (h *Handler) serveStaticFile(c *gin.Context, requestPath string) {
 	c.Data(http.StatusOK, c.GetHeader("Content-Type"), fileData)
 }
 
+// serveFileFromRoot serves a file from RootFS, returns true if successful
+func (h *Handler) serveFileFromRoot(c *gin.Context, root *security.RootFS, relPath string) bool {
+	file, err := root.Open(relPath)
+	if err != nil {
+		return false
+	}
+	defer file.Close()
+
+	fileInfo, err := file.Stat()
+	if err != nil {
+		return false
+	}
+
+	http.ServeContent(c.Writer, c.Request, fileInfo.Name(), fileInfo.ModTime(), file)
+	return true
+}
+
 // serveThumbnailFromRoot handles thumbnail requests using RootFS
 func (h *Handler) serveThumbnailFromRoot(c *gin.Context, relPath string) {
 	// Try to find the file in one of the RootFS instances
@@ -414,19 +449,10 @@ func (h *Handler) serveThumbnailFromRoot(c *gin.Context, relPath string) {
 		// Check if it's an image file
 		if !isImageFile(filepath.Base(relPath)) {
 			// Fallback to serving original file
-			file, err := root.Open(relPath)
-			if err != nil {
-				continue
+			if h.serveFileFromRoot(c, root, relPath) {
+				return
 			}
-			defer file.Close()
-
-			fileInfo, err := file.Stat()
-			if err != nil {
-				continue
-			}
-
-			http.ServeContent(c.Writer, c.Request, fileInfo.Name(), fileInfo.ModTime(), file)
-			return
+			continue
 		}
 
 		// For thumbnail generation, we still need the full path
@@ -437,19 +463,10 @@ func (h *Handler) serveThumbnailFromRoot(c *gin.Context, relPath string) {
 		thumbPath, err := files.Generate(fullPath, 200)
 		if err != nil {
 			// Fallback to serving original file on error
-			file, err := root.Open(relPath)
-			if err != nil {
-				continue
+			if h.serveFileFromRoot(c, root, relPath) {
+				return
 			}
-			defer file.Close()
-
-			fileInfo, err := file.Stat()
-			if err != nil {
-				continue
-			}
-
-			http.ServeContent(c.Writer, c.Request, fileInfo.Name(), fileInfo.ModTime(), file)
-			return
+			continue
 		}
 
 		// Serve the thumbnail

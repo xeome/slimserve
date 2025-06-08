@@ -105,7 +105,6 @@ func (s *Server) accessControlMiddleware() gin.HandlerFunc {
 		}
 
 		// Check if path is within allowed roots
-		pathAllowed := false
 		for _, root := range s.config.Directories {
 			// Try to resolve the absolute path for the requested file
 			candidatePath := filepath.Join(root, relPath)
@@ -128,17 +127,13 @@ func (s *Server) accessControlMiddleware() gin.HandlerFunc {
 
 			// Check if the absolute path is within the allowed root
 			if strings.HasPrefix(absPath+string(filepath.Separator), rootPath) || absPath == filepath.Clean(absRoot) {
-				pathAllowed = true
-				break
+				c.Next()
+				return
 			}
 		}
 
-		if !pathAllowed {
-			c.AbortWithStatus(http.StatusForbidden)
-			return
-		}
-
-		c.Next()
+		// Path not allowed in any root
+		c.AbortWithStatus(http.StatusForbidden)
 	}
 }
 

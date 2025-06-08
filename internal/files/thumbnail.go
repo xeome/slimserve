@@ -13,6 +13,8 @@ import (
 	"slimserve/internal/logger"
 	"strings"
 	"time"
+
+	"golang.org/x/image/draw"
 )
 
 // Generate creates a thumbnail for the given source file path with the specified maximum dimension.
@@ -135,14 +137,8 @@ func generateThumbnail(srcPath, thumbPath string, maxDim int, outputExt string) 
 	// Create new image with calculated dimensions
 	thumbImg := image.NewRGBA(image.Rect(0, 0, newWidth, newHeight))
 
-	// Scale using nearest neighbor
-	for y := 0; y < newHeight; y++ {
-		for x := 0; x < newWidth; x++ {
-			srcX := x * width / newWidth
-			srcY := y * height / newHeight
-			thumbImg.Set(x, y, srcImg.At(srcX, srcY))
-		}
-	}
+	// Scale using CatmullRom for highest quality
+	draw.CatmullRom.Scale(thumbImg, thumbImg.Bounds(), srcImg, srcImg.Bounds(), draw.Over, nil)
 
 	// Create output file
 	thumbFile, err := os.Create(thumbPath)

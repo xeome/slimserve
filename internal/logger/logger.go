@@ -1,7 +1,6 @@
 package logger
 
 import (
-	"errors"
 	"os"
 	"strings"
 	"time"
@@ -42,27 +41,18 @@ func Init(cfg *config.Config) error {
 
 // parseLogLevel converts string log level to zerolog.Level
 func parseLogLevel(levelStr string) (zerolog.Level, error) {
-	switch strings.ToLower(levelStr) {
-	case "panic":
-		return zerolog.PanicLevel, nil
-	case "fatal":
-		return zerolog.FatalLevel, nil
-	case "error":
-		return zerolog.ErrorLevel, nil
-	case "warn", "warning":
-		return zerolog.WarnLevel, nil
-	case "info":
-		return zerolog.InfoLevel, nil
-	case "debug":
-		return zerolog.DebugLevel, nil
-	case "trace":
-		return zerolog.TraceLevel, nil
-	case "":
-		// Default to info if empty
-		return zerolog.InfoLevel, nil
-	default:
-		return zerolog.InfoLevel, errors.New("unknown log level: " + levelStr)
+	if levelStr == "" {
+		return zerolog.InfoLevel, nil // Default level
 	}
+	// Handle "warning" alias for "warn"
+	if strings.ToLower(levelStr) == "warning" {
+		levelStr = "warn"
+	}
+	level, err := zerolog.ParseLevel(levelStr)
+	if err != nil {
+		return zerolog.InfoLevel, nil // Fallback to default without error
+	}
+	return level, nil
 }
 
 // Middleware returns a gin middleware for HTTP request logging
@@ -118,24 +108,4 @@ func Errorf(format string, v ...interface{}) {
 // Warnf logs a warning message with formatting
 func Warnf(format string, v ...interface{}) {
 	Log.Warn().Msgf(format, v...)
-}
-
-// Info logs a simple info message
-func Info(msg string) {
-	Log.Info().Msg(msg)
-}
-
-// Debug logs a simple debug message
-func Debug(msg string) {
-	Log.Debug().Msg(msg)
-}
-
-// Error logs a simple error message
-func Error(msg string) {
-	Log.Error().Msg(msg)
-}
-
-// Warn logs a simple warning message
-func Warn(msg string) {
-	Log.Warn().Msg(msg)
 }
