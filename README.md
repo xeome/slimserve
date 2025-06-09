@@ -2,7 +2,7 @@
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/xeome/slimserve)](https://goreportcard.com/report/github.com/xeome/slimserve)
 [![Coverage](https://img.shields.io/codecov/c/github/xeome/slimserve?label=coverage)](https://codecov.io/gh/xeome/slimserve)
-[![Docker Pulls](https://img.shields.io/docker/pulls/xeome/slimserve)](https://hub.docker.com/r/xeome/slimserve)
+[![GitHub Container Registry](https://img.shields.io/badge/ghcr.io-slimserve-blue)](https://github.com/xeome/slimserve/pkgs/container/slimserve)
 [![License](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 [![Go Version](https://img.shields.io/badge/go-1.24.4-blue.svg)](https://golang.org/dl/)
 
@@ -72,17 +72,17 @@ docker-compose down
 ### Manual Docker Run
 
 ```bash
-# Build the image
-docker build -t slimserve:latest .
+# Pull the image from GitHub Container Registry
+docker pull ghcr.io/xeome/slimserve:latest
 
 # Run with mounted directory
-docker run --rm -p 8080:8080 -v $(pwd)/data:/data slimserve:latest
+docker run --rm -p 8080:8080 -v $(pwd)/data:/data ghcr.io/xeome/slimserve:latest
 
 # Run with custom config file
 docker run --rm -p 8080:8080 \
   -v $(pwd)/data:/data \
   -v $(pwd)/my-config.json:/etc/slimserve/config.json:ro \
-  slimserve:latest
+  ghcr.io/xeome/slimserve:latest
 ```
 
 ## Configuration
