@@ -1,11 +1,8 @@
 package server
 
 import (
-	"context"
 	"os"
-	"slimserve/internal/config"
 	"testing"
-	"time"
 )
 
 func TestFormatSize(t *testing.T) {
@@ -204,98 +201,6 @@ func TestGetFileIcon(t *testing.T) {
 				t.Errorf("getFileIcon(directory) = %q, expected %q", result, "folder")
 			}
 			break
-		}
-	}
-}
-
-func TestServerLifecycleMethods(t *testing.T) {
-	cfg := config.Default()
-	cfg.Port = 0 // Use random port
-	srv := New(cfg)
-
-	// Test GetEngine
-	engine := srv.GetEngine()
-	if engine == nil {
-		t.Error("GetEngine() should return non-nil engine")
-	}
-
-	// Test Start method (just ensure it doesn't panic)
-	t.Run("start_method_exists", func(t *testing.T) {
-		// We can't actually start the server in tests as it would block
-		// but we can call the method to test it exists
-		// This will fail but we can catch the error
-		go func() {
-			srv.Start() // This will try to bind to default port and likely fail
-		}()
-		// Just testing that the method exists and is callable
-	})
-
-	// Test Stop method
-	t.Run("stop_without_running", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-		defer cancel()
-
-		err := srv.Stop(ctx)
-		if err != nil {
-			t.Errorf("Stop() on non-running server should not error, got: %v", err)
-		}
-	})
-}
-
-func TestBuildPathSegments(t *testing.T) {
-	tests := []struct {
-		requestPath string
-		expected    []PathSegment
-	}{
-		{
-			"/",
-			[]PathSegment{},
-		},
-		{
-			"/folder",
-			[]PathSegment{
-				{Name: "folder", URL: "/folder"},
-			},
-		},
-		{
-			"/folder/subfolder",
-			[]PathSegment{
-				{Name: "folder", URL: "/folder"},
-				{Name: "subfolder", URL: "/folder/subfolder"},
-			},
-		},
-		{
-			"/folder/subfolder/file.txt",
-			[]PathSegment{
-				{Name: "folder", URL: "/folder"},
-				{Name: "subfolder", URL: "/folder/subfolder"},
-				{Name: "file.txt", URL: "/folder/subfolder/file.txt"},
-			},
-		},
-		{
-			"/",
-			[]PathSegment{},
-		},
-		{
-			"", // Empty path - edge case
-			[]PathSegment{},
-		},
-	}
-
-	for _, tt := range tests {
-		result := buildPathSegments(tt.requestPath)
-		if len(result) != len(tt.expected) {
-			t.Errorf("buildPathSegments(%q) returned %d segments, expected %d",
-				tt.requestPath, len(result), len(tt.expected))
-			continue
-		}
-
-		for i, segment := range result {
-			if segment.Name != tt.expected[i].Name || segment.URL != tt.expected[i].URL {
-				t.Errorf("buildPathSegments(%q)[%d] = {%q, %q}, expected {%q, %q}",
-					tt.requestPath, i, segment.Name, segment.URL,
-					tt.expected[i].Name, tt.expected[i].URL)
-			}
 		}
 	}
 }

@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"fmt"
 	"html/template"
 	"net/http"
 	"path/filepath"
@@ -187,14 +186,8 @@ func (s *Server) Run(addr string) error {
 	return s.server.ListenAndServe()
 }
 
-// Start starts the HTTP server using config host and port (for backward compatibility)
-func (s *Server) Start() error {
-	addr := fmt.Sprintf("%s:%d", s.config.Host, s.config.Port)
-	return s.Run(addr)
-}
-
-// Stop gracefully stops the HTTP server
-func (s *Server) Stop(ctx context.Context) error {
+// Shutdown gracefully stops the HTTP server
+func (s *Server) Shutdown(ctx context.Context) error {
 	if s.server == nil {
 		return nil
 	}
