@@ -32,38 +32,57 @@ func isIgnored(relPath string, root *security.RootFS, cfg *config.Config) (bool,
 		return true, nil
 	}
 
-	var allPatterns []*Pattern
+	var lastMatch *Pattern
 
+	// Global patterns have the lowest precedence, so check them first.
 	globalPatternReader := strings.NewReader(strings.Join(cfg.IgnorePatterns, "\n"))
 	globalPatterns, err := Parse(globalPatternReader)
 	if err != nil {
 		return false, fmt.Errorf("failed to parse global ignore patterns: %w", err)
 	}
-	allPatterns = append(allPatterns, globalPatterns...)
+	for _, p := range globalPatterns {
+		if p.Regex.MatchString(relPath) {
+			lastMatch = p
+		}
+	}
 
-	currentDir := filepath.Dir(relPath)
-	for {
-		ignoreFilePath := filepath.Join(currentDir, ignoreFileName)
+	// .slimserveignore files override global ignores.
+	// We check from the root down to the file's directory, so the last match found has the highest precedence.
+	var pathSegments []string
+	if relPath != "." && relPath != "/" {
+		pathSegments = strings.Split(filepath.Dir(relPath), string(filepath.Separator))
+	}
+
+	currentCheckPath := "."
+	for i := -1; i < len(pathSegments); i++ {
+		if i > -1 {
+			currentCheckPath = filepath.Join(currentCheckPath, pathSegments[i])
+		}
+
+		ignoreFilePath := filepath.Join(currentCheckPath, ignoreFileName)
 		patterns, err := getOrReadIgnoreFile(root, ignoreFilePath)
 		if err != nil {
 			logger.Log.Warn().Err(err).Str("path", ignoreFilePath).Msg("Failed to read or parse ignore file")
 		}
-		allPatterns = append(allPatterns, patterns...)
 
-		if currentDir == "." || currentDir == "/" || currentDir == "" {
-			break
+		for _, p := range patterns {
+			pathToCheck := relPath
+			// If ignore file is not in root, patterns are relative to it.
+			if currentCheckPath != "." {
+				pathToCheck, _ = filepath.Rel(currentCheckPath, relPath)
+			}
+
+			if p.Regex.MatchString(pathToCheck) {
+				lastMatch = p
+			}
 		}
-		currentDir = filepath.Dir(currentDir)
 	}
 
-	ignored := false
-	for _, p := range allPatterns {
-		if p.Regex.MatchString(relPath) {
-			ignored = !p.Negate
-		}
+	if lastMatch != nil {
+		return !lastMatch.Negate, nil
 	}
 
-	return ignored, nil
+	return false, nil
 }
 
 // getOrReadIgnoreFile retrieves parsed patterns from cache or reads/parses from RootFS.

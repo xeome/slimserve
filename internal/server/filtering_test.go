@@ -42,6 +42,28 @@ secret.*
 `
 	require.NoError(t, os.WriteFile(filepath.Join(nestedDir, ".slimserveignore"), []byte(ignoreContentNested), 0644))
 
+	// --- Negation Test Setup ---
+	negationParentDir := filepath.Join(tmpDir, "negation_parent")
+	require.NoError(t, os.Mkdir(negationParentDir, 0755))
+	negationChildDir := filepath.Join(negationParentDir, "negation_child")
+	require.NoError(t, os.Mkdir(negationChildDir, 0755))
+
+	require.NoError(t, os.WriteFile(filepath.Join(negationParentDir, "general.txt"), []byte("..."), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(negationChildDir, "important.txt"), []byte("..."), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(negationChildDir, "ordinary.txt"), []byte("..."), 0644))
+
+	// Parent ignore file: ignore all .txt files
+	ignoreContentParentNegation := `
+*.txt
+`
+	require.NoError(t, os.WriteFile(filepath.Join(negationParentDir, ".slimserveignore"), []byte(ignoreContentParentNegation), 0644))
+
+	// Child ignore file: negate for important.txt
+	ignoreContentChildNegation := `
+!important.txt
+`
+	require.NoError(t, os.WriteFile(filepath.Join(negationChildDir, ".slimserveignore"), []byte(ignoreContentChildNegation), 0644))
+
 	// --- Test Cases ---
 	cfg := &config.Config{
 		IgnorePatterns: []string{"*.bak", ".env"},
@@ -66,6 +88,10 @@ secret.*
 		{"file within ignored directory", "node_modules/some-lib.js", true},
 		{"public file in nested dir", "nested/public.txt", false},
 		{"secret file in nested dir", "nested/secret.dat", true},
+		// Negation tests
+		{"parent ignored txt", "negation_parent/general.txt", true},
+		{"child negated txt (important)", "negation_parent/negation_child/important.txt", false},
+		{"child still ignored txt (ordinary)", "negation_parent/negation_child/ordinary.txt", true},
 	}
 
 	for _, tt := range tests {

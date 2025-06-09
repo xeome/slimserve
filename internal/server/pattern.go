@@ -37,9 +37,7 @@ func Parse(r io.Reader) ([]*Pattern, error) {
 			line = line[1:]
 		}
 
-		if strings.HasPrefix(line, `\`) {
-			line = line[1:]
-		}
+		line = strings.TrimPrefix(line, `\`)
 
 		builder.Reset()
 
