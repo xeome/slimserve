@@ -24,21 +24,6 @@ SlimServe is a minimalistic and efficient file-serving application that provides
 - 🌐 **Cross-platform support** (Linux, BSD, macOS, Windows)
 - ⚡ **Lightweight and fast** - minimal resource usage
 
-## Architecture
-
-```mermaid
-flowchart TD
-    Main[cmd/slimserve/main.go] --> Config[internal/config/loader.go]
-    Config --> Logger[internal/logger/logger.go]
-    Logger --> Server[internal/server/server.go]
-    Server --> GinEngine[gin.Engine]
-    GinEngine --> Middleware[logging & access control]
-    GinEngine --> Handler[internal/server/handler.go]
-    Handler --> FS[internal/security/rootfs.go]
-    Handler --> Templates[web/embed.go]
-    Handler --> Thumbnail[internal/files/thumbnail.go]
-```
-
 ## Quick Start
 
 ### Binary Installation
@@ -295,12 +280,9 @@ We welcome contributions! Please:
 
 ## Roadmap
 
-- [ ] WebDAV support for file uploads
+- [ ] File uploads
 - [ ] Video thumbnail generation
-- [ ] Plugin system for custom handlers
-- [ ] Advanced authentication (OAuth, LDAP)
 - [ ] File search and indexing
-- [ ] Real-time file change notifications
 
 ## License
 
