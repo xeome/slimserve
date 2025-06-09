@@ -44,6 +44,7 @@ Override any configuration setting using environment variables:
 - `SLIMSERVE_ENABLE_AUTH` - Enable session-based authentication (true/false)
 - `SLIMSERVE_USERNAME` - Username for authentication
 - `SLIMSERVE_PASSWORD` - Password for authentication
+- `SLIMSERVE_IGNORE_PATTERNS` - Comma-separated list of glob patterns to ignore
 - `CONFIG_FILE` - Path to JSON config file (default: `/etc/slimserve/config.json`)
 
 ### Configuration File
@@ -57,7 +58,8 @@ Mount a JSON configuration file to `/etc/slimserve/config.json`:
   "log_level": "info",
   "enable_auth": false,
   "username": "",
-  "password": ""
+  "password": "",
+  "ignore_patterns": ["*.log", ".git/"]
 }
 ```
 

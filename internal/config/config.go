@@ -12,6 +12,7 @@ type Config struct {
 	Password         string   `json:"password"`
 	MaxThumbCacheMB  int      `json:"thumb_cache_mb"`
 	ThumbJpegQuality int      `json:"thumb_jpeg_quality"`
+	IgnorePatterns   []string `json:"ignore_patterns"`
 }
 
 // Default returns a Config with default values
@@ -27,5 +28,6 @@ func Default() *Config {
 		Password:         "",
 		MaxThumbCacheMB:  100,
 		ThumbJpegQuality: 85,
+		IgnorePatterns:   []string{},
 	}
 }

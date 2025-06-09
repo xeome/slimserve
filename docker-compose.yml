@@ -1,7 +1,7 @@
 services:
   slimserve:
     build: .
-    image: slimserve:latest
+    image: ghcr.io/xeome/slimserve:latest
     container_name: slimserve
     restart: unless-stopped
     user: "1001:1001"
@@ -19,7 +19,7 @@ services:
       # - SLIMSERVE_HOST=0.0.0.0
       # - SLIMSERVE_PORT=8080
       # - SLIMSERVE_DIRS=/data
-      # - SLIMSERVE_DOT_FILES=false  # Allow dot files (true=allow, false=block)
+      # - SLIMSERVE_DISABLE_DOTFILES=false  # Allow dot files (true=block, false=allow)
       # - SLIMSERVE_LOG_LEVEL=info
       # - SLIMSERVE_ENABLE_AUTH=false
       # Uncomment and set for basic authentication

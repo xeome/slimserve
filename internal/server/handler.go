@@ -108,6 +108,18 @@ func (h *Handler) ServeFiles(c *gin.Context) {
 
 	// Try to find the file in one of the RootFS instances
 	for _, root := range h.roots {
+		// Check if the path is ignored before proceeding
+		ignored, err := isIgnored(relPath, root, h.config)
+		if err != nil {
+			logger.Log.Error().Err(err).Str("path", relPath).Msg("Error checking if path is ignored")
+			c.AbortWithStatus(http.StatusInternalServerError)
+			return
+		}
+		if ignored {
+			c.AbortWithStatus(http.StatusForbidden)
+			return
+		}
+
 		// Use RootFS.Stat for traversal-resistant file access
 		info, err := root.Stat(relPath)
 		if err != nil {
@@ -142,11 +154,24 @@ func (h *Handler) ServeFiles(c *gin.Context) {
 }
 
 // buildListingData creates a directory listing from entries, shared by both listing methods
-func (h *Handler) buildListingData(entries []os.DirEntry, requestPath string) ListingData {
+func (h *Handler) buildListingData(root *security.RootFS, entries []os.DirEntry, requestPath string) ListingData {
 	var files []FileItem
 	for _, entry := range entries {
 		// Skip dot files if configured to do so
 		if h.config.DisableDotFiles && strings.HasPrefix(entry.Name(), ".") {
+			continue
+		}
+
+		// Check if the entry is ignored
+		// We build the relative path for the entry to check against ignore rules.
+		entryRelPath := filepath.Join(strings.TrimPrefix(requestPath, "/"), entry.Name())
+
+		ignored, err := isIgnored(entryRelPath, root, h.config)
+		if err != nil {
+			logger.Log.Error().Err(err).Str("path", entryRelPath).Msg("Error checking if path is ignored")
+			continue // Skip problematic files
+		}
+		if ignored {
 			continue
 		}
 
@@ -189,27 +214,6 @@ func (h *Handler) buildListingData(entries []os.DirEntry, requestPath string) Li
 	}
 }
 
-func (h *Handler) serveDirectory(c *gin.Context, fullPath, requestPath string) {
-	entries, err := os.ReadDir(fullPath)
-	if err != nil {
-		logger.Log.Error().Err(err).Str("path", fullPath).Msg("Error reading directory")
-		c.AbortWithStatus(http.StatusInternalServerError)
-		return
-	}
-
-	data := h.buildListingData(entries, requestPath)
-
-	c.Header("Content-Type", "text/html")
-	if c.Request.Method == http.MethodHead {
-		c.Status(http.StatusOK)
-		return
-	}
-	if err := h.tmpl.ExecuteTemplate(c.Writer, "listing.html", data); err != nil {
-		logger.Log.Error().Err(err).Str("template", "listing.html").Msg("Error executing template")
-		c.AbortWithStatus(http.StatusInternalServerError)
-	}
-}
-
 func (h *Handler) serveDirectoryFromRoot(c *gin.Context, root *security.RootFS, relPath, requestPath string) {
 	// Handle empty or root path cases
 	if relPath == "" {
@@ -223,7 +227,7 @@ func (h *Handler) serveDirectoryFromRoot(c *gin.Context, root *security.RootFS, 
 		return
 	}
 
-	data := h.buildListingData(entries, requestPath)
+	data := h.buildListingData(root, entries, requestPath)
 
 	c.Header("Content-Type", "text/html")
 	if c.Request.Method == http.MethodHead {
@@ -460,7 +464,7 @@ func (h *Handler) serveThumbnailFromRoot(c *gin.Context, relPath string) {
 		fullPath := filepath.Join(root.Path(), relPath)
 
 		// Generate thumbnail with cache size limit
-		thumbPath, err := files.GenerateWithCacheLimit(fullPath, 200, h.config.MaxThumbCacheMB, h.config.ThumbJpegQuality)
+		thumbPath, err := files.GenerateWithCacheLimit(fullPath, 250, h.config.MaxThumbCacheMB, h.config.ThumbJpegQuality)
 		if err != nil {
 			// If file is too large, return a 413 Payload Too Large status
 			if err == files.ErrFileTooLarge {

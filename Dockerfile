@@ -78,10 +78,10 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 ENV CONFIG_FILE=/etc/slimserve/config.json
 
 # Add metadata labels
-LABEL maintainer="SlimServe" \
-      description="Lightweight, suckless file server. Environment variables: SLIMSERVE_HOST, SLIMSERVE_PORT, SLIMSERVE_DIRS, SLIMSERVE_DOT_FILES, SLIMSERVE_LOG_LEVEL, SLIMSERVE_ENABLE_AUTH, SLIMSERVE_USERNAME, SLIMSERVE_PASSWORD, CONFIG_FILE" \
+LABEL maintainer="xeome" \
+      description="Lightweight, efficient file server. Environment variables: SLIMSERVE_HOST, SLIMSERVE_PORT, SLIMSERVE_DIRS, SLIMSERVE_DISABLE_DOTFILES, SLIMSERVE_LOG_LEVEL, SLIMSERVE_ENABLE_AUTH, SLIMSERVE_USERNAME, SLIMSERVE_PASSWORD, CONFIG_FILE" \
       version="1.0" \
-      org.opencontainers.image.source="https://github.com/slimserve/slimserve"
+      org.opencontainers.image.source="https://github.com/xeome/slimserve"
 
 # Use entrypoint script for flexible configuration
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

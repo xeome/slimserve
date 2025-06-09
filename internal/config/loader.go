@@ -119,6 +119,13 @@ func loadFromEnv(cfg *Config) {
 			cfg.ThumbJpegQuality = val
 		}
 	}
+
+	if ignorePatterns := os.Getenv("SLIMSERVE_IGNORE_PATTERNS"); ignorePatterns != "" {
+		cfg.IgnorePatterns = strings.Split(ignorePatterns, ",")
+		for i, p := range cfg.IgnorePatterns {
+			cfg.IgnorePatterns[i] = strings.TrimSpace(p)
+		}
+	}
 }
 
 // loadFromFlags loads configuration from CLI flags
@@ -156,6 +163,9 @@ func loadFromFlags(cfg *Config) {
 	}
 	if flag.Lookup("thumb-jpeg-quality") == nil {
 		flag.Int("thumb-jpeg-quality", cfg.ThumbJpegQuality, "Thumbnail JPEG quality (1-100)")
+	}
+	if flag.Lookup("ignore-patterns") == nil {
+		flag.String("ignore-patterns", "", "Comma-separated list of glob patterns to ignore")
 	}
 
 	// Parse flags if not already parsed
@@ -215,6 +225,24 @@ func loadFromFlags(cfg *Config) {
 	if jpegQualityFlag := flag.Lookup("thumb-jpeg-quality"); jpegQualityFlag != nil && jpegQualityFlag.Value.String() != jpegQualityFlag.DefValue {
 		if val, err := strconv.Atoi(jpegQualityFlag.Value.String()); err == nil {
 			cfg.ThumbJpegQuality = val
+		}
+	}
+
+	if ignorePatternsFlag := flag.Lookup("ignore-patterns"); ignorePatternsFlag != nil && ignorePatternsFlag.Value.String() != "" {
+		patterns := strings.Split(ignorePatternsFlag.Value.String(), ",")
+		for i, p := range patterns {
+			patterns[i] = strings.TrimSpace(p)
+		}
+
+		// Merge with existing patterns from env/file, preventing duplicates
+		existingPatterns := make(map[string]struct{})
+		for _, p := range cfg.IgnorePatterns {
+			existingPatterns[p] = struct{}{}
+		}
+		for _, p := range patterns {
+			if _, exists := existingPatterns[p]; !exists {
+				cfg.IgnorePatterns = append(cfg.IgnorePatterns, p)
+			}
 		}
 	}
 }

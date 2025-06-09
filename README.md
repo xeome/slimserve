@@ -6,9 +6,9 @@
 [![License](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 [![Go Version](https://img.shields.io/badge/go-1.24.4-blue.svg)](https://golang.org/dl/)
 
-> A lightweight, suckless HTTP file server designed with simplicity and security in mind.
+> A lightweight HTTP file server designed with simplicity and security in mind.
 
-SlimServe is a minimalistic and efficient file-serving application that provides seamless file sharing over HTTP with minimal dependencies, configuration, and resource usage. Built with a suckless philosophy—simple, fast, and easy to use.
+SlimServe is a minimalistic and efficient file-serving application that provides seamless file sharing over HTTP with minimal dependencies, configuration, and resource usage. Built with a philosophy of being simple, fast, and easy to use.
 
 ## Features
 
@@ -94,6 +94,7 @@ Override any configuration setting using environment variables:
 - `SLIMSERVE_USERNAME` - Username for authentication
 - `SLIMSERVE_PASSWORD` - Password for authentication
 - `SLIMSERVE_THUMB_CACHE_MB` - Thumbnail cache size in MB (default: `100`)
+- `SLIMSERVE_IGNORE_PATTERNS` - Comma-separated list of glob patterns to ignore (e.g., `*.log,tmp/`)
 - `CONFIG_FILE` - Path to JSON config file
 
 ### Configuration File
@@ -110,7 +111,8 @@ Create a JSON configuration file (see [`example-config.json`](example-config.jso
   "enable_auth": false,
   "username": "",
   "password": "",
-  "thumb_cache_mb": 100
+  "thumb_cache_mb": 100,
+  "ignore_patterns": ["*.tmp", ".git/"]
 }
 ```
 
@@ -132,6 +134,7 @@ SlimServe can be run directly with command-line flags or configured via a JSON f
 | `-username`         | `SLIMSERVE_USERNAME`         | -         | Username for authentication             |
 | `-password`         | `SLIMSERVE_PASSWORD`         | -         | Password for authentication             |
 | `-thumb-cache-mb`   | `SLIMSERVE_THUMB_CACHE_MB`   | `100`     | Thumbnail cache size in MB              |
+| `-ignore-patterns`  | `SLIMSERVE_IGNORE_PATTERNS`  | -         | Comma-separated glob patterns to ignore |
 
 ### Example usage
 
@@ -159,7 +162,36 @@ SlimServe can be run directly with command-line flags or configured via a JSON f
 - **Dot-file Protection**: Configurable blocking of hidden files (enabled by default)
 - **Non-root Container**: Docker container runs as UID 1001 for security
 - **Cookie-based Session Authentication**: In-memory session management with automatic logout on server restart
+- **File Ignoring**: Ignore files and directories using global patterns or `.slimserveignore` files.
 - **Security Fuzzing**: Comprehensive fuzzing tests for vulnerability detection
+
+### File Ignoring
+
+You can control which files and directories are served using two methods:
+
+1.  **Global Ignore Patterns**: Use the `-ignore-patterns` flag or the `SLIMSERVE_IGNORE_PATTERNS` environment variable to provide a comma-separated list of glob patterns. These rules are applied to all served directories.
+   ```bash
+   # Ignore all .log files and the tmp/ directory
+   ./slimserve -ignore-patterns "*.log,tmp/"
+   ```
+
+2.  **`.slimserveignore` Files**: For more granular control, create a `.slimserveignore` file in any directory you are serving. This file works much like a `.gitignore` file.
+   - Each line in the file is a glob pattern.
+   - Patterns are relative to the directory containing the `.slimserveignore` file.
+   - Comments start with `#`.
+   - The `.slimserveignore` file itself is always hidden.
+
+   **Example `.slimserveignore`:**
+   ```
+   # Ignore node_modules
+   node_modules/
+
+   # Ignore temporary files
+   *.tmp
+   *.bak
+   ```
+
+All ignore rules (global and from `.slimserveignore` files) are combined. A file is hidden if it matches any rule.
 
 ## Thumbnail Generation
 
@@ -300,4 +332,4 @@ SlimServe is built with these excellent open-source projects:
 
 ---
 
-**SlimServe** - Simple, secure, and suckless file serving. 🚀
+**SlimServe** - Simple, secure, and efficient file serving. 🚀
