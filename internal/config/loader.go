@@ -84,9 +84,9 @@ func loadFromEnv(cfg *Config) {
 		}
 	}
 
-	if dotFiles := os.Getenv("SLIMSERVE_DOT_FILES"); dotFiles != "" {
+	if dotFiles := os.Getenv("SLIMSERVE_DISABLE_DOTFILES"); dotFiles != "" {
 		if val, err := strconv.ParseBool(dotFiles); err == nil {
-			cfg.DisableDotFiles = !val // Note: env var is "enable dot files", config is "disable dot files"
+			cfg.DisableDotFiles = val
 		}
 	}
 
@@ -127,8 +127,8 @@ func loadFromFlags(cfg *Config) {
 	if flag.Lookup("dirs") == nil {
 		flag.String("dirs", "", "Comma-separated list of directories to serve")
 	}
-	if flag.Lookup("dot-files") == nil {
-		flag.Bool("dot-files", !cfg.DisableDotFiles, "Allow serving dot files")
+	if flag.Lookup("disable-dotfiles") == nil {
+		flag.Bool("disable-dotfiles", cfg.DisableDotFiles, "Block access to dot files")
 	}
 	if flag.Lookup("log-level") == nil {
 		flag.String("log-level", cfg.LogLevel, "Log level (debug, info, warn, error)")
@@ -173,9 +173,9 @@ func loadFromFlags(cfg *Config) {
 		cfg.Directories = dirs
 	}
 
-	if dotFilesFlag := flag.Lookup("dot-files"); dotFilesFlag != nil && dotFilesFlag.Value.String() != dotFilesFlag.DefValue {
+	if dotFilesFlag := flag.Lookup("disable-dotfiles"); dotFilesFlag != nil && dotFilesFlag.Value.String() != dotFilesFlag.DefValue {
 		if val, err := strconv.ParseBool(dotFilesFlag.Value.String()); err == nil {
-			cfg.DisableDotFiles = !val // Flag is "enable dot files", config is "disable dot files"
+			cfg.DisableDotFiles = val // Flag is "disable dot files", config is "disable dot files"
 		}
 	}
 

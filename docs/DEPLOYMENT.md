@@ -39,11 +39,11 @@ Override any configuration setting using environment variables:
 - `SLIMSERVE_HOST` - Server host (default: 0.0.0.0)
 - `SLIMSERVE_PORT` - Server port (default: 8080)
 - `SLIMSERVE_DIRS` - Comma-separated list of directories to serve
-- `SLIMSERVE_DOT_FILES` - Allow dot files (true=allow, false=block, default: false)
+- `SLIMSERVE_DISABLE_DOTFILES` - Disable dot files (true=disable, false=allow, default: true)
 - `SLIMSERVE_LOG_LEVEL` - Log level (debug, info, warn, error)
-- `SLIMSERVE_ENABLE_AUTH` - Enable basic authentication (true/false)
-- `SLIMSERVE_USERNAME` - Username for basic auth
-- `SLIMSERVE_PASSWORD` - Password for basic auth
+- `SLIMSERVE_ENABLE_AUTH` - Enable session-based authentication (true/false)
+- `SLIMSERVE_USERNAME` - Username for authentication
+- `SLIMSERVE_PASSWORD` - Password for authentication
 - `CONFIG_FILE` - Path to JSON config file (default: `/etc/slimserve/config.json`)
 
 ### Configuration File
@@ -70,12 +70,38 @@ Configuration is loaded in this order (later overrides earlier):
 
 ## Production Deployment
 
+### Authentication
+
+SlimServe supports cookie-based session authentication for securing access to files:
+
+```bash
+# Enable authentication with username and password
+./slimserve -enable-auth -username myuser -password mypassword
+
+# Or via environment variables
+export SLIMSERVE_ENABLE_AUTH=true
+export SLIMSERVE_USERNAME=myuser
+export SLIMSERVE_PASSWORD=mypassword
+./slimserve
+```
+
+**How it works:**
+1. When authentication is enabled, users must first provide valid credentials via HTTP Basic Auth
+2. Upon successful authentication, SlimServe sets a secure session cookie (`slimserve_session`)
+3. Subsequent requests use the cookie for authentication - no need to repeatedly send credentials
+4. Sessions are stored in memory and automatically invalidated when the server restarts
+5. This approach eliminates browser credential caching issues common with traditional Basic Auth
+
+**Important**: Always use HTTPS in production by placing SlimServe behind a reverse proxy with SSL termination. This protects both the initial login credentials and the session cookie from interception.
+
 ### Security Considerations
 - Container runs as non-root user (UID 1001)
 - Only serves explicitly whitelisted directories
-- Dot files blocked by default (configurable)
+- Dot files blocked by default (can be disabled with `-disable-dotfiles=false`)
 - Path traversal protection built-in
-- Optional basic authentication support
+- Cookie-based session authentication with secure defaults (HttpOnly, SameSite=Lax)
+- Sessions automatically invalidated on server restart (no persistent storage)
+- Always use HTTPS in production when authentication is enabled
 
 ### Resource Usage
 - Final image size: ~24MB
@@ -160,7 +186,7 @@ echo "secret" > data/.env
 curl http://localhost:8080/.env  # Should be blocked
 
 # Test with dot files enabled
-SLIMSERVE_DOT_FILES=true docker-compose up -d
+SLIMSERVE_DISABLE_DOTFILES=false docker-compose up -d
 curl http://localhost:8080/.env  # Should work now
 ```
 

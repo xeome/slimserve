@@ -51,7 +51,7 @@ type ListingData struct {
 }
 
 func NewHandler(cfg *config.Config, roots []*security.RootFS) *Handler {
-	tmpl := template.Must(template.ParseFS(web.TemplateFS, "templates/*.html"))
+	tmpl := template.Must(template.ParseFS(web.TemplateFS, "templates/base.html", "templates/listing.html"))
 
 	return &Handler{
 		config:       cfg,

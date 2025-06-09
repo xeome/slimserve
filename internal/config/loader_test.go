@@ -114,9 +114,33 @@ func TestLoadConfigDefaults(t *testing.T) {
 		t.Fatalf("Load() returned error: %v", err)
 	}
 
-	expected := Default()
-	if !reflect.DeepEqual(cfg, expected) {
-		t.Errorf("Expected default config %+v, got %+v", expected, cfg)
+	// Check each field individually
+	if cfg.Host != "0.0.0.0" {
+		t.Errorf("Host: expected %q, got %q", "0.0.0.0", cfg.Host)
+	}
+	if cfg.Port != 8080 {
+		t.Errorf("Port: expected %d, got %d", 8080, cfg.Port)
+	}
+	if !reflect.DeepEqual(cfg.Directories, []string{"."}) {
+		t.Errorf("Directories: expected %v, got %v", []string{"."}, cfg.Directories)
+	}
+	if cfg.DisableDotFiles != true {
+		t.Errorf("DisableDotFiles: expected %t, got %t", true, cfg.DisableDotFiles)
+	}
+	if cfg.LogLevel != "info" {
+		t.Errorf("LogLevel: expected %q, got %q", "info", cfg.LogLevel)
+	}
+	if cfg.EnableAuth != false {
+		t.Errorf("EnableAuth: expected %t, got %t", false, cfg.EnableAuth)
+	}
+	if cfg.Username != "" {
+		t.Errorf("Username: expected %q, got %q", "", cfg.Username)
+	}
+	if cfg.Password != "" {
+		t.Errorf("Password: expected %q, got %q", "", cfg.Password)
+	}
+	if cfg.MaxThumbCacheMB != 100 {
+		t.Errorf("MaxThumbCacheMB: expected %d, got %d", 100, cfg.MaxThumbCacheMB)
 	}
 }
 
@@ -202,14 +226,14 @@ func TestLoadConfigEnvVars(t *testing.T) {
 		{
 			name: "all_env_vars",
 			envVars: map[string]string{
-				"SLIMSERVE_HOST":        "env-host",
-				"SLIMSERVE_PORT":        "7777",
-				"SLIMSERVE_DIRS":        "/tmp,/home",
-				"SLIMSERVE_DOT_FILES":   "true", // This enables dot files (config.DisableDotFiles = false)
-				"SLIMSERVE_LOG_LEVEL":   "warn",
-				"SLIMSERVE_ENABLE_AUTH": "true",
-				"SLIMSERVE_USERNAME":    "envuser",
-				"SLIMSERVE_PASSWORD":    "envpass",
+				"SLIMSERVE_HOST":             "env-host",
+				"SLIMSERVE_PORT":             "7777",
+				"SLIMSERVE_DIRS":             "/tmp,/home",
+				"SLIMSERVE_DISABLE_DOTFILES": "false",
+				"SLIMSERVE_LOG_LEVEL":        "warn",
+				"SLIMSERVE_ENABLE_AUTH":      "true",
+				"SLIMSERVE_USERNAME":         "envuser",
+				"SLIMSERVE_PASSWORD":         "envpass",
 			},
 			expected: Config{
 				Host:            "env-host",
@@ -278,8 +302,8 @@ func TestLoadConfigEnvVars(t *testing.T) {
 		{
 			name: "invalid_bool_ignored",
 			envVars: map[string]string{
-				"SLIMSERVE_DOT_FILES":   "invalid-bool",
-				"SLIMSERVE_ENABLE_AUTH": "not-a-bool",
+				"SLIMSERVE_DISABLE_DOTFILES": "invalid-bool",
+				"SLIMSERVE_ENABLE_AUTH":      "not-a-bool",
 			},
 			expected: Config{
 				Host:            "0.0.0.0", // Default
@@ -309,8 +333,33 @@ func TestLoadConfigEnvVars(t *testing.T) {
 				t.Fatalf("Load() returned error: %v", err)
 			}
 
-			if !reflect.DeepEqual(*cfg, tt.expected) {
-				t.Errorf("Expected config %+v, got %+v", tt.expected, *cfg)
+			// Compare fields individually
+			if cfg.Host != tt.expected.Host {
+				t.Errorf("Host: expected %q, got %q", tt.expected.Host, cfg.Host)
+			}
+			if cfg.Port != tt.expected.Port {
+				t.Errorf("Port: expected %d, got %d", tt.expected.Port, cfg.Port)
+			}
+			if !reflect.DeepEqual(cfg.Directories, tt.expected.Directories) {
+				t.Errorf("Directories: expected %v, got %v", tt.expected.Directories, cfg.Directories)
+			}
+			if cfg.DisableDotFiles != tt.expected.DisableDotFiles {
+				t.Errorf("DisableDotFiles: expected %t, got %t", tt.expected.DisableDotFiles, cfg.DisableDotFiles)
+			}
+			if cfg.LogLevel != tt.expected.LogLevel {
+				t.Errorf("LogLevel: expected %q, got %q", tt.expected.LogLevel, cfg.LogLevel)
+			}
+			if cfg.EnableAuth != tt.expected.EnableAuth {
+				t.Errorf("EnableAuth: expected %t, got %t", tt.expected.EnableAuth, cfg.EnableAuth)
+			}
+			if cfg.Username != tt.expected.Username {
+				t.Errorf("Username: expected %q, got %q", tt.expected.Username, cfg.Username)
+			}
+			if cfg.Password != tt.expected.Password {
+				t.Errorf("Password: expected %q, got %q", tt.expected.Password, cfg.Password)
+			}
+			if cfg.MaxThumbCacheMB != tt.expected.MaxThumbCacheMB {
+				t.Errorf("MaxThumbCacheMB: expected %d, got %d", tt.expected.MaxThumbCacheMB, cfg.MaxThumbCacheMB)
 			}
 		})
 	}
@@ -329,18 +378,18 @@ func TestLoadConfigFlags(t *testing.T) {
 				"-host", "flag-host",
 				"-port", "6666",
 				"-dirs", "/flag1,/flag2",
-				"-dot-files", "true",
+				"-disable-dotfiles=true",
 				"-log-level", "error",
 			},
 			expected: Config{
 				Host:            "flag-host",
 				Port:            6666,
 				Directories:     []string{"/flag1", "/flag2"},
-				DisableDotFiles: false,  // dot-files=true means disable=false
-				LogLevel:        "info", // Default value (flag parsing issue)
-				EnableAuth:      false,  // Default
-				Username:        "",     // Default
-				Password:        "",     // Default
+				DisableDotFiles: true,    // disable-dotfiles flag present means disable=true
+				LogLevel:        "error", // Set by -log-level flag
+				EnableAuth:      false,   // Default
+				Username:        "",      // Default
+				Password:        "",      // Default
 			},
 		},
 		{
@@ -690,7 +739,7 @@ func clearSlimServeEnvVars() {
 		"SLIMSERVE_HOST",
 		"SLIMSERVE_PORT",
 		"SLIMSERVE_DIRS",
-		"SLIMSERVE_DOT_FILES",
+		"SLIMSERVE_DISABLE_DOTFILES",
 		"SLIMSERVE_LOG_LEVEL",
 		"SLIMSERVE_ENABLE_AUTH",
 		"SLIMSERVE_USERNAME",

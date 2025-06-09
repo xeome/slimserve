@@ -167,3 +167,39 @@ document.addEventListener('DOMContentLoaded', function () {
         applyTheme(next);
     });
 });
+// Login page specific logic
+window.loginForm = function () {
+    return {
+        loading: false,
+        passwordVisible: false,
+        togglePassword() {
+            this.passwordVisible = !this.passwordVisible;
+            this.$refs.password.type = this.passwordVisible ? 'text' : 'password';
+        },
+        trapFocus(e) {
+            const focusableElements = this.$el.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+            const firstFocusable = focusableElements[0];
+            const lastFocusable = focusableElements[focusableElements.length - 1];
+
+            if (e.key === 'Tab') {
+                if (e.shiftKey) { // Shift + Tab
+                    if (document.activeElement === firstFocusable) {
+                        lastFocusable.focus();
+                        e.preventDefault();
+                    }
+                } else { // Tab
+                    if (document.activeElement === lastFocusable) {
+                        firstFocusable.focus();
+                        e.preventDefault();
+                    }
+                }
+            }
+        },
+        init() {
+            // Auto-focus username field on load
+            this.$nextTick(() => {
+                this.$refs.username.focus();
+            });
+        }
+    };
+}

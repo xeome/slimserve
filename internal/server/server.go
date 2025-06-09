@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"html/template"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -10,16 +11,19 @@ import (
 	"slimserve/internal/config"
 	"slimserve/internal/logger"
 	"slimserve/internal/security"
+	"slimserve/web"
 
 	"github.com/gin-gonic/gin"
 )
 
 // Server represents the HTTP server
 type Server struct {
-	config *config.Config
-	engine *gin.Engine
-	server *http.Server
-	roots  []*security.RootFS
+	config       *config.Config
+	engine       *gin.Engine
+	server       *http.Server
+	roots        []*security.RootFS
+	sessionStore *SessionStore
+	loginTmpl    *template.Template
 }
 
 // New creates a new server instance with the given configuration
@@ -45,10 +49,18 @@ func New(cfg *config.Config) *Server {
 	engine := gin.New()
 	engine.Use(gin.Recovery())
 
+	// Load login template separately to avoid conflicts
+	loginTmpl := template.Must(template.ParseFS(web.TemplateFS, "templates/base.html", "templates/login.html"))
+
+	// Handlers will load their own templates
+	engine.SetHTMLTemplate(template.New(""))
+
 	srv := &Server{
-		config: cfg,
-		engine: engine,
-		roots:  roots,
+		config:       cfg,
+		engine:       engine,
+		roots:        roots,
+		sessionStore: NewSessionStore(),
+		loginTmpl:    loginTmpl,
 	}
 
 	srv.setupRoutes()
@@ -62,12 +74,41 @@ func (s *Server) setupRoutes() {
 	// Add logging middleware
 	s.engine.Use(logger.Middleware())
 
+	// Add session authentication middleware
+	s.engine.Use(SessionAuthMiddleware(s.config, s.sessionStore))
+
 	// Add access control middleware for file serving (but skip for static assets)
 	s.engine.Use(s.accessControlMiddleware())
 
-	// Only one wildcard route: use handler logic to serve static vs dynamic
-	s.engine.GET("/*path", handler.ServeFiles)
-	s.engine.HEAD("/*path", handler.ServeFiles)
+	// Create a wrapper handler that checks for auth routes first
+	authHandler := s.createAuthAwareHandler(handler)
+
+	// Single wildcard route that handles both auth and file serving
+	s.engine.GET("/*path", authHandler)
+	s.engine.POST("/*path", authHandler)
+	s.engine.HEAD("/*path", authHandler)
+}
+
+// createAuthAwareHandler creates a handler that checks for auth routes before file serving
+func (s *Server) createAuthAwareHandler(fileHandler *Handler) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		path := c.Request.URL.Path
+
+		// Handle authentication routes if auth is enabled
+		if s.config.EnableAuth {
+			switch {
+			case path == "/login" && c.Request.Method == "GET":
+				s.showLogin(c)
+				return
+			case path == "/login" && c.Request.Method == "POST":
+				s.doLogin(c)
+				return
+			}
+		}
+
+		// Handle file serving for all other requests
+		fileHandler.ServeFiles(c)
+	}
 }
 
 // accessControlMiddleware validates that requested paths are within allowed roots
@@ -76,8 +117,8 @@ func (s *Server) accessControlMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		requestedPath := c.Request.URL.Path
 
-		// Skip access control for static assets
-		if strings.HasPrefix(requestedPath, "/static/") {
+		// Skip access control for static assets and login routes
+		if strings.HasPrefix(requestedPath, "/static/") || requestedPath == "/login" {
 			c.Next()
 			return
 		}

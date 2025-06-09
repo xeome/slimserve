@@ -1,0 +1,77 @@
+{{define "content"}}
+<div x-data="loginForm()" @keydown.escape="loading = false" @keydown="trapFocus"
+    class="w-full max-w-md bg-card border border-border rounded-lg shadow-sm">
+    <div class="p-6">
+        <div class="mb-6">
+            <h2 class="text-2xl font-semibold text-foreground text-center">
+                Sign in to SlimServe
+            </h2>
+        </div>
+
+        {{if .error}}
+        <div class="mb-4 rounded-md bg-destructive/10 border border-destructive/20 p-4" x-init="loading = false">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <svg class="h-5 w-5 text-destructive" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd"
+                            d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                            clip-rule="evenodd" />
+                    </svg>
+                </div>
+                <div class="ml-3">
+                    <p class="text-sm font-medium text-destructive">
+                        {{.error}}
+                    </p>
+                </div>
+            </div>
+        </div>
+        {{end}}
+
+        <form action="/login" method="POST" @submit="loading = true" class="space-y-4">
+            <input type="hidden" name="next" value="{{.next}}">
+
+            <div class="space-y-4">
+                <div>
+                    <label for="username" class="block text-sm font-medium text-foreground mb-2">Username</label>
+                    <input id="username" name="username" type="text" required x-ref="username" autocomplete="username"
+                        class="w-full px-3 py-2 bg-input border border-border rounded-md text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
+                        placeholder="Enter your username">
+                </div>
+
+                <div class="relative">
+                    <label for="password" class="block text-sm font-medium text-foreground mb-2">Password</label>
+                    <input id="password" name="password" type="password" required x-ref="password"
+                        autocomplete="current-password"
+                        class="w-full px-3 py-2 bg-input border border-border rounded-md text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
+                        placeholder="Enter your password">
+                    <button type="button" @click="togglePassword()"
+                        class="absolute inset-y-0 right-0 top-7 flex items-center px-3 text-muted-foreground hover:text-foreground"
+                        aria-label="Toggle password visibility">
+                        <svg x-show="!passwordVisible" class="h-5 w-5" xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                            <path fill-rule="evenodd"
+                                d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.022 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
+                                clip-rule="evenodd" />
+                        </svg>
+                        <svg x-show="passwordVisible" class="h-5 w-5" xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 20 20" fill="currentColor" style="display: none;">
+                            <path fill-rule="evenodd"
+                                d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074L3.707 2.293zM10 12a2 2 0 110-4 2 2 0 010 4z"
+                                clip-rule="evenodd" />
+                            <path
+                                d="M10 17a9.953 9.953 0 01-4.542-1.074l-1.473 1.473a1 1 0 11-1.414-1.414l14-14a1 1 0 111.414 1.414l-1.473 1.473A10.014 10.014 0 01.458 10C1.732 14.057 5.522 17 10 17z" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <button type="submit" :disabled="loading"
+                class="w-full py-2 px-4 bg-primary text-primary-foreground font-medium rounded-md hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background transition-colors flex items-center justify-center disabled:opacity-75">
+                <span x-show="loading" class="spinner mr-2" style="display: none;"></span>
+                <span x-text="loading ? 'Signing in...' : 'Sign in'">Sign in</span>
+            </button>
+        </form>
+    </div>
+</div>
+{{end}}
