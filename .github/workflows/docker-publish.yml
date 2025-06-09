@@ -1,13 +1,9 @@
-# GitHub Actions Workflow for building and publishing Docker images to ghcr.io
-#
-# This workflow is triggered on every push to the main branch.
-# It builds the Docker image and pushes it to the GitHub Container Registry.
 name: Docker Publish
 
 on:
   push:
-    branches:
-      - main
+    tags:
+      - "v*.*.*"
 
 permissions:
   contents: read
@@ -34,8 +30,9 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
-            type=sha
-            latest
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
