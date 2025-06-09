@@ -3,6 +3,7 @@ package server
 import (
 	"image"
 	"image/color"
+	"image/jpeg"
 	"image/png"
 	"net/http"
 	"net/http/httptest"
@@ -89,7 +90,7 @@ func TestThumbnailGeneration(t *testing.T) {
 			path:           "/test.png",
 			query:          "thumb=1",
 			expectedStatus: http.StatusOK,
-			checkHeaders:   map[string]string{"Content-Type": "image/png"},
+			checkHeaders:   map[string]string{"Content-Type": "image/jpeg"},
 		},
 		{
 			name:           "thumbnail_non_image_fallback",
@@ -143,10 +144,10 @@ func TestThumbnailGeneration(t *testing.T) {
 					t.Error("Thumbnail response should contain image data")
 				}
 
-				// Try to decode the response as PNG to verify it's a valid image
-				_, err := png.Decode(strings.NewReader(string(body)))
+				// Try to decode the response as JPEG to verify it's a valid image
+				_, err := jpeg.Decode(strings.NewReader(string(body)))
 				if err != nil {
-					t.Errorf("Thumbnail response should be valid PNG: %v", err)
+					t.Errorf("Thumbnail response should be valid JPEG: %v", err)
 				}
 			}
 		})

@@ -113,6 +113,12 @@ func loadFromEnv(cfg *Config) {
 			cfg.MaxThumbCacheMB = val
 		}
 	}
+
+	if jpegQuality := os.Getenv("SLIMSERVE_THUMB_JPEG_QUALITY"); jpegQuality != "" {
+		if val, err := strconv.Atoi(jpegQuality); err == nil {
+			cfg.ThumbJpegQuality = val
+		}
+	}
 }
 
 // loadFromFlags loads configuration from CLI flags
@@ -147,6 +153,9 @@ func loadFromFlags(cfg *Config) {
 	}
 	if flag.Lookup("thumb-cache-mb") == nil {
 		flag.Int("thumb-cache-mb", cfg.MaxThumbCacheMB, "Maximum thumbnail cache size in MB")
+	}
+	if flag.Lookup("thumb-jpeg-quality") == nil {
+		flag.Int("thumb-jpeg-quality", cfg.ThumbJpegQuality, "Thumbnail JPEG quality (1-100)")
 	}
 
 	// Parse flags if not already parsed
@@ -200,6 +209,12 @@ func loadFromFlags(cfg *Config) {
 	if thumbCacheFlag := flag.Lookup("thumb-cache-mb"); thumbCacheFlag != nil && thumbCacheFlag.Value.String() != thumbCacheFlag.DefValue {
 		if val, err := strconv.Atoi(thumbCacheFlag.Value.String()); err == nil {
 			cfg.MaxThumbCacheMB = val
+		}
+	}
+
+	if jpegQualityFlag := flag.Lookup("thumb-jpeg-quality"); jpegQualityFlag != nil && jpegQualityFlag.Value.String() != jpegQualityFlag.DefValue {
+		if val, err := strconv.Atoi(jpegQualityFlag.Value.String()); err == nil {
+			cfg.ThumbJpegQuality = val
 		}
 	}
 }

@@ -162,8 +162,8 @@ func TestGenerateLargeFile(t *testing.T) {
 		t.Error("Expected error for large file, but got none")
 	}
 
-	if !strings.Contains(err.Error(), "file too large") {
-		t.Errorf("Expected 'file too large' error, got: %v", err)
+	if !errors.Is(err, ErrFileTooLarge) {
+		t.Errorf("Expected ErrFileTooLarge, got: %v", err)
 	}
 }
 
@@ -319,7 +319,7 @@ func TestGenerateWithCacheLimit(t *testing.T) {
 			file.Close()
 
 			// Generate thumbnail with cache limit
-			thumbPath, err := GenerateWithCacheLimit(testImagePath, 16, test.cacheLimitMB)
+			thumbPath, err := GenerateWithCacheLimit(testImagePath, 16, test.cacheLimitMB, 85)
 
 			if test.expectError {
 				if err == nil {
@@ -394,7 +394,7 @@ func TestCacheSizeMB(t *testing.T) {
 	}
 	file.Close()
 
-	_, err = GenerateWithCacheLimit(testImagePath, 16, 0) // No limit
+	_, err = GenerateWithCacheLimit(testImagePath, 16, 0, 85) // No limit
 	if err != nil {
 		t.Errorf("unexpected error creating thumbnail: %v", err)
 	}
@@ -437,7 +437,7 @@ func TestBackwardCompatibility(t *testing.T) {
 	}
 
 	// Test that GenerateWithCacheLimit with 0 limit works the same
-	thumbPath2, err := GenerateWithCacheLimit(testImagePath, 16, 0)
+	thumbPath2, err := GenerateWithCacheLimit(testImagePath, 16, 0, 85)
 	if err != nil {
 		t.Fatalf("GenerateWithCacheLimit failed: %v", err)
 	}

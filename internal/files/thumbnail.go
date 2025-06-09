@@ -5,45 +5,44 @@ import (
 	"errors"
 	"fmt"
 	"image"
-	"image/gif"
 	"image/jpeg"
-	"image/png"
-	"mime"
+	_ "image/png" // import for side effects
 	"os"
 	"path/filepath"
+	"runtime"
 	"slimserve/internal/logger"
-	"strings"
 	"syscall"
 	"time"
 
 	"github.com/cespare/xxhash/v2"
 	"golang.org/x/image/draw"
+	_ "golang.org/x/image/webp" // import for side effects
 )
 
 var (
 	// ErrCacheSizeExceeded is deprecated and no longer returned, kept for API compatibility
 	ErrCacheSizeExceeded = errors.New("thumbnail cache size limit exceeded")
+	// ErrFileTooLarge is returned when a source image exceeds the size limit for thumbnailing.
+	ErrFileTooLarge = errors.New("file too large for thumbnail generation")
 )
 
 // Generate creates a thumbnail for the given source file path with the specified maximum dimension.
-// The thumbnail is cached in the system temp directory under slimserve/thumbcache.
-// Cache directory can be overridden via SLIMSERVE_CACHE_DIR environment variable.
-//
-// Returns the path to the generated thumbnail file, or an error if generation fails.
-// Cached filename scheme: <sha1 of filePath + mtime + maxDim>.<ext>
-//
-// Supported formats: JPEG, PNG, GIF (detected via MIME type)
-// Files larger than 10MB are skipped to prevent memory issues.
+// It is a wrapper around GenerateWithCacheLimit for backward compatibility.
 func Generate(srcPath string, maxDim int) (string, error) {
-	return GenerateWithCacheLimit(srcPath, maxDim, 0) // 0 = no limit for backward compatibility
+	// Call the new function with default values for new parameters
+	return GenerateWithCacheLimit(srcPath, maxDim, 0, 85)
 }
 
-// GenerateWithCacheLimit creates a thumbnail with cache size checking.
-// If maxCacheMB > 0, checks if creating the thumbnail would exceed the cache size limit.
-// Returns ErrCacheSizeExceeded if the cache size limit would be exceeded.
-func GenerateWithCacheLimit(srcPath string, maxDim int, maxCacheMB int) (string, error) {
+// GenerateWithCacheLimit creates a thumbnail with cache size checking and configurable generation options.
+// It now supports forcing JPEG output, configurable JPEG quality, and a conditional scaling algorithm.
+func GenerateWithCacheLimit(srcPath string, maxDim, maxCacheMB, jpegQuality int) (string, error) {
 	start := time.Now()
 	logger.Debugf("Starting thumbnail generation for %s (max dimension: %d)", srcPath, maxDim)
+	defer func() {
+		// Aggressively trigger GC to release memory after thumbnail generation
+		runtime.GC()
+		logger.Debugf("Forced garbage collection after thumbnail generation for %s", srcPath)
+	}()
 
 	// Check file size first - skip if > 10MB
 	info, err := os.Stat(srcPath)
@@ -55,48 +54,27 @@ func GenerateWithCacheLimit(srcPath string, maxDim int, maxCacheMB int) (string,
 	const maxFileSize = 10 * 1024 * 1024 // 10MB
 	if info.Size() > maxFileSize {
 		logger.Errorf("File too large for thumbnail generation: %s (%d bytes)", srcPath, info.Size())
-		return "", fmt.Errorf("file too large for thumbnail generation: %d bytes", info.Size())
+		return "", ErrFileTooLarge
 	}
 
-	// Determine cache directory
 	cacheDir := os.Getenv("SLIMSERVE_CACHE_DIR")
 	if cacheDir == "" {
 		cacheDir = filepath.Join(os.TempDir(), "slimserve", "thumbcache")
 	}
 
-	// Ensure cache directory exists
 	if err := os.MkdirAll(cacheDir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create cache directory: %w", err)
 	}
 
-	// Generate sophisticated cache key using 4-step algorithm
 	cacheKey, err := generateCacheKey(srcPath, maxDim)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate cache key: %w", err)
 	}
 
-	// Determine output format based on source file
-	ext := strings.ToLower(filepath.Ext(srcPath))
-	var outputExt string
-	switch ext {
-	case ".jpg", ".jpeg":
-		outputExt = ".jpg"
-	case ".png":
-		outputExt = ".png"
-	case ".gif":
-		outputExt = ".gif"
-	default:
-		// For unsupported formats, try to detect MIME type
-		mimeType := mime.TypeByExtension(ext)
-		if !strings.HasPrefix(mimeType, "image/") {
-			return "", fmt.Errorf("unsupported image format: %s", ext)
-		}
-		outputExt = ".jpg" // Default to JPEG for unknown image types
-	}
-
+	// All thumbnails are now JPEG
+	outputExt := ".jpg"
 	thumbPath := filepath.Join(cacheDir, fmt.Sprintf("%s%s", cacheKey, outputExt))
 
-	// Check if cached thumbnail exists and is newer than source
 	if thumbInfo, err := os.Stat(thumbPath); err == nil {
 		if thumbInfo.ModTime().After(info.ModTime()) || thumbInfo.ModTime().Equal(info.ModTime()) {
 			logger.Debugf("Using cached thumbnail for %s", srcPath)
@@ -104,47 +82,42 @@ func GenerateWithCacheLimit(srcPath string, maxDim int, maxCacheMB int) (string,
 		}
 	}
 
-	// Check cache size limit and prune if necessary before creating new thumbnail
 	if maxCacheMB > 0 {
 		cacheManager := NewCacheManager(cacheDir)
-		_, _, _, err := cacheManager.PruneIfNeeded(maxCacheMB)
-		if err != nil {
+		if _, _, _, err := cacheManager.PruneIfNeeded(maxCacheMB); err != nil {
 			logger.Errorf("Failed to prune thumbnail cache: %v", err)
-			// Continue with generation anyway - pruning failure shouldn't prevent thumbnail generation
 		}
 	}
 
-	// Generate thumbnail
-	if err := generateThumbnail(srcPath, thumbPath, maxDim, outputExt); err != nil {
+	scaler := draw.ApproxBiLinear
+	if err := generateThumbnail(srcPath, thumbPath, maxDim, jpegQuality, scaler); err != nil {
 		logger.Errorf("Failed to generate thumbnail for %s: %v", srcPath, err)
 		return "", fmt.Errorf("failed to generate thumbnail: %w", err)
 	}
 
 	duration := time.Since(start)
-	logger.Infof("Thumbnail generated successfully for %s (took %v)", srcPath, duration)
+	logger.Infof("Thumbnail generated successfully for %s (scaler: %T, took: %v)", srcPath, scaler, duration)
 	return thumbPath, nil
 }
 
-// generateThumbnail creates a thumbnail by scaling the source image proportionally
-// so that max(width, height) = maxDim, using nearest-neighbor scaling.
-func generateThumbnail(srcPath, thumbPath string, maxDim int, outputExt string) error {
-	// Open source file
+// generateThumbnail creates a thumbnail using a specific scaler and JPEG quality.
+func generateThumbnail(srcPath, thumbPath string, maxDim, jpegQuality int, scaler draw.Scaler) error {
 	srcFile, err := os.Open(srcPath)
 	if err != nil {
 		return fmt.Errorf("failed to open source file: %w", err)
 	}
 	defer srcFile.Close()
 
-	// Decode image
 	srcImg, _, err := image.Decode(srcFile)
 	if err != nil {
 		return fmt.Errorf("failed to decode image: %w", err)
 	}
 
-	// Calculate new dimensions maintaining aspect ratio
 	bounds := srcImg.Bounds()
-	width := bounds.Dx()
-	height := bounds.Dy()
+	width, height := bounds.Dx(), bounds.Dy()
+	if width <= 0 || height <= 0 {
+		return fmt.Errorf("invalid image dimensions: %dx%d", width, height)
+	}
 
 	var newWidth, newHeight int
 	if width > height {
@@ -155,42 +128,26 @@ func generateThumbnail(srcPath, thumbPath string, maxDim int, outputExt string) 
 		newWidth = width * maxDim / height
 	}
 
-	// Skip if image is already smaller than target
 	if width <= maxDim && height <= maxDim {
-		newWidth = width
-		newHeight = height
+		newWidth, newHeight = width, height
 	}
 
-	// Create new image with calculated dimensions
 	thumbImg := image.NewRGBA(image.Rect(0, 0, newWidth, newHeight))
+	scaler.Scale(thumbImg, thumbImg.Bounds(), srcImg, srcImg.Bounds(), draw.Over, nil)
 
-	// Scale using CatmullRom for highest quality
-	draw.CatmullRom.Scale(thumbImg, thumbImg.Bounds(), srcImg, srcImg.Bounds(), draw.Over, nil)
-
-	// Create output file
 	thumbFile, err := os.Create(thumbPath)
 	if err != nil {
 		return fmt.Errorf("failed to create thumbnail file: %w", err)
 	}
 	defer thumbFile.Close()
 
-	// Encode based on output format
-	switch outputExt {
-	case ".jpg":
-		err = jpeg.Encode(thumbFile, thumbImg, &jpeg.Options{Quality: 85})
-	case ".png":
-		err = png.Encode(thumbFile, thumbImg)
-	case ".gif":
-		err = gif.Encode(thumbFile, thumbImg, nil)
-	default:
-		return fmt.Errorf("unsupported output format: %s", outputExt)
+	if jpegQuality < 1 {
+		jpegQuality = 1
+	} else if jpegQuality > 100 {
+		jpegQuality = 100
 	}
 
-	if err != nil {
-		return fmt.Errorf("failed to encode thumbnail: %w", err)
-	}
-
-	return nil
+	return jpeg.Encode(thumbFile, thumbImg, &jpeg.Options{Quality: jpegQuality})
 }
 
 // generateCacheKey implements cache key generation using 4-step algorithm:
