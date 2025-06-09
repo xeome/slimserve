@@ -1,6 +1,5 @@
 services:
   slimserve:
-    build: .
     image: ghcr.io/xeome/slimserve:latest
     container_name: slimserve
     restart: unless-stopped
@@ -10,8 +9,9 @@ services:
     volumes:
       # Directory to serve - mount your files here
       - ./data:/data
-      # Configuration file - customize as needed
-      - ./example-config.json:/etc/slimserve/config.json:ro
+      # Configuration file - customize as needed, you arent required to use a config file
+      # Uncomment to use a custom config file
+      # - ./example-config.json:/etc/slimserve/config.json:ro
     # environment:
       # # Override config file location if needed
       # - CONFIG_FILE=/etc/slimserve/config.json

@@ -49,10 +49,11 @@ func TestThumbnailGeneration(t *testing.T) {
 
 	// Create handler
 	cfg := &config.Config{
-		Host:            "localhost",
-		Port:            8080,
-		Directories:     []string{tmpDir},
-		DisableDotFiles: true,
+		Host:               "localhost",
+		Port:               8080,
+		Directories:        []string{tmpDir},
+		DisableDotFiles:    true,
+		ThumbMaxFileSizeMB: 20,
 	}
 
 	// Create RootFS instances
@@ -210,10 +211,11 @@ func TestServeThumbnailMethod(t *testing.T) {
 
 	// Create handler
 	cfg := &config.Config{
-		Host:            "localhost",
-		Port:            8080,
-		Directories:     []string{tmpDir},
-		DisableDotFiles: true,
+		Host:               "localhost",
+		Port:               8080,
+		Directories:        []string{tmpDir},
+		DisableDotFiles:    true,
+		ThumbMaxFileSizeMB: 20,
 	}
 
 	// Create RootFS instances

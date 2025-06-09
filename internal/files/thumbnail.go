@@ -30,12 +30,12 @@ var (
 // It is a wrapper around GenerateWithCacheLimit for backward compatibility.
 func Generate(srcPath string, maxDim int) (string, error) {
 	// Call the new function with default values for new parameters
-	return GenerateWithCacheLimit(srcPath, maxDim, 0, 85)
+	return GenerateWithCacheLimit(srcPath, maxDim, 0, 85, 10)
 }
 
 // GenerateWithCacheLimit creates a thumbnail with cache size checking and configurable generation options.
 // It now supports forcing JPEG output, configurable JPEG quality, and a conditional scaling algorithm.
-func GenerateWithCacheLimit(srcPath string, maxDim, maxCacheMB, jpegQuality int) (string, error) {
+func GenerateWithCacheLimit(srcPath string, maxDim, maxCacheMB, jpegQuality, maxFileMB int) (string, error) {
 	start := time.Now()
 	logger.Debugf("Starting thumbnail generation for %s (max dimension: %d)", srcPath, maxDim)
 	defer func() {
@@ -44,16 +44,16 @@ func GenerateWithCacheLimit(srcPath string, maxDim, maxCacheMB, jpegQuality int)
 		logger.Debugf("Forced garbage collection after thumbnail generation for %s", srcPath)
 	}()
 
-	// Check file size first - skip if > 10MB
+	// Check file size first
 	info, err := os.Stat(srcPath)
 	if err != nil {
 		logger.Errorf("Failed to stat source file %s: %v", srcPath, err)
 		return "", fmt.Errorf("failed to stat source file: %w", err)
 	}
 
-	const maxFileSize = 10 * 1024 * 1024 // 10MB
-	if info.Size() > maxFileSize {
-		logger.Errorf("File too large for thumbnail generation: %s (%d bytes)", srcPath, info.Size())
+	maxFileSizeBytes := int64(maxFileMB) * 1024 * 1024
+	if info.Size() > maxFileSizeBytes {
+		logger.Errorf("File too large for thumbnail generation: %s (%d bytes > %d MB)", srcPath, info.Size(), maxFileMB)
 		return "", ErrFileTooLarge
 	}
 

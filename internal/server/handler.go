@@ -464,7 +464,7 @@ func (h *Handler) serveThumbnailFromRoot(c *gin.Context, relPath string) {
 		fullPath := filepath.Join(root.Path(), relPath)
 
 		// Generate thumbnail with cache size limit
-		thumbPath, err := files.GenerateWithCacheLimit(fullPath, 250, h.config.MaxThumbCacheMB, h.config.ThumbJpegQuality)
+		thumbPath, err := files.GenerateWithCacheLimit(fullPath, 250, h.config.MaxThumbCacheMB, h.config.ThumbJpegQuality, h.config.ThumbMaxFileSizeMB)
 		if err != nil {
 			// If file is too large, return a 413 Payload Too Large status
 			if err == files.ErrFileTooLarge {

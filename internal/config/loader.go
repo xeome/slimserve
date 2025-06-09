@@ -126,6 +126,12 @@ func loadFromEnv(cfg *Config) {
 			cfg.IgnorePatterns[i] = strings.TrimSpace(p)
 		}
 	}
+
+	if thumbMaxSize := os.Getenv("SLIMSERVE_THUMB_MAX_FILE_SIZE_MB"); thumbMaxSize != "" {
+		if val, err := strconv.Atoi(thumbMaxSize); err == nil {
+			cfg.ThumbMaxFileSizeMB = val
+		}
+	}
 }
 
 // loadFromFlags loads configuration from CLI flags
@@ -166,6 +172,9 @@ func loadFromFlags(cfg *Config) {
 	}
 	if flag.Lookup("ignore-patterns") == nil {
 		flag.String("ignore-patterns", "", "Comma-separated list of glob patterns to ignore")
+	}
+	if flag.Lookup("thumb-max-file-size-mb") == nil {
+		flag.Int("thumb-max-file-size-mb", cfg.ThumbMaxFileSizeMB, "Maximum file size in MB for thumbnail generation")
 	}
 
 	// Parse flags if not already parsed
@@ -243,6 +252,12 @@ func loadFromFlags(cfg *Config) {
 			if _, exists := existingPatterns[p]; !exists {
 				cfg.IgnorePatterns = append(cfg.IgnorePatterns, p)
 			}
+		}
+	}
+
+	if thumbMaxSizeFlag := flag.Lookup("thumb-max-file-size-mb"); thumbMaxSizeFlag != nil && thumbMaxSizeFlag.Value.String() != thumbMaxSizeFlag.DefValue {
+		if val, err := strconv.Atoi(thumbMaxSizeFlag.Value.String()); err == nil {
+			cfg.ThumbMaxFileSizeMB = val
 		}
 	}
 }

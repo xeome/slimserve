@@ -95,6 +95,7 @@ Override any configuration setting using environment variables:
 - `SLIMSERVE_PASSWORD` - Password for authentication
 - `SLIMSERVE_THUMB_CACHE_MB` - Thumbnail cache size in MB (default: `100`)
 - `SLIMSERVE_IGNORE_PATTERNS` - Comma-separated list of glob patterns to ignore (e.g., `*.log,tmp/`)
+- `SLIMSERVE_THUMB_MAX_FILE_SIZE_MB` - Maximum file size in MB for thumbnail generation (default: `10`)
 - `CONFIG_FILE` - Path to JSON config file
 
 ### Configuration File
@@ -112,6 +113,7 @@ Create a JSON configuration file (see [`example-config.json`](example-config.jso
   "username": "",
   "password": "",
   "thumb_cache_mb": 100,
+  "thumb_max_file_size_mb": 10,
   "ignore_patterns": ["*.tmp", ".git/"]
 }
 ```
@@ -122,19 +124,20 @@ SlimServe can be run directly with command-line flags or configured via a JSON f
 
 ### Command-line flags
 
-| Flag                | Environment Variable         | Default   | Description                             |
-| ------------------- | ---------------------------- | --------- | --------------------------------------- |
-| `-host`             | `SLIMSERVE_HOST`             | `0.0.0.0` | Host address to bind to                 |
-| `-port`             | `SLIMSERVE_PORT`             | `8080`    | Port to listen on                       |
-| `-dirs`             | `SLIMSERVE_DIRS`             | `.`       | Directories to serve (comma-separated)  |
-| `-config`           | `SLIMSERVE_CONFIG`           | -         | Path to JSON configuration file         |
-| `-log-level`        | `SLIMSERVE_LOG_LEVEL`        | `info`    | Logging level: debug, info, warn, error |
-| `-disable-dotfiles` | `SLIMSERVE_DISABLE_DOTFILES` | `true`    | Disable serving dot-files for security  |
-| `-enable-auth`      | `SLIMSERVE_ENABLE_AUTH`      | `false`   | Enable session-based authentication     |
-| `-username`         | `SLIMSERVE_USERNAME`         | -         | Username for authentication             |
-| `-password`         | `SLIMSERVE_PASSWORD`         | -         | Password for authentication             |
-| `-thumb-cache-mb`   | `SLIMSERVE_THUMB_CACHE_MB`   | `100`     | Thumbnail cache size in MB              |
-| `-ignore-patterns`  | `SLIMSERVE_IGNORE_PATTERNS`  | -         | Comma-separated glob patterns to ignore |
+| Flag                      | Environment Variable               | Default   | Description                             |
+| ------------------------- | ---------------------------------- | --------- | --------------------------------------- |
+| `-host`                   | `SLIMSERVE_HOST`                   | `0.0.0.0` | Host address to bind to                 |
+| `-port`                   | `SLIMSERVE_PORT`                   | `8080`    | Port to listen on                       |
+| `-dirs`                   | `SLIMSERVE_DIRS`                   | `.`       | Directories to serve (comma-separated)  |
+| `-config`                 | `SLIMSERVE_CONFIG`                 | -         | Path to JSON configuration file         |
+| `-log-level`              | `SLIMSERVE_LOG_LEVEL`              | `info`    | Logging level: debug, info, warn, error |
+| `-disable-dotfiles`       | `SLIMSERVE_DISABLE_DOTFILES`       | `true`    | Disable serving dot-files for security  |
+| `-enable-auth`            | `SLIMSERVE_ENABLE_AUTH`            | `false`   | Enable session-based authentication     |
+| `-username`               | `SLIMSERVE_USERNAME`               | -         | Username for authentication             |
+| `-password`               | `SLIMSERVE_PASSWORD`               | -         | Password for authentication             |
+| `-thumb-cache-mb`         | `SLIMSERVE_THUMB_CACHE_MB`         | `100`     | Thumbnail cache size in MB              |
+| `-thumb-max-file-size-mb` | `SLIMSERVE_THUMB_MAX_FILE_SIZE_MB` | `10`      | Maximum file size for thumbnails (MB)   |
+| `-ignore-patterns`        | `SLIMSERVE_IGNORE_PATTERNS`        | -         | Comma-separated glob patterns to ignore |
 
 ### Example usage
 
