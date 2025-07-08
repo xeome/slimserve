@@ -219,11 +219,28 @@ func (ah *AdminHandler) listFiles(c *gin.Context) {
 	if path == "/" && len(ah.server.config.Directories) > 0 {
 		targetDir = ah.server.config.Directories[0]
 	} else {
-		// Find matching directory
+		// Convert relative path to absolute path based on configured directories
 		found := false
 		for _, dir := range ah.server.config.Directories {
-			if strings.HasPrefix(path, dir) {
-				targetDir = path
+			// Convert configured directory to absolute path
+			absDir, err := filepath.Abs(dir)
+			if err != nil {
+				continue
+			}
+
+			// Build target path relative to the configured directory
+			var candidatePath string
+			if path == "/" {
+				candidatePath = absDir
+			} else {
+				// Remove leading slash and join with base directory
+				relativePath := strings.TrimPrefix(path, "/")
+				candidatePath = filepath.Join(absDir, relativePath)
+			}
+
+			// Check if the candidate path is within the allowed directory
+			if strings.HasPrefix(candidatePath, absDir) {
+				targetDir = candidatePath
 				found = true
 				break
 			}

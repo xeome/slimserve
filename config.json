@@ -1,0 +1,30 @@
+{
+  "host": "0.0.0.0",
+  "port": 8080,
+  "directories": [
+    "."
+  ],
+  "disable_dot_files": true,
+  "log_level": "info",
+  "enable_auth": false,
+  "username": "",
+  "password": "",
+  "thumb_cache_mb": 100,
+  "thumb_jpeg_quality": 85,
+  "thumb_max_file_size_mb": 10,
+  "ignore_patterns": [
+    "*.log",
+    "*.tmp",
+    ".git",
+    ".env"
+  ],
+  "enable_admin": true,
+  "admin_username": "admin",
+  "admin_password": "admin123",
+  "admin_upload_dir": "./uploads",
+  "max_upload_size_mb": 100,
+  "allowed_upload_types": [
+    "*"
+  ],
+  "max_concurrent_uploads": 5
+}

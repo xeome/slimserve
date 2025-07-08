@@ -282,6 +282,13 @@ func (s *Server) isAllowedFileType(filename string) bool {
 		return true // No restrictions if list is empty
 	}
 
+	// Check for wildcard (allow all types)
+	for _, allowedType := range s.config.AllowedUploadTypes {
+		if strings.TrimSpace(allowedType) == "*" {
+			return true
+		}
+	}
+
 	ext := strings.ToLower(filepath.Ext(filename))
 	if ext != "" && ext[0] == '.' {
 		ext = ext[1:] // Remove the dot

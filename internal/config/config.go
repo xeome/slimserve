@@ -47,7 +47,7 @@ func Default() *Config {
 		AdminPassword:        "",
 		AdminUploadDir:       "./uploads",
 		MaxUploadSizeMB:      100,
-		AllowedUploadTypes:   []string{"jpg", "jpeg", "png", "gif", "webp", "pdf", "txt", "md", "zip"},
+		AllowedUploadTypes:   []string{"*"}, // Allow all file types by default
 		MaxConcurrentUploads: 3,
 	}
 }

@@ -6,6 +6,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <meta name="description" content="SlimServe Admin – File Management" />
+    <meta name="csrf-token" content="{{.csrf_token}}" />
     <title>{{if .Title}}{{.Title}} — {{end}}SlimServe Admin</title>
 
     <!-- Theme variables -->
@@ -110,6 +111,10 @@
         <div class="p-6">
             <div class="flex items-center justify-between mb-4">
                 <div class="flex items-center space-x-2">
+                    <button @click="navigateToParent()" x-show="currentPath !== '/'"
+                        class="bg-secondary text-secondary-foreground px-3 py-1 rounded text-sm hover:bg-secondary/80">
+                        ← Back
+                    </button>
                     <span class="text-sm text-muted-foreground">Current path:</span>
                     <span class="text-sm font-mono bg-muted px-2 py-1 rounded" x-text="currentPath"></span>
                 </div>
@@ -136,7 +141,9 @@
                                 <div class="col-span-6 flex items-center space-x-2">
                                     <span x-show="file.is_dir" class="text-primary">📁</span>
                                     <span x-show="!file.is_dir" class="text-muted-foreground">📄</span>
-                                    <span x-text="file.name" class="truncate"></span>
+                                    <span x-text="file.name" class="truncate"
+                                        :class="file.is_dir ? 'cursor-pointer text-primary hover:text-primary/80' : ''"
+                                        @click="file.is_dir && navigateToDirectory(file.name)"></span>
                                 </div>
                                 <div class="col-span-2 text-muted-foreground"
                                     x-text="file.is_dir ? '-' : formatBytes(file.size)"></div>
@@ -177,16 +184,31 @@
                 }
             },
 
+            navigateToDirectory(dirName) {
+                const newPath = this.currentPath === '/' ? `/${dirName}` : `${this.currentPath}/${dirName}`;
+                this.loadFiles(newPath);
+            },
+
+            navigateToParent() {
+                if (this.currentPath === '/') return;
+                const parentPath = this.currentPath.split('/').slice(0, -1).join('/') || '/';
+                this.loadFiles(parentPath);
+            },
+
             async deleteFile(filename) {
                 if (!confirm(`Are you sure you want to delete "${filename}"?`)) {
                     return;
                 }
+
+                // Get CSRF token
+                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
 
                 try {
                     const response = await fetch('/admin/api/files/delete', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
+                            'X-CSRF-Token': csrfToken
                         },
                         body: JSON.stringify({
                             path: this.currentPath,
@@ -209,11 +231,15 @@
                 const name = prompt('Enter directory name:');
                 if (!name) return;
 
+                // Get CSRF token
+                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
                 try {
                     const response = await fetch('/admin/api/files/mkdir', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
+                            'X-CSRF-Token': csrfToken
                         },
                         body: JSON.stringify({
                             path: this.currentPath,

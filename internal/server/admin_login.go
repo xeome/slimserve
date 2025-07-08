@@ -113,7 +113,7 @@ func (s *Server) doAdminLogin(c *gin.Context) {
 			data := gin.H{
 				"error":      "Invalid admin username or password",
 				"next":       next,
-				"csrf_token": generateCSRFToken(),
+				"csrf_token": s.getOrSetCSRFToken(c),
 			}
 			c.Status(http.StatusUnauthorized)
 			if err := s.adminLoginTmpl.ExecuteTemplate(c.Writer, "admin_base", data); err != nil {
@@ -204,6 +204,27 @@ func generateCSRFToken() string {
 	return hex.EncodeToString(bytes)
 }
 
+// getOrSetCSRFToken gets the existing CSRF token from cookie, or generates and sets a new one
+func (s *Server) getOrSetCSRFToken(c *gin.Context) string {
+	// Try to get existing CSRF token from cookie
+	csrfToken, err := c.Cookie("slimserve_csrf_token")
+	if err != nil {
+		// Generate new token and set cookie if none exists
+		csrfToken = generateCSRFToken()
+		c.SetSameSite(http.SameSiteLaxMode)
+		c.SetCookie(
+			"slimserve_csrf_token",
+			csrfToken,
+			0, // session cookie
+			"/admin",
+			"",
+			c.Request.TLS != nil, // secure for HTTPS
+			true,                 // httpOnly
+		)
+	}
+	return csrfToken
+}
+
 // doAdminLogout handles admin logout
 func (s *Server) doAdminLogout(c *gin.Context) {
 	// Get admin session token
@@ -248,7 +269,7 @@ func (s *Server) doAdminLogout(c *gin.Context) {
 func (s *Server) showAdminDashboard(c *gin.Context) {
 	data := gin.H{
 		"Title":      "Dashboard",
-		"csrf_token": generateCSRFToken(),
+		"csrf_token": s.getOrSetCSRFToken(c),
 	}
 
 	// Check if admin template is loaded
@@ -269,7 +290,7 @@ func (s *Server) showAdminDashboard(c *gin.Context) {
 func (s *Server) showAdminUpload(c *gin.Context) {
 	data := gin.H{
 		"Title":           "Upload Files",
-		"csrf_token":      generateCSRFToken(),
+		"csrf_token":      s.getOrSetCSRFToken(c),
 		"max_upload_size": s.config.MaxUploadSizeMB,
 		"allowed_types":   strings.Join(s.config.AllowedUploadTypes, ", "),
 	}
@@ -285,7 +306,7 @@ func (s *Server) showAdminUpload(c *gin.Context) {
 func (s *Server) showAdminFiles(c *gin.Context) {
 	data := gin.H{
 		"Title":      "File Management",
-		"csrf_token": generateCSRFToken(),
+		"csrf_token": s.getOrSetCSRFToken(c),
 	}
 
 	c.Status(http.StatusOK)
@@ -299,7 +320,7 @@ func (s *Server) showAdminFiles(c *gin.Context) {
 func (s *Server) showAdminConfig(c *gin.Context) {
 	data := gin.H{
 		"Title":      "Configuration",
-		"csrf_token": generateCSRFToken(),
+		"csrf_token": s.getOrSetCSRFToken(c),
 	}
 
 	c.Status(http.StatusOK)
@@ -313,7 +334,7 @@ func (s *Server) showAdminConfig(c *gin.Context) {
 func (s *Server) showAdminStatus(c *gin.Context) {
 	data := gin.H{
 		"Title":      "System Status",
-		"csrf_token": generateCSRFToken(),
+		"csrf_token": s.getOrSetCSRFToken(c),
 	}
 
 	c.Status(http.StatusOK)

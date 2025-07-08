@@ -6,6 +6,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <meta name="description" content="SlimServe Admin – Configuration" />
+    <meta name="csrf-token" content="{{.csrf_token}}" />
     <title>{{if .Title}}{{.Title}} — {{end}}SlimServe Admin</title>
 
     <!-- Theme variables -->
@@ -219,11 +220,15 @@
                 this.saving = true;
                 this.message = '';
 
+                // Get CSRF token
+                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
                 try {
                     const response = await fetch('/admin/api/config', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
+                            'X-CSRF-Token': csrfToken
                         },
                         body: JSON.stringify({
                             max_upload_size_mb: parseInt(this.config.max_upload_size_mb),

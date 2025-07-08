@@ -6,6 +6,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <meta name="description" content="SlimServe Admin – File Upload" />
+    <meta name="csrf-token" content="{{.csrf_token}}" />
     <title>{{if .Title}}{{.Title}} — {{end}}SlimServe Admin</title>
 
     <!-- Theme variables -->
@@ -128,8 +129,7 @@
                     </div>
 
                     <div>
-                        <input type="file" multiple @change="handleFileSelect($event)" class="hidden" x-ref="fileInput"
-                            accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.txt,.md,.zip">
+                        <input type="file" multiple @change="handleFileSelect($event)" class="hidden" x-ref="fileInput">
                         <button @click="$refs.fileInput.click()"
                             class="bg-primary text-primary-foreground px-4 py-2 rounded-md hover:bg-primary/90 transition-colors">
                             Select Files
