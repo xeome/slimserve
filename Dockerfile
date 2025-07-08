@@ -54,7 +54,7 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 ENV CONFIG_FILE=/etc/slimserve/config.json
 
 LABEL maintainer="xeome" \
-      description="Lightweight, efficient file server. Environment variables: SLIMSERVE_HOST, SLIMSERVE_PORT, SLIMSERVE_DIRS, SLIMSERVE_DISABLE_DOTFILES, SLIMSERVE_LOG_LEVEL, SLIMSERVE_ENABLE_AUTH, SLIMSERVE_USERNAME, SLIMSERVE_PASSWORD, CONFIG_FILE" \
+      description="Lightweight, efficient file server with admin interface. Environment variables: SLIMSERVE_HOST, SLIMSERVE_PORT, SLIMSERVE_DIRS, SLIMSERVE_DISABLE_DOTFILES, SLIMSERVE_LOG_LEVEL, SLIMSERVE_ENABLE_AUTH, SLIMSERVE_USERNAME, SLIMSERVE_PASSWORD, SLIMSERVE_ENABLE_ADMIN, SLIMSERVE_ADMIN_USERNAME, SLIMSERVE_ADMIN_PASSWORD, SLIMSERVE_MAX_UPLOAD_SIZE_MB, CONFIG_FILE" \
       version="1.0" \
       org.opencontainers.image.source="https://github.com/xeome/slimserve"
 

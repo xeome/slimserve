@@ -124,6 +124,44 @@ func loadFromEnv(cfg *Config) {
 			cfg.ThumbMaxFileSizeMB = val
 		}
 	}
+
+	// Admin configuration from environment
+	if enableAdmin := os.Getenv("SLIMSERVE_ENABLE_ADMIN"); enableAdmin != "" {
+		if val, err := strconv.ParseBool(enableAdmin); err == nil {
+			cfg.EnableAdmin = val
+		}
+	}
+
+	if adminUsername := os.Getenv("SLIMSERVE_ADMIN_USERNAME"); adminUsername != "" {
+		cfg.AdminUsername = adminUsername
+	}
+
+	if adminPassword := os.Getenv("SLIMSERVE_ADMIN_PASSWORD"); adminPassword != "" {
+		cfg.AdminPassword = adminPassword
+	}
+
+	if adminUploadDir := os.Getenv("SLIMSERVE_ADMIN_UPLOAD_DIR"); adminUploadDir != "" {
+		cfg.AdminUploadDir = adminUploadDir
+	}
+
+	if maxUploadSize := os.Getenv("SLIMSERVE_MAX_UPLOAD_SIZE_MB"); maxUploadSize != "" {
+		if val, err := strconv.Atoi(maxUploadSize); err == nil {
+			cfg.MaxUploadSizeMB = val
+		}
+	}
+
+	if allowedTypes := os.Getenv("SLIMSERVE_ALLOWED_UPLOAD_TYPES"); allowedTypes != "" {
+		cfg.AllowedUploadTypes = strings.Split(allowedTypes, ",")
+		for i, typ := range cfg.AllowedUploadTypes {
+			cfg.AllowedUploadTypes[i] = strings.TrimSpace(typ)
+		}
+	}
+
+	if maxConcurrent := os.Getenv("SLIMSERVE_MAX_CONCURRENT_UPLOADS"); maxConcurrent != "" {
+		if val, err := strconv.Atoi(maxConcurrent); err == nil {
+			cfg.MaxConcurrentUploads = val
+		}
+	}
 }
 
 // loadFromFlags loads configuration from CLI flags
@@ -167,6 +205,29 @@ func loadFromFlags(cfg *Config) {
 	}
 	if flag.Lookup("thumb-max-file-size-mb") == nil {
 		flag.Int("thumb-max-file-size-mb", cfg.ThumbMaxFileSizeMB, "Maximum file size in MB for thumbnail generation")
+	}
+
+	// Admin flags
+	if flag.Lookup("enable-admin") == nil {
+		flag.Bool("enable-admin", cfg.EnableAdmin, "Enable admin interface")
+	}
+	if flag.Lookup("admin-username") == nil {
+		flag.String("admin-username", cfg.AdminUsername, "Admin username")
+	}
+	if flag.Lookup("admin-password") == nil {
+		flag.String("admin-password", cfg.AdminPassword, "Admin password")
+	}
+	if flag.Lookup("admin-upload-dir") == nil {
+		flag.String("admin-upload-dir", cfg.AdminUploadDir, "Directory for admin uploads")
+	}
+	if flag.Lookup("max-upload-size-mb") == nil {
+		flag.Int("max-upload-size-mb", cfg.MaxUploadSizeMB, "Maximum upload size in MB")
+	}
+	if flag.Lookup("allowed-upload-types") == nil {
+		flag.String("allowed-upload-types", "", "Comma-separated list of allowed upload file types")
+	}
+	if flag.Lookup("max-concurrent-uploads") == nil {
+		flag.Int("max-concurrent-uploads", cfg.MaxConcurrentUploads, "Maximum concurrent uploads")
 	}
 
 	// Parse flags if not already parsed
@@ -250,6 +311,45 @@ func loadFromFlags(cfg *Config) {
 	if thumbMaxSizeFlag := flag.Lookup("thumb-max-file-size-mb"); thumbMaxSizeFlag != nil && thumbMaxSizeFlag.Value.String() != thumbMaxSizeFlag.DefValue {
 		if val, err := strconv.Atoi(thumbMaxSizeFlag.Value.String()); err == nil {
 			cfg.ThumbMaxFileSizeMB = val
+		}
+	}
+
+	// Apply admin flag values
+	if enableAdminFlag := flag.Lookup("enable-admin"); enableAdminFlag != nil && enableAdminFlag.Value.String() != enableAdminFlag.DefValue {
+		if val, err := strconv.ParseBool(enableAdminFlag.Value.String()); err == nil {
+			cfg.EnableAdmin = val
+		}
+	}
+
+	if adminUsernameFlag := flag.Lookup("admin-username"); adminUsernameFlag != nil && adminUsernameFlag.Value.String() != adminUsernameFlag.DefValue {
+		cfg.AdminUsername = adminUsernameFlag.Value.String()
+	}
+
+	if adminPasswordFlag := flag.Lookup("admin-password"); adminPasswordFlag != nil && adminPasswordFlag.Value.String() != adminPasswordFlag.DefValue {
+		cfg.AdminPassword = adminPasswordFlag.Value.String()
+	}
+
+	if adminUploadDirFlag := flag.Lookup("admin-upload-dir"); adminUploadDirFlag != nil && adminUploadDirFlag.Value.String() != adminUploadDirFlag.DefValue {
+		cfg.AdminUploadDir = adminUploadDirFlag.Value.String()
+	}
+
+	if maxUploadSizeFlag := flag.Lookup("max-upload-size-mb"); maxUploadSizeFlag != nil && maxUploadSizeFlag.Value.String() != maxUploadSizeFlag.DefValue {
+		if val, err := strconv.Atoi(maxUploadSizeFlag.Value.String()); err == nil {
+			cfg.MaxUploadSizeMB = val
+		}
+	}
+
+	if allowedTypesFlag := flag.Lookup("allowed-upload-types"); allowedTypesFlag != nil && allowedTypesFlag.Value.String() != "" {
+		types := strings.Split(allowedTypesFlag.Value.String(), ",")
+		for i, typ := range types {
+			types[i] = strings.TrimSpace(typ)
+		}
+		cfg.AllowedUploadTypes = types
+	}
+
+	if maxConcurrentFlag := flag.Lookup("max-concurrent-uploads"); maxConcurrentFlag != nil && maxConcurrentFlag.Value.String() != maxConcurrentFlag.DefValue {
+		if val, err := strconv.Atoi(maxConcurrentFlag.Value.String()); err == nil {
+			cfg.MaxConcurrentUploads = val
 		}
 	}
 }

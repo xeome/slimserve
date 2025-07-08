@@ -1,0 +1,249 @@
+{{define "admin_files.html"}}
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="description" content="SlimServe Admin – File Management" />
+    <title>{{if .Title}}{{.Title}} — {{end}}SlimServe Admin</title>
+
+    <!-- Theme variables -->
+    <link rel="stylesheet" href="/static/css/theme.css" />
+    <link rel="icon" href="/static/favicon.ico" sizes="any">
+    <link rel="stylesheet" href="/static/css/custom.css" />
+
+    <!-- Tailwind -->
+    <script src="/static/js/tailwind.js"></script>
+
+    <!-- Admin JS -->
+    <script src="/static/js/admin.js"></script>
+
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+    <!-- Heroicons -->
+    <script src="/static/js/heroicons.js"></script>
+
+    <style type="text/tailwindcss">
+        @theme {
+            --color-background: hsl(var(--background));
+            --color-foreground: hsl(var(--foreground));
+            --color-card: hsl(var(--card));
+            --color-card-foreground: hsl(var(--card-foreground));
+            --color-primary: hsl(var(--primary));
+            --color-primary-foreground: hsl(var(--primary-foreground));
+            --color-secondary: hsl(var(--secondary));
+            --color-secondary-foreground: hsl(var(--secondary-foreground));
+            --color-muted: hsl(var(--muted));
+            --color-muted-foreground: hsl(var(--muted-foreground));
+            --color-accent: hsl(var(--accent));
+            --color-accent-foreground: hsl(var(--accent-foreground));
+            --color-destructive: hsl(var(--destructive));
+            --color-destructive-foreground: hsl(var(--destructive-foreground));
+            --color-border: hsl(var(--border));
+            --color-input: hsl(var(--input));
+            --color-ring: hsl(var(--ring));
+        }
+    </style>
+</head>
+
+<body class="bg-background text-foreground min-h-screen">
+    <div class="min-h-screen bg-background">
+        <!-- Admin Navigation -->
+        <nav class="bg-card border-b border-border">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between h-16">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <h1 class="text-xl font-bold text-foreground">SlimServe Admin</h1>
+                        </div>
+                        <div class="hidden md:block ml-10">
+                            <div class="flex items-baseline space-x-4">
+                                <a href="/admin"
+                                    class="text-muted-foreground hover:text-foreground px-3 py-2 rounded-md text-sm font-medium">Dashboard</a>
+                                <a href="/admin/upload"
+                                    class="text-muted-foreground hover:text-foreground px-3 py-2 rounded-md text-sm font-medium">Upload</a>
+                                <a href="/admin/files"
+                                    class="text-foreground hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Files</a>
+                                <a href="/admin/config"
+                                    class="text-muted-foreground hover:text-foreground px-3 py-2 rounded-md text-sm font-medium">Config</a>
+                                <a href="/admin/status"
+                                    class="text-muted-foreground hover:text-foreground px-3 py-2 rounded-md text-sm font-medium">Status</a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <a href="/"
+                            class="text-muted-foreground hover:text-foreground px-3 py-2 rounded-md text-sm font-medium">View
+                            Site</a>
+                        <form action="/admin/logout" method="POST" class="inline">
+                            <input type="hidden" name="csrf_token" value="{{.csrf_token}}">
+                            <button type="submit"
+                                class="text-muted-foreground hover:text-destructive px-3 py-2 rounded-md text-sm font-medium">Logout</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+            {{template "admin_files_content" .}}
+        </main>
+    </div>
+</body>
+
+</html>
+{{end}}
+
+{{define "admin_files_content"}}
+<div x-data="adminFiles()" class="space-y-6">
+    <!-- Header -->
+    <div class="bg-card rounded-lg border border-border p-6">
+        <h1 class="text-2xl font-bold text-foreground mb-2">File Management</h1>
+        <p class="text-muted-foreground">Browse and manage server files</p>
+    </div>
+
+    <!-- File Browser -->
+    <div class="bg-card rounded-lg border border-border">
+        <div class="p-6">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center space-x-2">
+                    <span class="text-sm text-muted-foreground">Current path:</span>
+                    <span class="text-sm font-mono bg-muted px-2 py-1 rounded" x-text="currentPath"></span>
+                </div>
+                <button @click="createDirectory()"
+                    class="bg-primary text-primary-foreground px-4 py-2 rounded-md text-sm font-medium hover:bg-primary/90">
+                    New Directory
+                </button>
+            </div>
+
+            <!-- File List -->
+            <div class="border border-border rounded-lg overflow-hidden">
+                <div class="bg-muted px-4 py-2 border-b border-border">
+                    <div class="grid grid-cols-12 gap-4 text-sm font-medium text-muted-foreground">
+                        <div class="col-span-6">Name</div>
+                        <div class="col-span-2">Size</div>
+                        <div class="col-span-3">Modified</div>
+                        <div class="col-span-1">Actions</div>
+                    </div>
+                </div>
+                <div class="divide-y divide-border">
+                    <template x-for="file in files" :key="file.name">
+                        <div class="px-4 py-3 hover:bg-muted/50">
+                            <div class="grid grid-cols-12 gap-4 items-center text-sm">
+                                <div class="col-span-6 flex items-center space-x-2">
+                                    <span x-show="file.is_dir" class="text-primary">📁</span>
+                                    <span x-show="!file.is_dir" class="text-muted-foreground">📄</span>
+                                    <span x-text="file.name" class="truncate"></span>
+                                </div>
+                                <div class="col-span-2 text-muted-foreground"
+                                    x-text="file.is_dir ? '-' : formatBytes(file.size)"></div>
+                                <div class="col-span-3 text-muted-foreground" x-text="formatDate(file.mod_time)"></div>
+                                <div class="col-span-1">
+                                    <button @click="deleteFile(file.name)" x-show="!file.is_dir"
+                                        class="text-destructive hover:text-destructive/80 text-xs">Delete</button>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function adminFiles() {
+        return {
+            currentPath: '/',
+            files: [],
+
+            init() {
+                this.loadFiles();
+            },
+
+            async loadFiles(path = '/') {
+                try {
+                    const response = await fetch(`/admin/api/files?path=${encodeURIComponent(path)}`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        this.currentPath = data.path;
+                        this.files = data.files || [];
+                    }
+                } catch (error) {
+                    console.error('Failed to load files:', error);
+                }
+            },
+
+            async deleteFile(filename) {
+                if (!confirm(`Are you sure you want to delete "${filename}"?`)) {
+                    return;
+                }
+
+                try {
+                    const response = await fetch('/admin/api/files/delete', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            path: this.currentPath,
+                            filename: filename
+                        })
+                    });
+
+                    if (response.ok) {
+                        this.loadFiles(this.currentPath);
+                    } else {
+                        alert('Failed to delete file');
+                    }
+                } catch (error) {
+                    console.error('Failed to delete file:', error);
+                    alert('Failed to delete file');
+                }
+            },
+
+            async createDirectory() {
+                const name = prompt('Enter directory name:');
+                if (!name) return;
+
+                try {
+                    const response = await fetch('/admin/api/files/mkdir', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            path: this.currentPath,
+                            name: name
+                        })
+                    });
+
+                    if (response.ok) {
+                        this.loadFiles(this.currentPath);
+                    } else {
+                        alert('Failed to create directory');
+                    }
+                } catch (error) {
+                    console.error('Failed to create directory:', error);
+                    alert('Failed to create directory');
+                }
+            },
+
+            formatBytes(bytes) {
+                if (bytes === 0) return '0 B';
+                const k = 1024;
+                const sizes = ['B', 'KB', 'MB', 'GB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+            },
+
+            formatDate(dateString) {
+                return new Date(dateString).toLocaleDateString();
+            }
+        };
+    }
+</script>
+{{end}}

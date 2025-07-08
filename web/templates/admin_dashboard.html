@@ -1,0 +1,349 @@
+{{define "admin_dashboard.html"}}
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="description" content="SlimServe Admin – File Server Administration" />
+    <title>{{if .Title}}{{.Title}} — {{end}}SlimServe Admin</title>
+
+    <!-- Theme variables -->
+    <link rel="stylesheet" href="/static/css/theme.css" />
+    <link rel="icon" href="/static/favicon.ico" sizes="any">
+    <link rel="stylesheet" href="/static/css/custom.css" />
+
+    <!-- Tailwind -->
+    <script src="/static/js/tailwind.js"></script>
+
+    <!-- Admin JS -->
+    <script src="/static/js/admin.js"></script>
+
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+    <!-- Heroicons -->
+    <script src="/static/js/heroicons.js"></script>
+
+    <style type="text/tailwindcss">
+        @theme {
+            --color-background: hsl(var(--background));
+            --color-foreground: hsl(var(--foreground));
+            --color-card: hsl(var(--card));
+            --color-card-foreground: hsl(var(--card-foreground));
+            --color-primary: hsl(var(--primary));
+            --color-primary-foreground: hsl(var(--primary-foreground));
+            --color-secondary: hsl(var(--secondary));
+            --color-secondary-foreground: hsl(var(--secondary-foreground));
+            --color-muted: hsl(var(--muted));
+            --color-muted-foreground: hsl(var(--muted-foreground));
+            --color-accent: hsl(var(--accent));
+            --color-accent-foreground: hsl(var(--accent-foreground));
+            --color-destructive: hsl(var(--destructive));
+            --color-destructive-foreground: hsl(var(--destructive-foreground));
+            --color-border: hsl(var(--border));
+            --color-input: hsl(var(--input));
+            --color-ring: hsl(var(--ring));
+        }
+    </style>
+</head>
+
+<body class="bg-background text-foreground min-h-screen">
+    <div class="min-h-screen bg-background">
+        <!-- Admin Navigation -->
+        <nav class="bg-card border-b border-border">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between h-16">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <h1 class="text-xl font-bold text-foreground">SlimServe Admin</h1>
+                        </div>
+                        <div class="hidden md:block ml-10">
+                            <div class="flex items-baseline space-x-4">
+                                <a href="/admin"
+                                    class="text-foreground hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Dashboard</a>
+                                <a href="/admin/upload"
+                                    class="text-muted-foreground hover:text-foreground px-3 py-2 rounded-md text-sm font-medium">Upload</a>
+                                <a href="/admin/files"
+                                    class="text-muted-foreground hover:text-foreground px-3 py-2 rounded-md text-sm font-medium">Files</a>
+                                <a href="/admin/config"
+                                    class="text-muted-foreground hover:text-foreground px-3 py-2 rounded-md text-sm font-medium">Config</a>
+                                <a href="/admin/status"
+                                    class="text-muted-foreground hover:text-foreground px-3 py-2 rounded-md text-sm font-medium">Status</a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <a href="/"
+                            class="text-muted-foreground hover:text-foreground px-3 py-2 rounded-md text-sm font-medium">View
+                            Site</a>
+                        <form action="/admin/logout" method="POST" class="inline">
+                            <input type="hidden" name="csrf_token" value="{{.csrf_token}}">
+                            <button type="submit"
+                                class="text-muted-foreground hover:text-destructive px-3 py-2 rounded-md text-sm font-medium">Logout</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+            {{template "admin_dashboard_content" .}}
+        </main>
+    </div>
+</body>
+
+</html>
+{{end}}
+
+{{define "admin_dashboard_content"}}
+<div x-data="adminDashboard()" class="space-y-6">
+    <!-- Header -->
+    <div class="bg-card rounded-lg border border-border p-6">
+        <h1 class="text-2xl font-bold text-foreground mb-2">Admin Dashboard</h1>
+        <p class="text-muted-foreground">Manage your SlimServe file server</p>
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div class="bg-card rounded-lg border border-border p-6">
+            <div class="flex items-center">
+                <div class="p-2 bg-primary/10 rounded-lg">
+                    <svg class="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-5l-2-2H5a2 2 0 00-2 2z"></path>
+                    </svg>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-muted-foreground">Total Files</p>
+                    <p class="text-2xl font-bold text-foreground" x-text="stats.totalFiles">-</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-card rounded-lg border border-border p-6">
+            <div class="flex items-center">
+                <div class="p-2 bg-secondary/10 rounded-lg">
+                    <svg class="w-6 h-6 text-secondary-foreground" fill="none" stroke="currentColor"
+                        viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                    </svg>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-muted-foreground">Uploads Today</p>
+                    <p class="text-2xl font-bold text-foreground" x-text="stats.uploadsToday">-</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-card rounded-lg border border-border p-6">
+            <div class="flex items-center">
+                <div class="p-2 bg-accent/10 rounded-lg">
+                    <svg class="w-6 h-6 text-accent-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z">
+                        </path>
+                    </svg>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-muted-foreground">Storage Used</p>
+                    <p class="text-2xl font-bold text-foreground" x-text="stats.storageUsed">-</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-card rounded-lg border border-border p-6">
+            <div class="flex items-center">
+                <div class="p-2 bg-green-500/10 rounded-lg">
+                    <svg class="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                    </svg>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-muted-foreground">Server Status</p>
+                    <p class="text-2xl font-bold text-green-500">Online</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="bg-card rounded-lg border border-border p-6">
+        <h2 class="text-lg font-semibold text-foreground mb-4">Quick Actions</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <a href="/admin/upload"
+                class="flex items-center p-4 bg-primary/5 hover:bg-primary/10 rounded-lg border border-primary/20 transition-colors">
+                <svg class="w-8 h-8 text-primary mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12">
+                    </path>
+                </svg>
+                <div>
+                    <p class="font-medium text-foreground">Upload Files</p>
+                    <p class="text-sm text-muted-foreground">Add new files</p>
+                </div>
+            </a>
+
+            <a href="/admin/files"
+                class="flex items-center p-4 bg-secondary/5 hover:bg-secondary/10 rounded-lg border border-secondary/20 transition-colors">
+                <svg class="w-8 h-8 text-secondary-foreground mr-3" fill="none" stroke="currentColor"
+                    viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-5l-2-2H5a2 2 0 00-2 2z"></path>
+                </svg>
+                <div>
+                    <p class="font-medium text-foreground">Manage Files</p>
+                    <p class="text-sm text-muted-foreground">Browse and organize</p>
+                </div>
+            </a>
+
+            <a href="/admin/config"
+                class="flex items-center p-4 bg-accent/5 hover:bg-accent/10 rounded-lg border border-accent/20 transition-colors">
+                <svg class="w-8 h-8 text-accent-foreground mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z">
+                    </path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                </svg>
+                <div>
+                    <p class="font-medium text-foreground">Configuration</p>
+                    <p class="text-sm text-muted-foreground">Server settings</p>
+                </div>
+            </a>
+
+            <a href="/admin/status"
+                class="flex items-center p-4 bg-green-500/5 hover:bg-green-500/10 rounded-lg border border-green-500/20 transition-colors">
+                <svg class="w-8 h-8 text-green-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z">
+                    </path>
+                </svg>
+                <div>
+                    <p class="font-medium text-foreground">System Status</p>
+                    <p class="text-sm text-muted-foreground">Monitor health</p>
+                </div>
+            </a>
+        </div>
+    </div>
+
+    <!-- Recent Activity -->
+    <div class="bg-card rounded-lg border border-border p-6">
+        <h2 class="text-lg font-semibold text-foreground mb-4">Recent Activity</h2>
+        <div class="space-y-3">
+            <template x-for="activity in recentActivity" :key="activity.id">
+                <div class="flex items-center p-3 bg-muted/20 rounded-lg">
+                    <div class="p-2 bg-primary/10 rounded-lg mr-3">
+                        <!-- Different icons for different activity types -->
+                        <svg x-show="activity.type === 'login'" class="w-4 h-4 text-green-500" fill="none"
+                            stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1">
+                            </path>
+                        </svg>
+                        <svg x-show="activity.type === 'upload'" class="w-4 h-4 text-blue-500" fill="none"
+                            stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12">
+                            </path>
+                        </svg>
+                        <svg x-show="activity.type === 'config'" class="w-4 h-4 text-orange-500" fill="none"
+                            stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z">
+                            </path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                        </svg>
+                        <svg x-show="activity.type === 'delete'" class="w-4 h-4 text-red-500" fill="none"
+                            stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16">
+                            </path>
+                        </svg>
+                        <svg x-show="activity.type === 'mkdir'" class="w-4 h-4 text-purple-500" fill="none"
+                            stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                        </svg>
+                        <!-- Default icon for unknown types -->
+                        <svg x-show="!['login', 'upload', 'config', 'delete', 'mkdir'].includes(activity.type)"
+                            class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                    <div class="flex-1">
+                        <p class="text-sm font-medium text-foreground" x-text="activity.description"></p>
+                        <p class="text-xs text-muted-foreground" x-text="formatTimestamp(activity.timestamp)"></p>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+</div>
+
+<script>
+    function adminDashboard() {
+        return {
+            stats: {
+                totalFiles: 0,
+                uploadsToday: 0,
+                storageUsed: '0 MB',
+            },
+            recentActivity: [],
+
+            init() {
+                this.loadStats();
+                this.loadRecentActivity();
+            },
+
+            async loadStats() {
+                try {
+                    const response = await fetch('/admin/api/stats');
+                    if (response.ok) {
+                        this.stats = await response.json();
+                    }
+                } catch (error) {
+                    console.error('Failed to load stats:', error);
+                }
+            },
+
+            async loadRecentActivity() {
+                try {
+                    const response = await fetch('/admin/api/activity');
+                    if (response.ok) {
+                        this.recentActivity = await response.json();
+                    }
+                } catch (error) {
+                    console.error('Failed to load recent activity:', error);
+                }
+            },
+
+            formatTimestamp(timestamp) {
+                const date = new Date(timestamp);
+                const now = new Date();
+                const diffMs = now - date;
+                const diffMins = Math.floor(diffMs / 60000);
+                const diffHours = Math.floor(diffMs / 3600000);
+                const diffDays = Math.floor(diffMs / 86400000);
+
+                if (diffMins < 1) {
+                    return 'Just now';
+                } else if (diffMins < 60) {
+                    return `${diffMins} minute${diffMins === 1 ? '' : 's'} ago`;
+                } else if (diffHours < 24) {
+                    return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
+                } else if (diffDays < 7) {
+                    return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
+                } else {
+                    return date.toLocaleDateString();
+                }
+            }
+        };
+    }
+</script>
+{{end}}

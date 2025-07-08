@@ -1,0 +1,395 @@
+{{define "admin_upload.html"}}
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="description" content="SlimServe Admin – File Upload" />
+    <title>{{if .Title}}{{.Title}} — {{end}}SlimServe Admin</title>
+
+    <!-- Theme variables -->
+    <link rel="stylesheet" href="/static/css/theme.css" />
+    <link rel="icon" href="/static/favicon.ico" sizes="any">
+    <link rel="stylesheet" href="/static/css/custom.css" />
+
+    <!-- Tailwind -->
+    <script src="/static/js/tailwind.js"></script>
+
+    <!-- Admin JS -->
+    <script src="/static/js/admin.js"></script>
+
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+    <!-- Heroicons -->
+    <script src="/static/js/heroicons.js"></script>
+
+    <style type="text/tailwindcss">
+        @theme {
+            --color-background: hsl(var(--background));
+            --color-foreground: hsl(var(--foreground));
+            --color-card: hsl(var(--card));
+            --color-card-foreground: hsl(var(--card-foreground));
+            --color-primary: hsl(var(--primary));
+            --color-primary-foreground: hsl(var(--primary-foreground));
+            --color-secondary: hsl(var(--secondary));
+            --color-secondary-foreground: hsl(var(--secondary-foreground));
+            --color-muted: hsl(var(--muted));
+            --color-muted-foreground: hsl(var(--muted-foreground));
+            --color-accent: hsl(var(--accent));
+            --color-accent-foreground: hsl(var(--accent-foreground));
+            --color-destructive: hsl(var(--destructive));
+            --color-destructive-foreground: hsl(var(--destructive-foreground));
+            --color-border: hsl(var(--border));
+            --color-input: hsl(var(--input));
+            --color-ring: hsl(var(--ring));
+        }
+    </style>
+</head>
+
+<body class="bg-background text-foreground min-h-screen">
+    <div class="min-h-screen bg-background">
+        <!-- Admin Navigation -->
+        <nav class="bg-card border-b border-border">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between h-16">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <h1 class="text-xl font-bold text-foreground">SlimServe Admin</h1>
+                        </div>
+                        <div class="hidden md:block ml-10">
+                            <div class="flex items-baseline space-x-4">
+                                <a href="/admin"
+                                    class="text-muted-foreground hover:text-foreground px-3 py-2 rounded-md text-sm font-medium">Dashboard</a>
+                                <a href="/admin/upload"
+                                    class="text-foreground hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Upload</a>
+                                <a href="/admin/files"
+                                    class="text-muted-foreground hover:text-foreground px-3 py-2 rounded-md text-sm font-medium">Files</a>
+                                <a href="/admin/config"
+                                    class="text-muted-foreground hover:text-foreground px-3 py-2 rounded-md text-sm font-medium">Config</a>
+                                <a href="/admin/status"
+                                    class="text-muted-foreground hover:text-foreground px-3 py-2 rounded-md text-sm font-medium">Status</a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <a href="/"
+                            class="text-muted-foreground hover:text-foreground px-3 py-2 rounded-md text-sm font-medium">View
+                            Site</a>
+                        <form action="/admin/logout" method="POST" class="inline">
+                            <input type="hidden" name="csrf_token" value="{{.csrf_token}}">
+                            <button type="submit"
+                                class="text-muted-foreground hover:text-destructive px-3 py-2 rounded-md text-sm font-medium">Logout</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+            {{template "admin_upload_content" .}}
+        </main>
+    </div>
+</body>
+
+</html>
+{{end}}
+
+{{define "admin_upload_content"}}
+<div x-data="adminUpload()" class="space-y-6">
+    <!-- Header -->
+    <div class="bg-card rounded-lg border border-border p-6">
+        <h1 class="text-2xl font-bold text-foreground mb-2">File Upload</h1>
+        <p class="text-muted-foreground">Upload files to the server</p>
+    </div>
+
+    <!-- Upload Area -->
+    <div class="bg-card rounded-lg border border-border p-6">
+        <div class="space-y-6">
+            <!-- Drag and Drop Area -->
+            <div @drop.prevent="handleDrop($event)" @dragover.prevent="dragOver = true"
+                @dragleave.prevent="dragOver = false"
+                :class="{'border-primary bg-primary/5': dragOver, 'border-border': !dragOver}"
+                class="border-2 border-dashed rounded-lg p-8 text-center transition-colors">
+
+                <div class="space-y-4">
+                    <svg class="mx-auto h-12 w-12 text-muted-foreground" fill="none" stroke="currentColor"
+                        viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12">
+                        </path>
+                    </svg>
+
+                    <div>
+                        <p class="text-lg font-medium text-foreground">Drop files here to upload</p>
+                        <p class="text-sm text-muted-foreground">or click to select files</p>
+                    </div>
+
+                    <div>
+                        <input type="file" multiple @change="handleFileSelect($event)" class="hidden" x-ref="fileInput"
+                            accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.txt,.md,.zip">
+                        <button @click="$refs.fileInput.click()"
+                            class="bg-primary text-primary-foreground px-4 py-2 rounded-md hover:bg-primary/90 transition-colors">
+                            Select Files
+                        </button>
+                    </div>
+
+                    <div class="text-xs text-muted-foreground">
+                        <p>Maximum file size: {{.max_upload_size}}MB</p>
+                        <p>Allowed types: {{.allowed_types}}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Selected Files -->
+            <div x-show="selectedFiles.length > 0" class="space-y-4">
+                <h3 class="text-lg font-medium text-foreground">Selected Files</h3>
+
+                <div class="space-y-2">
+                    <template x-for="(file, index) in selectedFiles" :key="index">
+                        <div class="flex items-center justify-between p-3 bg-muted/20 rounded-lg">
+                            <div class="flex items-center space-x-3">
+                                <svg class="w-5 h-5 text-muted-foreground" fill="none" stroke="currentColor"
+                                    viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
+                                    </path>
+                                </svg>
+                                <div>
+                                    <p class="text-sm font-medium text-foreground" x-text="file.name"></p>
+                                    <p class="text-xs text-muted-foreground" x-text="formatFileSize(file.size)"></p>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center space-x-2">
+                                <!-- Progress bar for uploading files -->
+                                <div x-show="file.uploading" class="w-24 bg-muted rounded-full h-2">
+                                    <div class="bg-primary h-2 rounded-full transition-all duration-300"
+                                        :style="`width: ${file.progress}%`"></div>
+                                </div>
+
+                                <!-- Status indicators -->
+                                <div x-show="file.status === 'completed'" class="text-green-500">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M5 13l4 4L19 7"></path>
+                                    </svg>
+                                </div>
+
+                                <div x-show="file.status === 'error'" class="text-destructive">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M6 18L18 6M6 6l12 12"></path>
+                                    </svg>
+                                </div>
+
+                                <button @click="removeFile(index)" x-show="!file.uploading"
+                                    class="text-muted-foreground hover:text-destructive">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16">
+                                        </path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Upload Controls -->
+                <div class="flex items-center justify-between pt-4 border-t border-border">
+                    <div class="text-sm text-muted-foreground">
+                        <span x-text="selectedFiles.length"></span> file(s) selected
+                    </div>
+
+                    <div class="space-x-2">
+                        <button @click="clearFiles()" :disabled="uploading"
+                            class="px-4 py-2 text-muted-foreground hover:text-foreground border border-border rounded-md hover:bg-muted/20 transition-colors disabled:opacity-50">
+                            Clear All
+                        </button>
+
+                        <button @click="uploadFiles()" :disabled="uploading || selectedFiles.length === 0"
+                            class="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50">
+                            <span x-show="!uploading">Upload Files</span>
+                            <span x-show="uploading" class="flex items-center">
+                                <span class="spinner mr-2"></span>
+                                Uploading...
+                            </span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upload Results -->
+    <div x-show="uploadResults.length > 0" class="bg-card rounded-lg border border-border p-6">
+        <h3 class="text-lg font-medium text-foreground mb-4">Upload Results</h3>
+
+        <div class="space-y-2">
+            <template x-for="result in uploadResults" :key="result.filename">
+                <div class="flex items-center justify-between p-3 rounded-lg"
+                    :class="result.status === 'success' ? 'bg-green-500/10 border border-green-500/20' : 'bg-destructive/10 border border-destructive/20'">
+                    <div class="flex items-center space-x-3">
+                        <div x-show="result.status === 'success'" class="text-green-500">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M5 13l4 4L19 7"></path>
+                            </svg>
+                        </div>
+
+                        <div x-show="result.status === 'error'" class="text-destructive">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                        </div>
+
+                        <div>
+                            <p class="text-sm font-medium text-foreground" x-text="result.filename"></p>
+                            <p class="text-xs"
+                                :class="result.status === 'success' ? 'text-green-600' : 'text-destructive'"
+                                x-text="result.message"></p>
+                        </div>
+                    </div>
+
+                    <div x-show="result.status === 'success'" class="text-xs text-muted-foreground">
+                        <span x-text="formatFileSize(result.size)"></span>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        <div class="mt-4 pt-4 border-t border-border">
+            <button @click="clearResults()" class="text-sm text-muted-foreground hover:text-foreground">
+                Clear Results
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    function adminUpload() {
+        return {
+            selectedFiles: [],
+            uploading: false,
+            dragOver: false,
+            uploadResults: [],
+
+            handleDrop(event) {
+                this.dragOver = false;
+                const files = Array.from(event.dataTransfer.files);
+                this.addFiles(files);
+            },
+
+            handleFileSelect(event) {
+                const files = Array.from(event.target.files);
+                this.addFiles(files);
+            },
+
+            addFiles(files) {
+                files.forEach(file => {
+                    this.selectedFiles.push({
+                        file: file,
+                        name: file.name,
+                        size: file.size,
+                        status: 'pending',
+                        progress: 0,
+                        uploading: false
+                    });
+                });
+            },
+
+            removeFile(index) {
+                this.selectedFiles.splice(index, 1);
+            },
+
+            clearFiles() {
+                this.selectedFiles = [];
+            },
+
+            clearResults() {
+                this.uploadResults = [];
+            },
+
+            async uploadFiles() {
+                if (this.selectedFiles.length === 0) return;
+
+                this.uploading = true;
+                this.uploadResults = [];
+
+                const formData = new FormData();
+                this.selectedFiles.forEach((fileObj, index) => {
+                    formData.append('files', fileObj.file);
+                    fileObj.uploading = true;
+                    fileObj.status = 'uploading';
+                });
+
+                // Add CSRF token
+                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+                if (csrfToken) {
+                    formData.append('csrf_token', csrfToken);
+                }
+
+                try {
+                    const response = await fetch('/admin/api/upload', {
+                        method: 'POST',
+                        body: formData,
+                        headers: {
+                            'X-CSRF-Token': csrfToken
+                        }
+                    });
+
+                    const result = await response.json();
+
+                    if (response.ok) {
+                        // Process results
+                        result.results.forEach((uploadResult, index) => {
+                            if (index < this.selectedFiles.length) {
+                                this.selectedFiles[index].uploading = false;
+                                this.selectedFiles[index].status = uploadResult.status === 'success' ? 'completed' : 'error';
+                                this.selectedFiles[index].progress = 100;
+                            }
+
+                            this.uploadResults.push({
+                                filename: uploadResult.filename,
+                                status: uploadResult.status,
+                                message: uploadResult.status === 'success' ?
+                                    `Uploaded as ${uploadResult.saved_as}` :
+                                    uploadResult.error,
+                                size: uploadResult.size || 0
+                            });
+                        });
+                    } else {
+                        throw new Error(result.error || 'Upload failed');
+                    }
+                } catch (error) {
+                    console.error('Upload error:', error);
+                    this.selectedFiles.forEach(fileObj => {
+                        fileObj.uploading = false;
+                        fileObj.status = 'error';
+                    });
+
+                    this.uploadResults.push({
+                        filename: 'Upload Error',
+                        status: 'error',
+                        message: error.message || 'Upload failed'
+                    });
+                } finally {
+                    this.uploading = false;
+                }
+            },
+
+            formatFileSize(bytes) {
+                if (bytes === 0) return '0 Bytes';
+                const k = 1024;
+                const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+            }
+        };
+    }
+</script>
+{{end}}

@@ -27,6 +27,7 @@ func (s *Server) showLogin(c *gin.Context) {
 	}
 
 	// Render the login template
+	c.Status(http.StatusOK)
 	if err := s.loginTmpl.ExecuteTemplate(c.Writer, "base", data); err != nil {
 		http.Error(c.Writer, "failed to render login page", http.StatusInternalServerError)
 	}
@@ -77,6 +78,7 @@ func (s *Server) doLogin(c *gin.Context) {
 				"error": "Invalid username or password",
 				"next":  next,
 			}
+			c.Status(http.StatusOK)
 			if err := s.loginTmpl.ExecuteTemplate(c.Writer, "base", data); err != nil {
 				http.Error(c.Writer, "failed to render login page", http.StatusInternalServerError)
 			}

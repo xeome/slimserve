@@ -32,6 +32,12 @@ func SessionAuthMiddleware(cfg *config.Config, store *SessionStore) gin.HandlerF
 			return
 		}
 
+		// Skip authentication for admin routes (admin has its own auth)
+		if strings.HasPrefix(c.Request.URL.Path, "/admin") {
+			c.Next()
+			return
+		}
+
 		// Check for session cookie
 		cookie, err := c.Cookie("slimserve_session")
 		if err == nil && store.Valid(cookie) {

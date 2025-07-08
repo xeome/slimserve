@@ -67,77 +67,84 @@ func (h *Handler) ServeFiles(c *gin.Context) {
 		requestPath = "/"
 	}
 
-	if requestPath == "/" {
-		if len(h.roots) > 0 {
-			h.serveDirectoryFromRoot(c, h.roots[0], ".", "/")
-			return
-		}
+	// Handle root directory
+	if requestPath == "/" && len(h.roots) > 0 {
+		h.serveDirectoryFromRoot(c, h.roots[0], ".", "/")
+		return
 	}
 
+	// Handle static files
 	if strings.HasPrefix(requestPath, "/static/") {
 		h.serveStaticFile(c, requestPath)
 		return
 	}
 
+	// Clean and validate path
 	cleanPath := filepath.Clean(requestPath)
 	if cleanPath == "." {
 		cleanPath = "/"
 	}
 	relPath := strings.TrimPrefix(cleanPath, "/")
 
-	if h.config.DisableDotFiles {
-		pathComponents := strings.Split(strings.Trim(cleanPath, "/"), "/")
-		for _, component := range pathComponents {
-			if component != "" && strings.HasPrefix(component, ".") {
-				c.AbortWithStatus(http.StatusForbidden)
-				return
-			}
-		}
+	// Check for dot files if disabled
+	if h.config.DisableDotFiles && h.containsDotFile(cleanPath) {
+		c.AbortWithStatus(http.StatusForbidden)
+		return
 	}
 
+	// Handle thumbnail requests
 	if c.Query("thumb") == "1" {
 		h.serveThumbnailFromRoot(c, relPath)
 		return
 	}
 
-	for _, root := range h.roots {
-		ignored, err := isIgnored(relPath, root, h.config)
-		if err != nil {
-			logger.Log.Error().Err(err).Str("path", relPath).Msg("Error checking if path is ignored")
-			c.AbortWithStatus(http.StatusInternalServerError)
-			return
-		}
-		if ignored {
-			c.AbortWithStatus(http.StatusForbidden)
-			return
-		}
-
-		info, err := root.Stat(relPath)
-		if err != nil {
-			continue
-		}
-
-		if !info.IsDir() {
-			file, err := root.Open(relPath)
-			if err != nil {
-				continue
-			}
-			defer file.Close()
-
-			fileInfo, err := file.Stat()
-			if err != nil {
-				continue
-			}
-
-			http.ServeContent(c.Writer, c.Request, fileInfo.Name(), fileInfo.ModTime(), file)
-			return
-		}
-
-		h.serveDirectoryFromRoot(c, root, relPath, cleanPath)
+	// Try to serve from each root
+	if h.tryServeFromRoots(c, relPath, cleanPath) {
 		return
 	}
 
 	c.AbortWithStatus(http.StatusNotFound)
+}
+
+// containsDotFile checks if the path contains any dot files/directories
+func (h *Handler) containsDotFile(path string) bool {
+	pathComponents := strings.Split(strings.Trim(path, "/"), "/")
+	for _, component := range pathComponents {
+		if component != "" && strings.HasPrefix(component, ".") {
+			return true
+		}
+	}
+	return false
+}
+
+// tryServeFromRoots attempts to serve the file from available roots
+func (h *Handler) tryServeFromRoots(c *gin.Context, relPath, cleanPath string) bool {
+	for _, root := range h.roots {
+		// Check if file is ignored
+		if ignored, err := isIgnored(relPath, root, h.config); err != nil {
+			logger.Log.Error().Err(err).Str("path", relPath).Msg("Error checking if path is ignored")
+			c.AbortWithStatus(http.StatusInternalServerError)
+			return true
+		} else if ignored {
+			c.AbortWithStatus(http.StatusForbidden)
+			return true
+		}
+
+		// Try to stat the file
+		info, err := root.Stat(relPath)
+		if err != nil {
+			continue // Try next root
+		}
+
+		// Serve file or directory
+		if info.IsDir() {
+			h.serveDirectoryFromRoot(c, root, relPath, cleanPath)
+		} else {
+			h.serveFileFromRoot(c, root, relPath)
+		}
+		return true
+	}
+	return false
 }
 
 // buildListingData creates a directory listing from entries, shared by both listing methods
@@ -217,8 +224,8 @@ func (h *Handler) serveDirectoryFromRoot(c *gin.Context, root *security.RootFS, 
 	data := h.buildListingData(root, entries, requestPath)
 
 	c.Header("Content-Type", "text/html")
+	c.Status(http.StatusOK)
 	if c.Request.Method == http.MethodHead {
-		c.Status(http.StatusOK)
 		return
 	}
 	if err := h.tmpl.ExecuteTemplate(c.Writer, "listing.html", data); err != nil {

@@ -14,6 +14,15 @@ type Config struct {
 	ThumbJpegQuality   int      `json:"thumb_jpeg_quality"`
 	ThumbMaxFileSizeMB int      `json:"thumb_max_file_size_mb"`
 	IgnorePatterns     []string `json:"ignore_patterns"`
+
+	// Admin configuration
+	EnableAdmin          bool     `json:"enable_admin"`
+	AdminUsername        string   `json:"admin_username"`
+	AdminPassword        string   `json:"admin_password"`
+	AdminUploadDir       string   `json:"admin_upload_dir"`
+	MaxUploadSizeMB      int      `json:"max_upload_size_mb"`
+	AllowedUploadTypes   []string `json:"allowed_upload_types"`
+	MaxConcurrentUploads int      `json:"max_concurrent_uploads"`
 }
 
 // Default returns a Config with default values
@@ -31,5 +40,14 @@ func Default() *Config {
 		ThumbJpegQuality:   85,
 		ThumbMaxFileSizeMB: 10,
 		IgnorePatterns:     []string{},
+
+		// Admin defaults
+		EnableAdmin:          false,
+		AdminUsername:        "",
+		AdminPassword:        "",
+		AdminUploadDir:       "./uploads",
+		MaxUploadSizeMB:      100,
+		AllowedUploadTypes:   []string{"jpg", "jpeg", "png", "gif", "webp", "pdf", "txt", "md", "zip"},
+		MaxConcurrentUploads: 3,
 	}
 }

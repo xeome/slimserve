@@ -19,6 +19,9 @@ SlimServe is a minimalistic and efficient file-serving application that provides
 - 🖼️ **On-demand thumbnail generation** for images (JPEG, PNG, GIF, WebP)
 - 📝 **Structured logging** with configurable levels
 - 🔐 **Configurable dot-file protection** and cookie-based session authentication
+- 👑 **Admin interface** with secure file upload and server management
+- 📤 **File upload** with validation, size limits, and type checking
+- 🛡️ **Security features** including CSRF protection, rate limiting, and input validation
 - 🐳 **Docker deployment support** (23.9MB production image)
 - 🧪 **Comprehensive security fuzzing** infrastructure
 - 🌐 **Cross-platform support** (Linux, BSD, macOS, Windows)
@@ -156,7 +159,60 @@ SlimServe can be run directly with command-line flags or configured via a JSON f
 
 # Enable session-based authentication
 ./slimserve -enable-auth -username alice -password secret
+
+# Enable admin interface with file upload
+./slimserve -enable-admin -admin-username admin -admin-password secure123
 ```
+
+## Admin Interface
+
+SlimServe includes a secure admin interface for file management and server administration.
+
+### Enabling Admin Interface
+
+```bash
+# Enable admin interface with credentials
+./slimserve -enable-admin -admin-username admin -admin-password secure123
+
+# Or via environment variables
+export SLIMSERVE_ENABLE_ADMIN=true
+export SLIMSERVE_ADMIN_USERNAME=admin
+export SLIMSERVE_ADMIN_PASSWORD=secure123
+./slimserve
+```
+
+### Admin Features
+
+- **Dashboard**: System statistics and server status monitoring
+- **File Upload**: Secure multi-file upload with validation
+- **File Management**: Browse, delete, and organize uploaded files
+- **Configuration**: Runtime configuration management
+- **System Status**: Memory usage, uptime, and performance metrics
+
+### Admin Security
+
+- **Separate Authentication**: Admin uses separate credentials from regular users
+- **CSRF Protection**: All admin operations protected against CSRF attacks
+- **Rate Limiting**: Prevents brute force attacks on admin endpoints
+- **Input Validation**: Comprehensive validation of all admin inputs
+- **File Type Restrictions**: Configurable allowed file types for uploads
+- **Size Limits**: Configurable maximum file size and concurrent uploads
+
+### Admin Configuration
+
+| Flag                      | Environment Variable               | Default                                | Description            |
+| ------------------------- | ---------------------------------- | -------------------------------------- | ---------------------- |
+| `-enable-admin`           | `SLIMSERVE_ENABLE_ADMIN`           | `false`                                | Enable admin interface |
+| `-admin-username`         | `SLIMSERVE_ADMIN_USERNAME`         | -                                      | Admin username         |
+| `-admin-password`         | `SLIMSERVE_ADMIN_PASSWORD`         | -                                      | Admin password         |
+| `-admin-upload-dir`       | `SLIMSERVE_ADMIN_UPLOAD_DIR`       | `./uploads`                            | Upload directory       |
+| `-max-upload-size-mb`     | `SLIMSERVE_MAX_UPLOAD_SIZE_MB`     | `100`                                  | Max upload size (MB)   |
+| `-allowed-upload-types`   | `SLIMSERVE_ALLOWED_UPLOAD_TYPES`   | `jpg,jpeg,png,gif,webp,pdf,txt,md,zip` | Allowed file types     |
+| `-max-concurrent-uploads` | `SLIMSERVE_MAX_CONCURRENT_UPLOADS` | `3`                                    | Max concurrent uploads |
+
+### Accessing Admin Interface
+
+Once enabled, access the admin interface at `/admin`. You'll be prompted to log in with your admin credentials.
 
 ## Security Features
 
