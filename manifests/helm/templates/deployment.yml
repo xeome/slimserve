@@ -1,0 +1,72 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "{{ .Release.Name }}-main"
+  namespace: "{{ if eq .Release.Namespace "default" }}slimserve{{ else }}{{ .Release.Namespace }}{{ end }}"
+spec:
+  replicas: {{ .Values.replicaCount | default (printf "%d" 1) }}
+  selector:
+    matchLabels:
+      app: "{{ .Release.Name }}-main"
+  template:
+    metadata:
+      labels:
+        app: "{{ .Release.Name }}-main"
+    spec:
+    {{- with .Values.nodeSelector }}
+      nodeSelector:
+      {{- toYaml . | nindent 8 }}
+    {{- end }}
+    {{- with .Values.affinity }}
+      affinity:
+      {{- toYaml . | nindent 8 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+      {{- toYaml . | nindent 8 }}
+    {{- end }}
+      containers:
+        - name: "{{ .Release.Name }}-main"
+          image: {{ template "slimserve.main.image" . }}
+          env:
+          {{- if .Values.main.auth.enabled }}
+            - name: SLIMSERVE_ENABLE_AUTH
+              value: "true"
+            - name: SLIMSERVE_USERNAME
+              value: {{ .Values.main.auth.name | quote }}
+            - name: SLIMSERVE_PASSWORD
+              {{- if and (eq (.Values.main.auth.secret.enabled | toString) "true") (or (eq (.Values.main.auth.secret.autoCreate | toString) "true") (eq (.Values.main.auth.secret.autoCreate | toString) "kustomize")) }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ if .Values.main.auth.secret.name }}{{ .Values.main.auth.secret.name }}{{ else }}{{ .Release.Name }}-secret{{ end }}
+                  key: {{ .Values.main.auth.secret.key }}
+              {{- else }}
+              value: {{ .Values.main.auth.password | quote }}
+              {{- end }}
+          {{- end }}
+          {{- range $key, $value := .Values.main.options }}
+            - name: {{ $key | upper }}
+              value: {{ $value | quote }}
+          {{- end }}
+          {{- range .Values.main.environments }}
+            - name: {{ .name }}
+              value: {{ .value | quote }}
+          {{- end }}
+          {{- with .Values.main.ports }}
+          ports:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.resources.limits.main }}
+          resources:
+            limits:
+              {{- toYaml . | nindent 14 }}
+          {{- end }}
+          volumeMounts:
+            - name: "{{ .Release.Name }}-data"
+              mountPath: /data
+              subPath: subpath
+      volumes:
+        - name: "{{ .Release.Name }}-data"
+          persistentVolumeClaim:
+            claimName: "{{ .Release.Name }}-data-pvc"

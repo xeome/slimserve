@@ -1,0 +1,12 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: "{{ .Release.Name }}-data-pvc"
+  namespace: "{{ if eq .Release.Namespace "default" }}slimserve{{ else }}{{ .Release.Namespace }}{{ end }}"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: "{{ .Values.resources.requests.main.storage }}"

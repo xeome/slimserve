@@ -1,0 +1,12 @@
+apiVersion: v2
+name: slimserve
+description: A lightweight HTTP file server designed with simplicity and security in mind.
+type: application
+version: 1.0.0
+appVersion: 0.3.1
+projectUrl: https://github.com/xeome/slimserve
+maintainers:
+- name: Emin
+  email: xeome@proton.me
+- name: Taha
+  email: mt190502@mtaha.dev
