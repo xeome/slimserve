@@ -3,7 +3,6 @@
 # update the 'content' array in tailwind.config.js to ensure all Tailwind CSS classes are included.
 .PHONY: help build test clean fuzz-go fuzz-short fuzz-long docker-build docker-run
 
-# Default target
 all: build
 
 help:
@@ -18,16 +17,12 @@ help:
 	@echo "  clean         - Clean build artifacts"
 	@echo "  help          - Show this help message"
 
-# Build the main binary
 build:
 	go build -o slimserve cmd/slimserve/main.go
 
-# Run tests
 test:
 	go test ./...
 
-
-# Run fuzz tests for short duration (30 seconds)
 fuzz-short:
 	@echo "Running path fuzzing..."
 	go test ./internal/server -fuzz=FuzzRequestPath -fuzztime=30s
@@ -36,7 +31,6 @@ fuzz-short:
 	@echo "Running static asset fuzzing..."
 	go test ./internal/server -fuzz=FuzzStaticAssets -fuzztime=30s
 
-# Run fuzz tests for longer duration (5 minutes each)
 fuzz-long:
 	@echo "Running extended path fuzzing..."
 	go test ./internal/server -fuzz=FuzzRequestPath -fuzztime=5m
@@ -45,13 +39,11 @@ fuzz-long:
 	@echo "Running extended static asset fuzzing..."
 	go test ./internal/server -fuzz=FuzzStaticAssets -fuzztime=5m
 
-# Docker targets
 docker-build:
 	docker build -t slimserve:latest .
 
 docker-run:
 	docker run --rm -p 8080:8080 slimserve:latest
 
-# Clean build artifacts
 clean:
 	rm -f slimserve

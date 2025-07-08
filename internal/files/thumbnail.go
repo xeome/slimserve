@@ -29,7 +29,6 @@ var (
 // Generate creates a thumbnail for the given source file path with the specified maximum dimension.
 // It is a wrapper around GenerateWithCacheLimit for backward compatibility.
 func Generate(srcPath string, maxDim int) (string, error) {
-	// Call the new function with default values for new parameters
 	return GenerateWithCacheLimit(srcPath, maxDim, 0, 85, 10)
 }
 
@@ -39,12 +38,10 @@ func GenerateWithCacheLimit(srcPath string, maxDim, maxCacheMB, jpegQuality, max
 	start := time.Now()
 	logger.Debugf("Starting thumbnail generation for %s (max dimension: %d)", srcPath, maxDim)
 	defer func() {
-		// Aggressively trigger GC to release memory after thumbnail generation
 		runtime.GC()
 		logger.Debugf("Forced garbage collection after thumbnail generation for %s", srcPath)
 	}()
 
-	// Check file size first
 	info, err := os.Stat(srcPath)
 	if err != nil {
 		logger.Errorf("Failed to stat source file %s: %v", srcPath, err)
@@ -71,7 +68,6 @@ func GenerateWithCacheLimit(srcPath string, maxDim, maxCacheMB, jpegQuality, max
 		return "", fmt.Errorf("failed to generate cache key: %w", err)
 	}
 
-	// All thumbnails are now JPEG
 	outputExt := ".jpg"
 	thumbPath := filepath.Join(cacheDir, fmt.Sprintf("%s%s", cacheKey, outputExt))
 
@@ -163,7 +159,6 @@ func generateCacheKey(imagePath string, maxDim int) (string, error) {
 		if resolved, err := filepath.EvalSymlinks(canonicalPath); err == nil {
 			canonicalPath = resolved
 		}
-		// If EvalSymlinks fails, keep the Abs result
 	}
 
 	var inode uint64
@@ -187,8 +182,8 @@ func generateCacheKey(imagePath string, maxDim int) (string, error) {
 	if file, err := os.Open(canonicalPath); err == nil {
 		defer file.Close()
 
-		buffer := make([]byte, 64*1024) // 64 KiB buffer
-		n, _ := file.Read(buffer)       // Read up to 64 KiB, ignore EOF error
+		buffer := make([]byte, 64*1024)
+		n, _ := file.Read(buffer)
 
 		hasher := xxhash.New()
 		hasher.Write(buffer[:n])

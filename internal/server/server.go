@@ -28,11 +28,9 @@ type Server struct {
 // New creates a new server instance with the given configuration
 func New(cfg *config.Config) *Server {
 	if len(cfg.Directories) == 0 {
-		// Default to current directory when none provided
 		cfg.Directories = []string{"."}
 	}
 
-	// Build RootFS instances from configured directories
 	var roots []*security.RootFS
 	for _, dir := range cfg.Directories {
 		root, err := security.NewRootFS(dir)
@@ -70,19 +68,11 @@ func New(cfg *config.Config) *Server {
 func (s *Server) setupRoutes() {
 	handler := NewHandler(s.config, s.roots)
 
-	// Add logging middleware
 	s.engine.Use(logger.Middleware())
-
-	// Add session authentication middleware
 	s.engine.Use(SessionAuthMiddleware(s.config, s.sessionStore))
-
-	// Add access control middleware for file serving (but skip for static assets)
 	s.engine.Use(s.accessControlMiddleware())
 
-	// Create a wrapper handler that checks for auth routes first
 	authHandler := s.createAuthAwareHandler(handler)
-
-	// Single wildcard route that handles both auth and file serving
 	s.engine.GET("/*path", authHandler)
 	s.engine.POST("/*path", authHandler)
 	s.engine.HEAD("/*path", authHandler)
@@ -172,7 +162,6 @@ func (s *Server) accessControlMiddleware() gin.HandlerFunc {
 			}
 		}
 
-		// Path not allowed in any root
 		c.AbortWithStatus(http.StatusForbidden)
 	}
 }
@@ -192,7 +181,6 @@ func (s *Server) Shutdown(ctx context.Context) error {
 		return nil
 	}
 
-	// Close all RootFS instances
 	for _, root := range s.roots {
 		if err := root.Close(); err != nil {
 			logger.Log.Warn().Err(err).Msg("Failed to close RootFS")

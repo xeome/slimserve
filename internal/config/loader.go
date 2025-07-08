@@ -16,7 +16,6 @@ import (
 func Load() (*Config, error) {
 	cfg := Default()
 
-	// Load from configuration file first (if specified)
 	configFile := getConfigFile()
 	if configFile != "" {
 		if err := loadFromFile(cfg, configFile); err != nil {
@@ -24,10 +23,7 @@ func Load() (*Config, error) {
 		}
 	}
 
-	// Load from environment variables (overrides file config)
 	loadFromEnv(cfg)
-
-	// Load from CLI flags (overrides everything else)
 	loadFromFlags(cfg)
 
 	return cfg, nil
@@ -35,18 +31,15 @@ func Load() (*Config, error) {
 
 // getConfigFile returns the configuration file path from flags or environment
 func getConfigFile() string {
-	// Check CLI flag first
 	configFlag := flag.Lookup("config")
 	if configFlag != nil && configFlag.Value.String() != "" {
 		return configFlag.Value.String()
 	}
 
-	// Check environment variable
 	if envConfig := os.Getenv("SLIMSERVE_CONFIG"); envConfig != "" {
 		return envConfig
 	}
 
-	// Check for default config file
 	if _, err := os.Stat("slimserve.json"); err == nil {
 		return "slimserve.json"
 	}
@@ -78,7 +71,6 @@ func loadFromEnv(cfg *Config) {
 
 	if dirs := os.Getenv("SLIMSERVE_DIRS"); dirs != "" {
 		cfg.Directories = strings.Split(dirs, ",")
-		// Trim whitespace from each directory
 		for i, dir := range cfg.Directories {
 			cfg.Directories[i] = strings.TrimSpace(dir)
 		}

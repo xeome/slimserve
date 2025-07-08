@@ -92,21 +92,20 @@ func (cm *CacheManager) collectCacheFiles() ([]CachedFile, error) {
 
 	err := filepath.WalkDir(cm.cacheDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
-			return nil // Skip files we can't access but continue walking
+			return nil
 		}
 
 		if d.IsDir() {
-			return nil // Skip directories
+			return nil
 		}
 
-		// Only consider image files for cache operations
 		if !IsImageFile(d.Name()) {
-			return nil // Skip non-image files
+			return nil
 		}
 
 		info, err := d.Info()
 		if err != nil {
-			return nil // Skip files we can't get info for
+			return nil
 		}
 
 		files = append(files, CachedFile{
@@ -144,7 +143,6 @@ func (cm *CacheManager) Prune(targetMB int64) (int, int64, error) {
 		return 0, 0, nil
 	}
 
-	// Sort files by modification time (oldest first)
 	sort.Slice(files, func(i, j int) bool {
 		return files[i].ModTime.Before(files[j].ModTime)
 	})
@@ -152,7 +150,6 @@ func (cm *CacheManager) Prune(targetMB int64) (int, int64, error) {
 	var removed int
 	var freedBytes int64
 
-	// Remove files until we're under the target size
 	for _, file := range files {
 		currentMB := (totalBytes - freedBytes) / (1024 * 1024)
 		if currentMB <= targetMB {

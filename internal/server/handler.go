@@ -67,7 +67,6 @@ func (h *Handler) ServeFiles(c *gin.Context) {
 		requestPath = "/"
 	}
 
-	// If root is requested, serve directory listing of first allowed root directly
 	if requestPath == "/" {
 		if len(h.roots) > 0 {
 			h.serveDirectoryFromRoot(c, h.roots[0], ".", "/")
@@ -75,21 +74,17 @@ func (h *Handler) ServeFiles(c *gin.Context) {
 		}
 	}
 
-	// Handle static assets from embedded FS - bypass all other checks
 	if strings.HasPrefix(requestPath, "/static/") {
 		h.serveStaticFile(c, requestPath)
 		return
 	}
 
-	// Clean and convert to relative path
 	cleanPath := filepath.Clean(requestPath)
 	if cleanPath == "." {
 		cleanPath = "/"
 	}
-	// Map absolute URL path to relative filesystem path
 	relPath := strings.TrimPrefix(cleanPath, "/")
 
-	// Check for hidden files/directories (components starting with ".") if enabled
 	if h.config.DisableDotFiles {
 		pathComponents := strings.Split(strings.Trim(cleanPath, "/"), "/")
 		for _, component := range pathComponents {
@@ -100,15 +95,12 @@ func (h *Handler) ServeFiles(c *gin.Context) {
 		}
 	}
 
-	// Check for thumbnail request
 	if c.Query("thumb") == "1" {
 		h.serveThumbnailFromRoot(c, relPath)
 		return
 	}
 
-	// Try to find the file in one of the RootFS instances
 	for _, root := range h.roots {
-		// Check if the path is ignored before proceeding
 		ignored, err := isIgnored(relPath, root, h.config)
 		if err != nil {
 			logger.Log.Error().Err(err).Str("path", relPath).Msg("Error checking if path is ignored")
@@ -120,13 +112,11 @@ func (h *Handler) ServeFiles(c *gin.Context) {
 			return
 		}
 
-		// Use RootFS.Stat for traversal-resistant file access
 		info, err := root.Stat(relPath)
 		if err != nil {
-			continue // Try next root
+			continue
 		}
 
-		// If it's a file, serve it
 		if !info.IsDir() {
 			file, err := root.Open(relPath)
 			if err != nil {
@@ -134,7 +124,6 @@ func (h *Handler) ServeFiles(c *gin.Context) {
 			}
 			defer file.Close()
 
-			// Get file info for headers
 			fileInfo, err := file.Stat()
 			if err != nil {
 				continue
@@ -144,12 +133,10 @@ func (h *Handler) ServeFiles(c *gin.Context) {
 			return
 		}
 
-		// If it's a directory, show listing
 		h.serveDirectoryFromRoot(c, root, relPath, cleanPath)
 		return
 	}
 
-	// File not found in any allowed root
 	c.AbortWithStatus(http.StatusNotFound)
 }
 

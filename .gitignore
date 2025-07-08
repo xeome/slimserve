@@ -1,4 +1,5 @@
 .kilocode
+.vscode
 slimserve
 *.log
 

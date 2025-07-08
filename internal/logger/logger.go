@@ -18,22 +18,15 @@ var Log zerolog.Logger
 // Init configures global zerolog defaults based on Config.LogLevel.
 // Accepts "panic","fatal","error","warn","info","debug","trace" (case-insensitive).
 func Init(cfg *config.Config) error {
-	// Configure time format for compact JSON
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 
-	// Parse log level from config
 	level, err := parseLogLevel(cfg.LogLevel)
 	if err != nil {
 		return err
 	}
 
-	// Set global log level
 	zerolog.SetGlobalLevel(level)
-
-	// Configure logger output
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr}).With().Caller().Logger()
-
-	// Initialize global logger
 	Log = log.Logger
 
 	return nil
@@ -58,24 +51,17 @@ func parseLogLevel(levelStr string) (zerolog.Level, error) {
 // Middleware returns a gin middleware for HTTP request logging
 func Middleware() gin.HandlerFunc {
 	return gin.HandlerFunc(func(c *gin.Context) {
-		// Record start time
 		start := time.Now()
 		path := c.Request.URL.Path
 		method := c.Request.Method
 
-		// Process request
 		c.Next()
 
-		// Calculate duration
 		duration := time.Since(start)
 		status := c.Writer.Status()
 		size := c.Writer.Size()
-
-		// Extract client information
 		clientIP := c.ClientIP()
 		userAgent := c.Request.UserAgent()
-
-		// Log request
 		Log.Info().
 			Str("method", method).
 			Str("path", path).
