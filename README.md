@@ -58,16 +58,19 @@ docker-compose down
 ```
 
 ### Kubernetes
+If you're using Helm v3.7.x or earlier, you need to manually enable OCI support using an environment variable:
 ```bash
-# Add chart reporepository
-helm repo add slimserve https://xeome.github.io/slimserve
+export HELM_EXPERIMENTAL_OCI=1
+```
 
-# Update repositories
-helm repo update
+#### Installing
 
-# Deploy slimserve
-helm install slimserve slimserve/slimserve --namespace slimserve --create-namespace
+```bash
+# Get latest version from GitHub API (requires curl and jq on your system)
+LATEST_VERSION=$(curl -fsSL https://api.github.com/repos/xeome/slimserve/tags | jq -r '.[].name' | sort -Vr | head -n 1 | sed 's/v//g')
 
+# Deploy SlimServe
+helm install slimserve oci://ghcr.io/xeome/slimserve-helm --version $LATEST_VERSION --namespace slimserve --create-namespace
 ```
 
 ### Manual Docker Run
