@@ -1,0 +1,50 @@
+image:
+  main:
+    repository: ghcr.io/xeome/slimserve
+    pullPolicy: IfNotPresent
+    tag: 0.3.1
+
+main:
+  ports:
+    - containerPort: 8080
+  auth:
+    enabled: false
+    name: admin
+    password: password
+    secret: 
+      enabled: true
+      autoCreate: true
+      name: admin-password
+      key: password
+  options:
+    slimserve_dirs: "/data"
+    slimserve_disable_dotfiles: "false"
+    slimserve_log_level: "info"
+    slimserve_enable_auth: "false"
+  environments: {}
+    # - name: key
+    #  value: value
+
+service:
+  type: ClusterIP
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8080
+      targetPort: 8080
+
+resources:
+  limits:
+    main:
+      memory: 512Mi
+  requests:
+    main:
+      storage: 1Gi
+
+replicaCount: 1
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

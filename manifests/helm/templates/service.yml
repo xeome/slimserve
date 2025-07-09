@@ -1,0 +1,14 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: "{{ .Release.Name }}-main"
+  namespace: "{{ if eq .Release.Namespace "default" }}slimserve{{ else }}{{ .Release.Namespace }}{{ end }}"
+spec:
+  type: "{{ .Values.service.type }}"
+  selector:
+    app: "{{ .Release.Name }}-main"
+  {{- with .Values.service.ports }}
+  ports:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
