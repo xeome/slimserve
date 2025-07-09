@@ -13,11 +13,24 @@ import (
 	"slimserve/internal/config"
 	"slimserve/internal/logger"
 	"slimserve/internal/server"
+	"slimserve/internal/version"
 
 	"github.com/rs/zerolog/log"
 )
 
 func main() {
+	// Check for version flag
+	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "-v") {
+		versionInfo := version.Get()
+		fmt.Printf("SlimServe %s\n", versionInfo.String())
+		fmt.Printf("Commit: %s\n", versionInfo.CommitHash)
+		fmt.Printf("Build Date: %s\n", versionInfo.BuildDate)
+		fmt.Printf("Build User: %s\n", versionInfo.BuildUser)
+		fmt.Printf("Go Version: %s\n", versionInfo.GoVersion)
+		fmt.Printf("Platform: %s/%s\n", versionInfo.Platform, versionInfo.Arch)
+		return
+	}
+
 	if err := Run(context.Background()); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal().Err(err).Msg("failed to run server")
 	}

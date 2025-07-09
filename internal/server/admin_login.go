@@ -47,6 +47,9 @@ func (s *Server) showAdminLogin(c *gin.Context) {
 		data["error"] = errorMsg
 	}
 
+	// Add version information
+	data = s.addVersionToTemplateData(data)
+
 	// Check if admin login template is loaded
 	if s.adminLoginTmpl == nil {
 		logger.Log.Error().Msg("Admin login template not loaded")
@@ -115,6 +118,8 @@ func (s *Server) doAdminLogin(c *gin.Context) {
 				"next":       next,
 				"csrf_token": s.getOrSetCSRFToken(c),
 			}
+			// Add version information
+			data = s.addVersionToTemplateData(data)
 			c.Status(http.StatusUnauthorized)
 			if err := s.adminLoginTmpl.ExecuteTemplate(c.Writer, "admin_login.html", data); err != nil {
 				http.Error(c.Writer, "failed to render admin login page", http.StatusInternalServerError)
@@ -273,6 +278,9 @@ func (s *Server) showAdminDashboard(c *gin.Context) {
 		"CurrentPath": c.Request.URL.Path,
 	}
 
+	// Add version information
+	data = s.addVersionToTemplateData(data)
+
 	// Check if admin template is loaded
 	if s.adminTmpl == nil {
 		logger.Log.Error().Msg("Admin template not loaded")
@@ -297,6 +305,9 @@ func (s *Server) showAdminUpload(c *gin.Context) {
 		"allowed_types":   strings.Join(s.config.AllowedUploadTypes, ", "),
 	}
 
+	// Add version information
+	data = s.addVersionToTemplateData(data)
+
 	c.Status(http.StatusOK)
 	if err := s.adminTmpl.ExecuteTemplate(c.Writer, "admin_upload.html", data); err != nil {
 		logger.Log.Error().Err(err).Msg("Failed to render admin upload page")
@@ -311,6 +322,9 @@ func (s *Server) showAdminFiles(c *gin.Context) {
 		"csrf_token":  s.getOrSetCSRFToken(c),
 		"CurrentPath": c.Request.URL.Path,
 	}
+
+	// Add version information
+	data = s.addVersionToTemplateData(data)
 
 	c.Status(http.StatusOK)
 	if err := s.adminTmpl.ExecuteTemplate(c.Writer, "admin_files.html", data); err != nil {
@@ -327,6 +341,9 @@ func (s *Server) showAdminConfig(c *gin.Context) {
 		"CurrentPath": c.Request.URL.Path,
 	}
 
+	// Add version information
+	data = s.addVersionToTemplateData(data)
+
 	c.Status(http.StatusOK)
 	if err := s.adminTmpl.ExecuteTemplate(c.Writer, "admin_config.html", data); err != nil {
 		logger.Log.Error().Err(err).Msg("Failed to render admin config page")
@@ -341,6 +358,9 @@ func (s *Server) showAdminStatus(c *gin.Context) {
 		"csrf_token":  s.getOrSetCSRFToken(c),
 		"CurrentPath": c.Request.URL.Path,
 	}
+
+	// Add version information
+	data = s.addVersionToTemplateData(data)
 
 	c.Status(http.StatusOK)
 	if err := s.adminTmpl.ExecuteTemplate(c.Writer, "admin_status.html", data); err != nil {

@@ -10,6 +10,7 @@ import (
 	"slimserve/internal/config"
 	"slimserve/internal/logger"
 	"slimserve/internal/security"
+	"slimserve/internal/version"
 	"slimserve/web"
 
 	"github.com/gin-gonic/gin"
@@ -183,6 +184,12 @@ func (s *Server) createUnifiedHandler(fileHandler *Handler) gin.HandlerFunc {
 			// Set the path parameter for the file handler
 			c.Params = gin.Params{{Key: "path", Value: path}}
 			fileHandler.ServeFiles(c)
+			return
+		}
+
+		// Handle version endpoint (no auth needed)
+		if path == "/version" && (method == "GET" || method == "HEAD") {
+			s.handleVersion(c)
 			return
 		}
 
@@ -387,4 +394,20 @@ func (s *Server) GetEngine() *gin.Engine {
 // ServeHTTP implements http.Handler interface
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.engine.ServeHTTP(w, r)
+}
+
+// handleVersion returns version information as JSON
+func (s *Server) handleVersion(c *gin.Context) {
+	versionInfo := version.Get()
+	c.JSON(http.StatusOK, versionInfo)
+}
+
+// addVersionToTemplateData adds version information to template data
+func (s *Server) addVersionToTemplateData(data gin.H) gin.H {
+	if data == nil {
+		data = gin.H{}
+	}
+	data["Version"] = version.GetShort()
+	data["VersionInfo"] = version.Get()
+	return data
 }
