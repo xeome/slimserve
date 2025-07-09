@@ -44,6 +44,9 @@ make build
 ### Docker Compose (Recommended)
 
 ```bash
+# Change workdir to manifests/docker/
+cd manifests/docker
+
 # Create data directory
 mkdir -p data
 
