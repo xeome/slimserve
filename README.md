@@ -66,8 +66,11 @@ export HELM_EXPERIMENTAL_OCI=1
 #### Installing
 
 ```bash
+# Get latest version from GitHub API (requires curl and jq on your system)
+LATEST_VERSION=$(curl -fsSL https://api.github.com/repos/xeome/slimserve/tags | jq -r '.[].name' | sort -Vr | head -n 1 | sed 's/v//g')
+
 # Deploy SlimServe
-helm install slimserve oci://ghcr.io/xeome/slimserve-helm --version 1.0.7 --namespace slimserve --create-namespace
+helm install slimserve oci://ghcr.io/xeome/slimserve-helm --version $LATEST_VERSION --namespace slimserve --create-namespace
 ```
 
 ### Manual Docker Run
