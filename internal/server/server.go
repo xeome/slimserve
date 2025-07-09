@@ -60,6 +60,7 @@ func New(cfg *config.Config) *Server {
 		adminLoginTmpl = template.Must(template.ParseFS(web.TemplateFS, "templates/admin_login.html"))
 		adminTmpl = template.Must(template.ParseFS(web.TemplateFS,
 			"templates/admin_base.html",
+			"templates/admin_components.html",
 			"templates/admin_dashboard.html",
 			"templates/admin_upload.html",
 			"templates/admin_files.html",

@@ -56,7 +56,7 @@ func (s *Server) showAdminLogin(c *gin.Context) {
 
 	// Render the admin login template
 	c.Status(http.StatusOK)
-	if err := s.adminLoginTmpl.ExecuteTemplate(c.Writer, "admin_base", data); err != nil {
+	if err := s.adminLoginTmpl.ExecuteTemplate(c.Writer, "admin_login.html", data); err != nil {
 		logger.Log.Error().Err(err).Msg("Failed to render admin login page")
 		http.Error(c.Writer, "failed to render admin login page", http.StatusInternalServerError)
 	}
@@ -116,7 +116,7 @@ func (s *Server) doAdminLogin(c *gin.Context) {
 				"csrf_token": s.getOrSetCSRFToken(c),
 			}
 			c.Status(http.StatusUnauthorized)
-			if err := s.adminLoginTmpl.ExecuteTemplate(c.Writer, "admin_base", data); err != nil {
+			if err := s.adminLoginTmpl.ExecuteTemplate(c.Writer, "admin_login.html", data); err != nil {
 				http.Error(c.Writer, "failed to render admin login page", http.StatusInternalServerError)
 			}
 			return
@@ -268,8 +268,9 @@ func (s *Server) doAdminLogout(c *gin.Context) {
 // showAdminDashboard renders the admin dashboard
 func (s *Server) showAdminDashboard(c *gin.Context) {
 	data := gin.H{
-		"Title":      "Dashboard",
-		"csrf_token": s.getOrSetCSRFToken(c),
+		"Title":       "Dashboard",
+		"csrf_token":  s.getOrSetCSRFToken(c),
+		"CurrentPath": c.Request.URL.Path,
 	}
 
 	// Check if admin template is loaded
@@ -291,6 +292,7 @@ func (s *Server) showAdminUpload(c *gin.Context) {
 	data := gin.H{
 		"Title":           "Upload Files",
 		"csrf_token":      s.getOrSetCSRFToken(c),
+		"CurrentPath":     c.Request.URL.Path,
 		"max_upload_size": s.config.MaxUploadSizeMB,
 		"allowed_types":   strings.Join(s.config.AllowedUploadTypes, ", "),
 	}
@@ -305,8 +307,9 @@ func (s *Server) showAdminUpload(c *gin.Context) {
 // showAdminFiles renders the admin file management page
 func (s *Server) showAdminFiles(c *gin.Context) {
 	data := gin.H{
-		"Title":      "File Management",
-		"csrf_token": s.getOrSetCSRFToken(c),
+		"Title":       "File Management",
+		"csrf_token":  s.getOrSetCSRFToken(c),
+		"CurrentPath": c.Request.URL.Path,
 	}
 
 	c.Status(http.StatusOK)
@@ -319,8 +322,9 @@ func (s *Server) showAdminFiles(c *gin.Context) {
 // showAdminConfig renders the admin configuration page
 func (s *Server) showAdminConfig(c *gin.Context) {
 	data := gin.H{
-		"Title":      "Configuration",
-		"csrf_token": s.getOrSetCSRFToken(c),
+		"Title":       "Configuration",
+		"csrf_token":  s.getOrSetCSRFToken(c),
+		"CurrentPath": c.Request.URL.Path,
 	}
 
 	c.Status(http.StatusOK)
@@ -333,8 +337,9 @@ func (s *Server) showAdminConfig(c *gin.Context) {
 // showAdminStatus renders the admin system status page
 func (s *Server) showAdminStatus(c *gin.Context) {
 	data := gin.H{
-		"Title":      "System Status",
-		"csrf_token": s.getOrSetCSRFToken(c),
+		"Title":       "System Status",
+		"csrf_token":  s.getOrSetCSRFToken(c),
+		"CurrentPath": c.Request.URL.Path,
 	}
 
 	c.Status(http.StatusOK)
