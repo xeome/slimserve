@@ -1,5 +1,5 @@
 apiVersion: v2
-name: slimserve
+name: slimserve-helm
 description: A lightweight HTTP file server designed with simplicity and security in mind.
 type: application
 version: 1.0.0

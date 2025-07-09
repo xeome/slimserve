@@ -16,6 +16,7 @@ jobs:
   release:
     permissions:
       contents: write
+      packages: write
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -41,18 +42,20 @@ jobs:
         run: |
           git config user.name "$GITHUB_ACTOR"
           git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
-
+    
       - name: Install Helm
-        if: env.changes == 'true'
-        uses: azure/setup-helm@v4
-        env:
-          GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
-
-      - name: Run chart-releaser
-        if: env.changes == 'true'
-        uses: helm/chart-releaser-action@v1.7.0
+        uses: azure/setup-helm@v3
         with:
-          charts_dir: 'manifests'
-        env:
-          CR_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
-          CR_SKIP_EXISTING: 'true'
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Build release charts
+        run: |
+          helm package manifests/helm
+
+      - name: Login to GitHub Container Registry
+        run: |
+          helm registry login ghcr.io -u ${{ github.repository_owner }} -p ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push Helm Chart
+        run: |
+          helm push ${{ github.workspace }}/*.tgz oci://ghcr.io/${{ github.repository_owner }}/
