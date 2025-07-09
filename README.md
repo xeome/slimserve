@@ -57,6 +57,19 @@ docker-compose logs -f slimserve
 docker-compose down
 ```
 
+### Kubernetes
+```bash
+# Add chart reporepository
+helm repo add slimserve https://xeome.github.io/slimserve
+
+# Update repositories
+helm repo update
+
+# Deploy slimserve
+helm install slimserve slimserve/slimserve --namespace slimserve --create-namespace
+
+```
+
 ### Manual Docker Run
 
 ```bash
