@@ -355,6 +355,7 @@ The project includes comprehensive testing:
 
 - **Unit tests**: 229 test cases with 88.6% coverage
 - **Fuzz testing**: Security-focused fuzzing for path traversal, thumbnails, and static assets
+- **Performance benchmarks**: Extensive benchmarks for critical code paths including cache operations, thumbnail generation, file serving, and request routing
 - **Integration tests**: End-to-end Docker deployment testing
 
 ```bash
@@ -366,9 +367,14 @@ go test -cover ./...
 
 # Run fuzz tests
 go test ./internal/server -fuzz=FuzzRequestPath -fuzztime=30s
+
+# Run performance benchmarks
+make bench              # Quick benchmarks
+make bench-all          # Comprehensive benchmarks
+./scripts/benchmark.sh  # Detailed benchmark runner
 ```
 
-See [`FUZZING.md`](FUZZING.md) for detailed security testing information.
+See [`FUZZING.md`](FUZZING.md) for detailed security testing information and [`BENCHMARKS.md`](BENCHMARKS.md) for performance benchmarking documentation.
 
 ## Docker Deployment
 

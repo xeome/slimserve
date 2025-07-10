@@ -450,3 +450,152 @@ func TestBackwardCompatibility(t *testing.T) {
 		t.Errorf("thumbnail from GenerateWithCacheLimit was not created at %s", thumbPath2)
 	}
 }
+
+// Benchmark tests for performance-critical code paths
+
+// BenchmarkGenerateCacheKey benchmarks the cache key generation function
+func BenchmarkGenerateCacheKey(b *testing.B) {
+	// Create test image file
+	testDir := b.TempDir()
+	testImagePath := filepath.Join(testDir, "test.png")
+
+	// Create a simple test image
+	img := image.NewRGBA(image.Rect(0, 0, 100, 100))
+	for y := 0; y < 100; y++ {
+		for x := 0; x < 100; x++ {
+			img.Set(x, y, color.RGBA{uint8(x), uint8(y), 0, 255})
+		}
+	}
+
+	file, err := os.Create(testImagePath)
+	if err != nil {
+		b.Fatalf("Failed to create test image: %v", err)
+	}
+	defer file.Close()
+
+	if err := png.Encode(file, img); err != nil {
+		b.Fatalf("Failed to encode test image: %v", err)
+	}
+	file.Close()
+
+	// Benchmark different dimensions to test various scenarios
+	dimensions := []int{64, 128, 256, 512, 1024}
+
+	for _, maxDim := range dimensions {
+		b.Run(fmt.Sprintf("dim_%d", maxDim), func(b *testing.B) {
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				_, err := generateCacheKey(testImagePath, maxDim)
+				if err != nil {
+					b.Fatalf("generateCacheKey failed: %v", err)
+				}
+			}
+		})
+	}
+}
+
+// BenchmarkGenerateCacheKeyLargeFile benchmarks cache key generation with large files
+func BenchmarkGenerateCacheKeyLargeFile(b *testing.B) {
+	// Create a larger test image file (simulating real-world scenarios)
+	testDir := b.TempDir()
+	testImagePath := filepath.Join(testDir, "large_test.png")
+
+	// Create a larger image (1000x1000)
+	img := image.NewRGBA(image.Rect(0, 0, 1000, 1000))
+	for y := 0; y < 1000; y++ {
+		for x := 0; x < 1000; x++ {
+			img.Set(x, y, color.RGBA{uint8(x % 256), uint8(y % 256), uint8((x + y) % 256), 255})
+		}
+	}
+
+	file, err := os.Create(testImagePath)
+	if err != nil {
+		b.Fatalf("Failed to create test image: %v", err)
+	}
+	defer file.Close()
+
+	if err := png.Encode(file, img); err != nil {
+		b.Fatalf("Failed to encode test image: %v", err)
+	}
+	file.Close()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := generateCacheKey(testImagePath, 256)
+		if err != nil {
+			b.Fatalf("generateCacheKey failed: %v", err)
+		}
+	}
+}
+
+// BenchmarkThumbnailGeneration benchmarks the complete thumbnail generation process
+func BenchmarkThumbnailGeneration(b *testing.B) {
+	// Create test image file
+	testDir := b.TempDir()
+	testImagePath := filepath.Join(testDir, "bench_test.png")
+
+	// Create test image
+	img := image.NewRGBA(image.Rect(0, 0, 800, 600))
+	for y := 0; y < 600; y++ {
+		for x := 0; x < 800; x++ {
+			img.Set(x, y, color.RGBA{uint8(x % 256), uint8(y % 256), uint8((x * y) % 256), 255})
+		}
+	}
+
+	file, err := os.Create(testImagePath)
+	if err != nil {
+		b.Fatalf("Failed to create test image: %v", err)
+	}
+	defer file.Close()
+
+	if err := png.Encode(file, img); err != nil {
+		b.Fatalf("Failed to encode test image: %v", err)
+	}
+	file.Close()
+
+	// Set custom cache dir
+	customCacheDir := filepath.Join(testDir, "cache")
+	os.Setenv("SLIMSERVE_CACHE_DIR", customCacheDir)
+	defer os.Unsetenv("SLIMSERVE_CACHE_DIR")
+
+	// Test different thumbnail sizes
+	sizes := []int{64, 128, 256, 512}
+
+	for _, size := range sizes {
+		b.Run(fmt.Sprintf("size_%d", size), func(b *testing.B) {
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				// Use a unique path for each iteration to avoid cache hits
+				uniquePath := fmt.Sprintf("%s_%d_%d", testImagePath, size, i)
+				// Copy the test file to unique path
+				if err := copyFile(testImagePath, uniquePath); err != nil {
+					b.Fatalf("Failed to copy test file: %v", err)
+				}
+				defer os.Remove(uniquePath)
+
+				_, err := Generate(uniquePath, size)
+				if err != nil {
+					b.Fatalf("Generate failed: %v", err)
+				}
+			}
+		})
+	}
+}
+
+// Helper function to copy files for benchmarking
+func copyFile(src, dst string) error {
+	sourceFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer sourceFile.Close()
+
+	destFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer destFile.Close()
+
+	_, err = destFile.ReadFrom(sourceFile)
+	return err
+}

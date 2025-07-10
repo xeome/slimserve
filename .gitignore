@@ -5,3 +5,5 @@ slimserve
 
 data/*.png
 data/*.jpg
+
+benchmark_results/*
