@@ -1,0 +1,69 @@
+name: Version Bumper
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout full Git history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get latest Git tag (app version)
+        id: get_tag
+        run: |
+          LATEST_TAG=$(git tag --sort=-v:refname | grep '^v' | head -n 1)
+          echo "Latest tag: $LATEST_TAG"
+          echo "latest_tag=${LATEST_TAG#v}" >> $GITHUB_OUTPUT
+
+      - name: Bump Helm chart version
+        id: bump
+        run: |
+          FILE="manifests/helm/Chart.yaml"
+          README="README.md"
+          APP_VERSION="${{ steps.get_tag.outputs.latest_tag }}"
+
+          current_chart_version=$(grep '^version:' "$FILE" | awk '{print $2}')
+          echo "Current chart version: $current_chart_version"
+
+          IFS='.' read -r chart_major chart_minor chart_patch <<< "$current_chart_version"
+          IFS='.' read -r app_major app_minor app_patch <<< "$APP_VERSION"
+
+          if [ "$app_major" -gt "$chart_major" ]; then
+            chart_major=$((chart_major + 1))
+            chart_minor=0
+            chart_patch=0
+          elif [ "$app_minor" -gt "$chart_minor" ]; then
+            chart_minor=$((chart_minor + 1))
+            chart_patch=0
+          elif [ "$app_patch" -gt "$chart_patch" ]; then
+            chart_patch=$((chart_patch + 1))
+          else
+            chart_patch=$((chart_patch + 1))
+          fi
+
+          new_chart_version="${chart_major}.${chart_minor}.${chart_patch}"
+          echo "New chart version: $new_chart_version"
+
+          # Update Chart.yaml
+          sed -i "s/^version: .*/version: ${new_chart_version}/" "$FILE"
+          sed -i "s/^appVersion: .*/appVersion: ${APP_VERSION}/" "$FILE"
+
+          # Update README
+          sed -i "/helm install .*--version/s/--version [^ ]*/--version ${new_chart_version}/" "$README"
+
+          echo "new_version=${new_chart_version}" >> "$GITHUB_OUTPUT"
+
+      - name: Commit and push changes to master
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add manifests/helm/Chart.yaml README.md
+          git commit -m "chore(chart): bump version to ${{ steps.bump.outputs.new_version }}"
+          git push origin HEAD:master
