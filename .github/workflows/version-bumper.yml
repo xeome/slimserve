@@ -1,0 +1,58 @@
+name: Version Bumper
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get current and previous tags
+        id: tags
+        run: |
+          git fetch --tags
+          CURRENT_TAG=${GITHUB_REF_NAME#v}
+          PREVIOUS_TAG=$(git tag --sort=-v:refname | grep '^v' | sed -n 2p | sed 's/^v//')
+          echo "current=$CURRENT_TAG" >> $GITHUB_OUTPUT
+          echo "previous=$PREVIOUS_TAG" >> $GITHUB_OUTPUT
+
+      - name: Bump chart version
+        id: bump
+        run: |
+          FILE=manifests/helm/Chart.yaml
+          README=README.md
+
+          APP_PREVIOUS="${{ steps.tags.outputs.previous }}"
+          APP_CURRENT="${{ steps.tags.outputs.current }}"
+
+          IFS='.' read -r prev_major prev_minor prev_patch <<< "$APP_PREVIOUS"
+          IFS='.' read -r curr_major curr_minor curr_patch <<< "$APP_CURRENT"
+          IFS='.' read -r chart_major chart_minor chart_patch <<< "$(grep '^version:' "$FILE" | awk '{print $2}')"
+
+          [ "$curr_major" != "$prev_major" ] && chart_major=$((chart_major + 1))
+          [ "$curr_minor" != "$prev_minor" ] && chart_minor=$((chart_minor + 1))
+          [ "$curr_patch" != "$prev_patch" ] && chart_patch=$((chart_patch + 1))
+
+          NEW_CHART_VERSION="${chart_major}.${chart_minor}.${chart_patch}"
+
+          sed -i "s/^version: .*/version: $NEW_CHART_VERSION/" "$FILE"
+          sed -i "s/^appVersion: .*/appVersion: $APP_CURRENT/" "$FILE"
+          sed -i "s/--version [0-9.]*/--version $NEW_CHART_VERSION/" "$README"
+
+          echo "new=$NEW_CHART_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Commit and push changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add manifests/helm/Chart.yaml README.md
+          git commit -m "chore(release): bump chart to ${{ steps.bump.outputs.new }} and update README for v${{ steps.tags.outputs.current }}"
+          git push origin HEAD:master
