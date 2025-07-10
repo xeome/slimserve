@@ -10,42 +10,39 @@ import (
 	"time"
 )
 
-// CachedFile represents a cached file with metadata
 type CachedFile struct {
 	Path    string
 	ModTime time.Time
 	Size    int64 // size in bytes
 }
 
-// IsImageFile checks if a file is a valid image based on its extension
-func IsImageFile(filename string) bool {
-	ext := strings.ToLower(filepath.Ext(filename))
-	switch ext {
-	case ".jpg", ".jpeg", ".png", ".gif", ".webp":
-		return true
-	default:
-		return false
-	}
+var imageExtensions = map[string]bool{
+	".jpg":  true,
+	".jpeg": true,
+	".png":  true,
+	".gif":  true,
+	".webp": true,
 }
 
-// CacheManager handles thumbnail cache operations
+func IsImageFile(filename string) bool {
+	ext := strings.ToLower(filepath.Ext(filename))
+	return imageExtensions[ext]
+}
+
 type CacheManager struct {
 	cacheDir string
 }
 
-// NewCacheManager creates a new cache manager instance
 func NewCacheManager(cacheDir string) *CacheManager {
 	return &CacheManager{
 		cacheDir: cacheDir,
 	}
 }
 
-// GetCacheDir returns the cache directory path
 func (cm *CacheManager) GetCacheDir() string {
 	return cm.cacheDir
 }
 
-// EnsureCacheDir creates the cache directory if it doesn't exist
 func (cm *CacheManager) EnsureCacheDir() error {
 	return os.MkdirAll(cm.cacheDir, 0755)
 }
@@ -56,22 +53,21 @@ func (cm *CacheManager) SizeMB() (int64, error) {
 
 	err := filepath.WalkDir(cm.cacheDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
-			// If we can't access a file, skip it but continue
 			return nil
 		}
 
 		if d.IsDir() {
-			return nil // Skip directories
+			return nil
 		}
 
 		// Only count image files (thumbnails)
 		if !IsImageFile(d.Name()) {
-			return nil // Skip non-image files
+			return nil
 		}
 
 		info, err := d.Info()
 		if err != nil {
-			return nil // Skip files we can't get info for
+			return nil
 		}
 
 		totalSize += info.Size()
@@ -82,13 +78,14 @@ func (cm *CacheManager) SizeMB() (int64, error) {
 		return 0, err
 	}
 
-	// Convert bytes to MB
 	return totalSize / (1024 * 1024), nil
 }
 
 // collectCacheFiles gathers all image files in the cache directory
 func (cm *CacheManager) collectCacheFiles() ([]CachedFile, error) {
-	var files []CachedFile
+	// Start with a smaller initial capacity and let it grow naturally
+	// This balances memory usage for small caches vs allocation efficiency for large ones
+	files := make([]CachedFile, 0, 64)
 
 	err := filepath.WalkDir(cm.cacheDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -124,45 +121,66 @@ func (cm *CacheManager) collectCacheFiles() ([]CachedFile, error) {
 // Only removes image files (thumbnails), leaving other files intact.
 // Returns the number of files removed, MB freed, and any error.
 func (cm *CacheManager) Prune(targetMB int64) (int, int64, error) {
-	files, err := cm.collectCacheFiles()
-	if err != nil {
-		return 0, 0, fmt.Errorf("failed to collect cache files: %w", err)
-	}
+	targetBytes := targetMB * 1024 * 1024
 
-	// Calculate total size in bytes
+	var files []CachedFile
 	var totalBytes int64
-	for _, file := range files {
-		totalBytes += file.Size
-	}
 
-	// Convert to MB for comparison
-	totalMB := totalBytes / (1024 * 1024)
+	err := filepath.WalkDir(cm.cacheDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() || !IsImageFile(d.Name()) {
+			return nil
+		}
+
+		info, err := d.Info()
+		if err != nil {
+			return nil
+		}
+
+		fileSize := info.Size()
+		totalBytes += fileSize
+
+		files = append(files, CachedFile{
+			Path:    path,
+			ModTime: info.ModTime(),
+			Size:    fileSize,
+		})
+		return nil
+	})
+
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to walk cache directory: %w", err)
+	}
 
 	// If we're already under the target, no pruning needed
-	if totalMB <= targetMB {
+	if totalBytes <= targetBytes {
 		return 0, 0, nil
 	}
 
+	// Sort by modification time (oldest first) for efficient pruning
 	sort.Slice(files, func(i, j int) bool {
 		return files[i].ModTime.Before(files[j].ModTime)
 	})
 
+	needToFreeBytes := totalBytes - targetBytes
 	var removed int
 	var freedBytes int64
 
-	for _, file := range files {
-		currentMB := (totalBytes - freedBytes) / (1024 * 1024)
-		if currentMB <= targetMB {
+	// Remove oldest files until we reach the target
+	for i := range files {
+		if freedBytes >= needToFreeBytes {
 			break
 		}
 
-		if err := os.Remove(file.Path); err != nil {
-			logger.Warnf("Failed to remove cache file during pruning: %s: %v", file.Path, err)
+		if err := os.Remove(files[i].Path); err != nil {
+			logger.Warnf("Failed to remove cache file during pruning: %s: %v", files[i].Path, err)
 			continue
 		}
 
 		removed++
-		freedBytes += file.Size
+		freedBytes += files[i].Size
 	}
 
 	freedMB := freedBytes / (1024 * 1024)

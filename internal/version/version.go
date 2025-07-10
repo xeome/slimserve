@@ -9,17 +9,12 @@ import (
 
 // Build-time variables injected via ldflags
 var (
-	// Version is the semantic version of the application
-	Version = "dev"
-	// CommitHash is the git commit hash
+	Version    = "dev"
 	CommitHash = "unknown"
-	// BuildDate is the date when the binary was built
-	BuildDate = "unknown"
-	// BuildUser is the user who built the binary
-	BuildUser = "unknown"
+	BuildDate  = "unknown"
+	BuildUser  = "unknown"
 )
 
-// Info represents version information
 type Info struct {
 	Version    string `json:"version"`
 	CommitHash string `json:"commit_hash"`
@@ -30,9 +25,13 @@ type Info struct {
 	Arch       string `json:"arch"`
 }
 
-// Get returns the current version information
-func Get() Info {
-	return Info{
+var (
+	cachedInfo  *Info
+	cachedShort string
+)
+
+func init() {
+	cachedInfo = &Info{
 		Version:    Version,
 		CommitHash: CommitHash,
 		BuildDate:  BuildDate,
@@ -41,6 +40,17 @@ func Get() Info {
 		Platform:   runtime.GOOS,
 		Arch:       runtime.GOARCH,
 	}
+
+	if cachedInfo.CommitHash != "unknown" && len(cachedInfo.CommitHash) > 7 {
+		cachedShort = fmt.Sprintf("%s (%s)", cachedInfo.Version, cachedInfo.CommitHash[:7])
+	} else {
+		cachedShort = cachedInfo.Version
+	}
+}
+
+// Get returns the current version information (cached)
+func Get() Info {
+	return *cachedInfo
 }
 
 // String returns a human-readable version string
@@ -56,10 +66,9 @@ func (i Info) JSON() ([]byte, error) {
 	return json.MarshalIndent(i, "", "  ")
 }
 
-// GetShort returns a short version string for display
+// GetShort returns a short version string for display (cached)
 func GetShort() string {
-	info := Get()
-	return info.String()
+	return cachedShort
 }
 
 // GetBuildTime returns the build time as a time.Time if parseable
@@ -67,24 +76,24 @@ func GetBuildTime() (time.Time, error) {
 	if BuildDate == "unknown" {
 		return time.Time{}, fmt.Errorf("build date unknown")
 	}
-	
+
 	// Try RFC3339 format first (ISO 8601)
 	if t, err := time.Parse(time.RFC3339, BuildDate); err == nil {
 		return t, nil
 	}
-	
+
 	// Try common build date formats
 	formats := []string{
 		"2006-01-02T15:04:05Z",
 		"2006-01-02 15:04:05",
 		"2006-01-02",
 	}
-	
+
 	for _, format := range formats {
 		if t, err := time.Parse(format, BuildDate); err == nil {
 			return t, nil
 		}
 	}
-	
+
 	return time.Time{}, fmt.Errorf("unable to parse build date: %s", BuildDate)
 }
