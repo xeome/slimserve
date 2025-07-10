@@ -24,8 +24,49 @@ SlimServe is a minimalistic and efficient file-serving application that provides
 - 🛡️ **Security features** including CSRF protection, rate limiting, and input validation
 - 🐳 **Docker deployment support** (23.9MB production image)
 - 🧪 **Comprehensive security fuzzing** infrastructure
-- 🌐 **Cross-platform support** (Linux, BSD, macOS, Windows)
+- 🌐 **Cross-platform support** Linux, BSD, macOS, Windows (Only Linux is tested)
 - ⚡ **Lightweight and fast** - minimal resource usage
+
+---
+
+## Screenshots
+
+A quick visual tour of SlimServe’s interface and admin tools:
+
+<table>
+  <tr>
+    <td align="center">
+      <img src="assets/dashboard.png" width="350" alt="Dashboard"/><br>
+      <sub><b>Dashboard</b><br><i>Server overview and quick stats</i></sub>
+    </td>
+    <td align="center">
+      <img src="assets/status.png" width="350" alt="System Status"/><br>
+      <sub><b>Status</b><br><i>Real-time system & performance</i></sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="assets/admin_login.png" width="350" alt="Admin Login"/><br>
+      <sub><b>Admin Login</b><br><i>Dedicated, secure admin login page</i></sub>
+    </td>
+    <td align="center">
+      <img src="assets/admin_config.png" width="350" alt="Admin Config"/><br>
+      <sub><b>Config Panel</b><br><i>Live runtime configuration and settings</i></sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="assets/admin_file_management.png" width="350" alt="File Management"/><br>
+      <sub><b>File Management</b><br><i>Browse, organize, and delete uploads</i></sub>
+    </td>
+    <td align="center">
+      <img src="assets/file_upload.png" width="350" alt="File Upload"/><br>
+      <sub><b>File Upload</b><br><i>Drag & drop with validation</i></sub>
+    </td>
+  </tr>
+</table>
+
+---
 
 ## Quick Start
 
@@ -44,6 +85,9 @@ make build
 ### Docker Compose (Recommended)
 
 ```bash
+# Change workdir to manifests/docker/
+cd manifests/docker
+
 # Create data directory
 mkdir -p data
 
@@ -66,11 +110,8 @@ export HELM_EXPERIMENTAL_OCI=1
 #### Installing
 
 ```bash
-# Get latest version from GitHub API (requires curl and jq on your system)
-LATEST_VERSION=$(curl -fsSL https://api.github.com/repos/xeome/slimserve/tags | jq -r '.[].name' | sort -Vr | head -n 1 | sed 's/v//g')
-
 # Deploy SlimServe
-helm install slimserve oci://ghcr.io/xeome/slimserve-helm --version $LATEST_VERSION --namespace slimserve --create-namespace
+helm install slimserve oci://ghcr.io/xeome/slimserve-helm --version 1.1.0 --namespace slimserve --create-namespace
 ```
 
 ### Manual Docker Run

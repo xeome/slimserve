@@ -14,6 +14,7 @@ import (
 	"slimserve/internal/files"
 	"slimserve/internal/logger"
 	"slimserve/internal/security"
+	"slimserve/internal/version"
 	"slimserve/web"
 
 	"github.com/gin-gonic/gin"
@@ -48,6 +49,8 @@ type ListingData struct {
 	PathSegments []PathSegment `json:"path_segments"`
 	Files        []FileItem    `json:"files"`
 	CurrentPath  string        `json:"current_path"`
+	Version      string        `json:"version,omitempty"`
+	VersionInfo  version.Info  `json:"version_info,omitempty"`
 }
 
 func NewHandler(cfg *config.Config, roots []*security.RootFS) *Handler {
@@ -205,6 +208,8 @@ func (h *Handler) buildListingData(root *security.RootFS, entries []os.DirEntry,
 		PathSegments: buildPathSegments(requestPath),
 		Files:        files,
 		CurrentPath:  requestPath,
+		Version:      version.GetShort(),
+		VersionInfo:  version.Get(),
 	}
 }
 

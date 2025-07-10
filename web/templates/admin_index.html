@@ -1,0 +1,35 @@
+{{/* 
+Admin Template Index - Includes all base templates and components
+This file should be loaded first to ensure all templates are available
+*/}}
+
+{{/* Include base admin template */}}
+{{template "admin_base.html"}}
+
+{{/* Include reusable components */}}
+{{template "admin_components.html"}}
+
+{{/* Template loading order documentation:
+1. admin_base.html - Provides the main layout structure
+2. admin_components.html - Provides reusable UI components
+3. Individual page templates (admin_dashboard.html, admin_status.html, etc.)
+
+Template naming conventions:
+- Main page templates: "admin_[page].html" (e.g., "admin_dashboard.html")
+- Content templates: "admin_content" (used by all pages)
+- Component templates: descriptive names (e.g., "status_card", "page_header")
+- Base templates: "admin_base", "admin_head", "admin_nav"
+
+Template inheritance pattern:
+Page Template -> admin_base -> admin_head + admin_nav + admin_content
+*/}}
+
+{{/* Template validation helpers */}}
+{{define "template_debug"}}
+{{if .Debug}}
+<!-- Template Debug Info -->
+<!-- Current Path: {{.CurrentPath}} -->
+<!-- Title: {{.Title}} -->
+<!-- CSRF Token: {{.csrf_token}} -->
+{{end}}
+{{end}}

@@ -47,6 +47,9 @@ func (s *Server) showAdminLogin(c *gin.Context) {
 		data["error"] = errorMsg
 	}
 
+	// Add version information
+	data = s.addVersionToTemplateData(data)
+
 	// Check if admin login template is loaded
 	if s.adminLoginTmpl == nil {
 		logger.Log.Error().Msg("Admin login template not loaded")
@@ -56,7 +59,7 @@ func (s *Server) showAdminLogin(c *gin.Context) {
 
 	// Render the admin login template
 	c.Status(http.StatusOK)
-	if err := s.adminLoginTmpl.ExecuteTemplate(c.Writer, "admin_base", data); err != nil {
+	if err := s.adminLoginTmpl.ExecuteTemplate(c.Writer, "admin_login.html", data); err != nil {
 		logger.Log.Error().Err(err).Msg("Failed to render admin login page")
 		http.Error(c.Writer, "failed to render admin login page", http.StatusInternalServerError)
 	}
@@ -115,8 +118,10 @@ func (s *Server) doAdminLogin(c *gin.Context) {
 				"next":       next,
 				"csrf_token": s.getOrSetCSRFToken(c),
 			}
+			// Add version information
+			data = s.addVersionToTemplateData(data)
 			c.Status(http.StatusUnauthorized)
-			if err := s.adminLoginTmpl.ExecuteTemplate(c.Writer, "admin_base", data); err != nil {
+			if err := s.adminLoginTmpl.ExecuteTemplate(c.Writer, "admin_login.html", data); err != nil {
 				http.Error(c.Writer, "failed to render admin login page", http.StatusInternalServerError)
 			}
 			return
@@ -268,9 +273,13 @@ func (s *Server) doAdminLogout(c *gin.Context) {
 // showAdminDashboard renders the admin dashboard
 func (s *Server) showAdminDashboard(c *gin.Context) {
 	data := gin.H{
-		"Title":      "Dashboard",
-		"csrf_token": s.getOrSetCSRFToken(c),
+		"Title":       "Dashboard",
+		"csrf_token":  s.getOrSetCSRFToken(c),
+		"CurrentPath": c.Request.URL.Path,
 	}
+
+	// Add version information
+	data = s.addVersionToTemplateData(data)
 
 	// Check if admin template is loaded
 	if s.adminTmpl == nil {
@@ -291,9 +300,13 @@ func (s *Server) showAdminUpload(c *gin.Context) {
 	data := gin.H{
 		"Title":           "Upload Files",
 		"csrf_token":      s.getOrSetCSRFToken(c),
+		"CurrentPath":     c.Request.URL.Path,
 		"max_upload_size": s.config.MaxUploadSizeMB,
 		"allowed_types":   strings.Join(s.config.AllowedUploadTypes, ", "),
 	}
+
+	// Add version information
+	data = s.addVersionToTemplateData(data)
 
 	c.Status(http.StatusOK)
 	if err := s.adminTmpl.ExecuteTemplate(c.Writer, "admin_upload.html", data); err != nil {
@@ -305,9 +318,13 @@ func (s *Server) showAdminUpload(c *gin.Context) {
 // showAdminFiles renders the admin file management page
 func (s *Server) showAdminFiles(c *gin.Context) {
 	data := gin.H{
-		"Title":      "File Management",
-		"csrf_token": s.getOrSetCSRFToken(c),
+		"Title":       "File Management",
+		"csrf_token":  s.getOrSetCSRFToken(c),
+		"CurrentPath": c.Request.URL.Path,
 	}
+
+	// Add version information
+	data = s.addVersionToTemplateData(data)
 
 	c.Status(http.StatusOK)
 	if err := s.adminTmpl.ExecuteTemplate(c.Writer, "admin_files.html", data); err != nil {
@@ -319,9 +336,13 @@ func (s *Server) showAdminFiles(c *gin.Context) {
 // showAdminConfig renders the admin configuration page
 func (s *Server) showAdminConfig(c *gin.Context) {
 	data := gin.H{
-		"Title":      "Configuration",
-		"csrf_token": s.getOrSetCSRFToken(c),
+		"Title":       "Configuration",
+		"csrf_token":  s.getOrSetCSRFToken(c),
+		"CurrentPath": c.Request.URL.Path,
 	}
+
+	// Add version information
+	data = s.addVersionToTemplateData(data)
 
 	c.Status(http.StatusOK)
 	if err := s.adminTmpl.ExecuteTemplate(c.Writer, "admin_config.html", data); err != nil {
@@ -333,9 +354,13 @@ func (s *Server) showAdminConfig(c *gin.Context) {
 // showAdminStatus renders the admin system status page
 func (s *Server) showAdminStatus(c *gin.Context) {
 	data := gin.H{
-		"Title":      "System Status",
-		"csrf_token": s.getOrSetCSRFToken(c),
+		"Title":       "System Status",
+		"csrf_token":  s.getOrSetCSRFToken(c),
+		"CurrentPath": c.Request.URL.Path,
 	}
+
+	// Add version information
+	data = s.addVersionToTemplateData(data)
 
 	c.Status(http.StatusOK)
 	if err := s.adminTmpl.ExecuteTemplate(c.Writer, "admin_status.html", data); err != nil {

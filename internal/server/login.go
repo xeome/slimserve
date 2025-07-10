@@ -26,6 +26,9 @@ func (s *Server) showLogin(c *gin.Context) {
 		data["error"] = errorMsg
 	}
 
+	// Add version information
+	data = s.addVersionToTemplateData(data)
+
 	// Render the login template
 	c.Status(http.StatusOK)
 	if err := s.loginTmpl.ExecuteTemplate(c.Writer, "base", data); err != nil {

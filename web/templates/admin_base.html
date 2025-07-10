@@ -1,32 +1,54 @@
+{{/* Admin Base Template - Provides common structure for all admin pages */}}
+{{define "admin_base"}}
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <meta name="description" content="SlimServe Admin – File Server Administration" />
-    <meta name="csrf-token" content="{{.csrf_token}}" />
-    <title>{{if .Title}}{{.Title}} — {{end}}SlimServe Admin</title>
+    {{template "admin_head" .}}
+</head>
 
-    <!-- Theme variables -->
-    <link rel="stylesheet" href="/static/css/theme.css" />
-    <link rel="icon" href="/static/favicon.ico" sizes="any">
-    <link rel="stylesheet" href="/static/css/custom.css" />
+<body class="bg-background text-foreground min-h-screen">
+    <div class="min-h-screen bg-background">
+        {{template "admin_nav" .}}
+        <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+            {{template "admin_content" .}}
+        </main>
+    </div>
+</body>
 
-    <!-- Tailwind -->
-    <script src="/static/js/tailwind.js"></script>
+</html>
+{{end}}
 
-    <!-- Admin JS -->
-    <script src="/static/js/admin.js"></script>
+{{/* Common head section for all admin pages */}}
+{{define "admin_head"}}
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="description"
+    content="{{if .Description}}{{.Description}}{{else}}SlimServe Admin – File Server Administration{{end}}" />
+<meta name="csrf-token" content="{{.csrf_token}}" />
+<title>{{if .Title}}{{.Title}} — {{end}}SlimServe Admin</title>
 
-    <!-- Alpine.js -->
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<!-- Theme variables -->
+<link rel="stylesheet" href="/static/css/theme.css" />
+<link rel="icon" href="/static/favicon.ico" sizes="any">
+<link rel="stylesheet" href="/static/css/custom.css" />
 
-    <!-- Heroicons -->
-    <script src="/static/js/heroicons.js"></script>
+<!-- Tailwind -->
+<script src="/static/js/tailwind.js"></script>
 
-    <style type="text/tailwindcss">
-        @theme {
+<!-- Admin JS -->
+<script src="/static/js/admin.js"></script>
+
+<!-- Alpine.js -->
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+<!-- Heroicons -->
+<script src="/static/js/heroicons.js"></script>
+
+{{template "admin_head_extra" .}}
+
+<style type="text/tailwindcss">
+    @theme {
             --color-background: hsl(var(--background));
             --color-foreground: hsl(var(--foreground));
             --color-card: hsl(var(--card));
@@ -46,54 +68,67 @@
             --color-ring: hsl(var(--ring));
         }
     </style>
-</head>
+{{end}}
 
-<body class="bg-background text-foreground min-h-screen">
-    {{template "admin_content" .}}
-</body>
+{{/* Default empty head extra - can be overridden by specific pages */}}
+{{define "admin_head_extra"}}{{end}}
 
-</html>
-
-{{define "admin_content"}}
-<div class="min-h-screen bg-background">
-    <!-- Admin Navigation -->
-    <nav class="bg-card border-b border-border">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between h-16">
-                <div class="flex items-center">
-                    <div class="flex-shrink-0">
-                        <h1 class="text-xl font-bold text-foreground">SlimServe Admin</h1>
-                    </div>
-                    <div class="hidden md:block ml-10">
-                        <div class="flex items-baseline space-x-4">
-                            <a href="/admin"
-                                class="text-foreground hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Dashboard</a>
-                            <a href="/admin/upload"
-                                class="text-muted-foreground hover:text-foreground px-3 py-2 rounded-md text-sm font-medium">Upload</a>
-                            <a href="/admin/files"
-                                class="text-muted-foreground hover:text-foreground px-3 py-2 rounded-md text-sm font-medium">Files</a>
-                            <a href="/admin/config"
-                                class="text-muted-foreground hover:text-foreground px-3 py-2 rounded-md text-sm font-medium">Config</a>
-                            <a href="/admin/status"
-                                class="text-muted-foreground hover:text-foreground px-3 py-2 rounded-md text-sm font-medium">Status</a>
-                        </div>
-                    </div>
+{{/* Admin navigation component */}}
+{{define "admin_nav"}}
+<nav class="bg-card border-b border-border">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex justify-between h-16">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <h1 class="text-xl font-bold text-foreground">SlimServe Admin</h1>
                 </div>
-                <div class="flex items-center space-x-4">
-                    <a href="/"
-                        class="text-muted-foreground hover:text-foreground px-3 py-2 rounded-md text-sm font-medium">View
-                        Site</a>
-                    <form action="/admin/logout" method="POST" class="inline">
-                        <input type="hidden" name="csrf_token" value="{{.csrf_token}}">
-                        <button type="submit"
-                            class="text-muted-foreground hover:text-destructive px-3 py-2 rounded-md text-sm font-medium">Logout</button>
-                    </form>
+                <div class="hidden md:block ml-10">
+                    <div class="flex items-baseline space-x-4">
+                        {{template "admin_nav_links" .}}
+                    </div>
                 </div>
             </div>
+            <div class="flex items-center space-x-4">
+                {{if .Version}}
+                <span class="text-xs text-muted-foreground px-2 py-1 bg-muted rounded">{{.Version}}</span>
+                {{end}}
+                <a href="/"
+                    class="text-muted-foreground hover:text-foreground px-3 py-2 rounded-md text-sm font-medium">View
+                    Site</a>
+                <form action="/admin/logout" method="POST" class="inline">
+                    <input type="hidden" name="csrf_token" value="{{.csrf_token}}">
+                    <button type="submit"
+                        class="text-muted-foreground hover:text-destructive px-3 py-2 rounded-md text-sm font-medium">Logout</button>
+                </form>
+            </div>
         </div>
-    </nav>
+    </div>
+</nav>
+{{end}}
 
-    <!-- Main Content -->
+{{/* Navigation links with active state support */}}
+{{define "admin_nav_links"}}
+{{$currentPath := .CurrentPath}}
+<a href="/admin" class="{{if eq $currentPath " /admin"}}text-foreground hover:text-primary{{else}}text-muted-foreground
+    hover:text-foreground{{end}} px-3 py-2 rounded-md text-sm font-medium">Dashboard</a>
+<a href="/admin/upload" class="{{if eq $currentPath " /admin/upload"}}text-foreground
+    hover:text-primary{{else}}text-muted-foreground hover:text-foreground{{end}} px-3 py-2 rounded-md text-sm
+    font-medium">Upload</a>
+<a href="/admin/files" class="{{if eq $currentPath " /admin/files"}}text-foreground
+    hover:text-primary{{else}}text-muted-foreground hover:text-foreground{{end}} px-3 py-2 rounded-md text-sm
+    font-medium">Files</a>
+<a href="/admin/config" class="{{if eq $currentPath " /admin/config"}}text-foreground
+    hover:text-primary{{else}}text-muted-foreground hover:text-foreground{{end}} px-3 py-2 rounded-md text-sm
+    font-medium">Config</a>
+<a href="/admin/status" class="{{if eq $currentPath " /admin/status"}}text-foreground
+    hover:text-primary{{else}}text-muted-foreground hover:text-foreground{{end}} px-3 py-2 rounded-md text-sm
+    font-medium">Status</a>
+{{end}}
+
+{{/* Legacy compatibility - keep existing template names working */}}
+{{define "admin_content"}}
+<div class="min-h-screen bg-background">
+    {{template "admin_nav" .}}
     <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         {{template "admin_page_content" .}}
     </main>
