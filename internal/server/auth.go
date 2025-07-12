@@ -10,6 +10,18 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// Pre-computed constants to avoid string allocations
+const (
+	sessionCookieName = "slimserve_session"
+	loginPath         = "/login"
+	staticPrefix      = "/static/"
+	adminPrefix       = "/admin"
+	faviconPath       = "/favicon.ico"
+	loginQueryPrefix  = "/login?next="
+)
+
+var unauthorizedResponse = gin.H{"error": "unauthenticated"}
+
 // SessionAuthMiddleware handles authentication by checking session cookies.
 // If unauthenticated, it redirects browsers to /login or returns 401 JSON for API requests.
 func SessionAuthMiddleware(cfg *config.Config, store *SessionStore) gin.HandlerFunc {
@@ -20,28 +32,28 @@ func SessionAuthMiddleware(cfg *config.Config, store *SessionStore) gin.HandlerF
 			return
 		}
 
-		// Skip authentication for login routes
-		if c.Request.URL.Path == "/login" {
+		path := c.Request.URL.Path
+
+		if path == loginPath {
 			c.Next()
 			return
 		}
 
 		// Skip authentication for static assets
-		if strings.HasPrefix(c.Request.URL.Path, "/static/") || c.Request.URL.Path == "/favicon.ico" {
+		if strings.HasPrefix(path, staticPrefix) || path == faviconPath {
 			c.Next()
 			return
 		}
 
 		// Skip authentication for admin routes (admin has its own auth)
-		if strings.HasPrefix(c.Request.URL.Path, "/admin") {
+		if strings.HasPrefix(path, adminPrefix) {
 			c.Next()
 			return
 		}
 
 		// Check for session cookie
-		cookie, err := c.Cookie("slimserve_session")
+		cookie, err := c.Cookie(sessionCookieName)
 		if err == nil && store.Valid(cookie) {
-			// Valid session found, proceed
 			c.Next()
 			return
 		}
@@ -52,13 +64,15 @@ func SessionAuthMiddleware(cfg *config.Config, store *SessionStore) gin.HandlerF
 		isBrowser := strings.Contains(accept, "text/html") && xmlHttpRequest != "XMLHttpRequest"
 
 		if isBrowser {
-			// Redirect browsers to login page with next parameter
 			nextURL := url.QueryEscape(c.Request.URL.RequestURI())
-			c.Redirect(http.StatusFound, "/login?next="+nextURL)
+			var redirectURL strings.Builder
+			redirectURL.Grow(len(loginQueryPrefix) + len(nextURL))
+			redirectURL.WriteString(loginQueryPrefix)
+			redirectURL.WriteString(nextURL)
+			c.Redirect(http.StatusFound, redirectURL.String())
 			c.Abort()
 		} else {
-			// Return 401 JSON for API requests
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthenticated"})
+			c.JSON(http.StatusUnauthorized, unauthorizedResponse)
 			c.Abort()
 		}
 	}
