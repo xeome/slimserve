@@ -4,12 +4,6 @@ on:
   push:
     paths:
       - 'manifests/**'
-#   branches:
-#     - main
-  workflow_run:
-    workflows: ['Update Helm Chart Version']
-    types:
-      - completed
   workflow_dispatch:
 
 jobs:
