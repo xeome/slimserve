@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -18,9 +19,11 @@ jobs:
         with:
           fetch-depth: 0
       - run: git fetch --force --tags
+
       - uses: actions/setup-go@v5
         with:
           go-version: stable
+
       - uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
