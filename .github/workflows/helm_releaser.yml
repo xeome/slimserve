@@ -1,10 +1,11 @@
-name: Release Charts
+name: Release Helm Charts
 
 on:
   push:
     paths:
-      - 'manifests/**'
+      - 'manifests/helm/**'
   workflow_dispatch:
+  workflow_call:
 
 jobs:
   release:
@@ -12,27 +13,14 @@ jobs:
       contents: write
       packages: write
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Check for Changes
-        id: check_changes
-        run: |
-          last_update_commit=$(git log --oneline | grep -E 'feat|fix|added new chart|updated helm charts' | head -n 1 | awk '{print $1}')
-          last_update_commit_date=$(git show -s --format=%ct $last_update_commit)
-          current_date_timestamp=$(date +%s)
-
-          if [ "$((current_date_timestamp - last_update_commit_date))" -le "1800" ]; then
-              echo changes=true >> $GITHUB_ENV
-          else
-              echo changes=false >> $GITHUB_ENV
-          fi
-
       - name: Configure Git
-        if: env.changes == 'true'
         run: |
           git config user.name "$GITHUB_ACTOR"
           git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
@@ -41,14 +29,14 @@ jobs:
         uses: azure/setup-helm@v3
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-      
+
       - name: Build release charts
         run: |
           helm package manifests/helm
 
       - name: Login to GitHub Container Registry
         run: |
-          helm registry login ghcr.io -u ${{ github.repository_owner }} -p ${{ secrets.GITHUB_TOKEN }}
+          echo ${{ secrets.GITHUB_TOKEN }} | helm registry login ghcr.io -u ${{ github.repository_owner }} --password-stdin
 
       - name: Push Helm Chart
         run: |

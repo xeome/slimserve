@@ -1,0 +1,26 @@
+name: Release Pipeline
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  goreleaser:
+    uses: ./.github/workflows/goreleaser.yml
+
+  docker-release:
+    needs: goreleaser
+    uses: ./.github/workflows/docker-publish.yml
+
+  version-bumper:
+    needs: docker-release
+    uses: ./.github/workflows/version-bumper.yml
+
+  helm-releaser:
+    needs: version-bumper
+    uses: ./.github/workflows/helm_releaser.yml

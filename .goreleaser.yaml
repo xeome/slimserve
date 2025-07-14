@@ -10,12 +10,13 @@ builds:
       - CGO_ENABLED=0
     goos:
       - linux
-      - freebsd
-      - windows
-      - darwin
     goarch:
       - amd64
       - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version=$VERSION
     main: ./cmd/slimserve/main.go
 
 archives:

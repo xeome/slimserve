@@ -1,0 +1,54 @@
+# SlimServe Dockerfile
+# Multi-stage build for minimal production image
+FROM alpine:latest
+
+ARG TARGETARCH
+ARG REPOWN
+
+RUN apk add --no-cache \
+    ca-certificates \
+    wget \
+    curl \
+    jq \
+    && rm -rf /var/cache/apk/*
+
+RUN addgroup -g 1001 -S slimserve && \
+    adduser -u 1001 -S slimserve -G slimserve
+
+RUN mkdir -p /data && \
+    chown slimserve:slimserve /data
+
+RUN set -eux; \
+    full_digest=$(curl -s "https://api.github.com/repos/$REPOWN/slimserve/releases/latest" \
+        | jq -r ".assets[] | select(.name==\"slimserve_$TARGETARCH\") | .digest"); \
+    digest=${full_digest#sha256:}; \
+    until wget -q -O /usr/local/bin/slimserve "https://github.com/$REPOWN/slimserve/releases/latest/download/slimserve_$TARGETARCH" && \
+          echo "$digest  /usr/local/bin/slimserve" | sha256sum -c -; do \
+      echo "Checksum verification failed, retrying..."; \
+      sleep 1; \
+    done
+
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+
+RUN chmod +x /usr/local/bin/slimserve && \
+    chmod +x /usr/local/bin/docker-entrypoint.sh
+
+RUN mkdir -p /etc/slimserve && \
+    chown slimserve:slimserve /etc/slimserve
+
+USER slimserve
+WORKDIR /data
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/ || exit 1
+
+ENV CONFIG_FILE=/etc/slimserve/config.json
+
+LABEL maintainer="xeome" \
+      description="Lightweight, efficient file server with admin interface. Environment variables: SLIMSERVE_HOST, SLIMSERVE_PORT, SLIMSERVE_DIRS, SLIMSERVE_DISABLE_DOTFILES, SLIMSERVE_LOG_LEVEL, SLIMSERVE_ENABLE_AUTH, SLIMSERVE_USERNAME, SLIMSERVE_PASSWORD, SLIMSERVE_ENABLE_ADMIN, SLIMSERVE_ADMIN_USERNAME, SLIMSERVE_ADMIN_PASSWORD, SLIMSERVE_MAX_UPLOAD_SIZE_MB, CONFIG_FILE" \
+      version="1.0" \
+      org.opencontainers.image.source="https://github.com/xeome/slimserve"
+
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD ["-port", "8080", "-dirs", "/data"]

@@ -1,9 +1,8 @@
 name: Version Bumper
 
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_dispatch:
+  workflow_call:
 
 jobs:
   bump:

@@ -1,43 +1,118 @@
 name: Docker Publish
 
 on:
-  push:
-    tags:
-      - "v*.*.*"
+  workflow_call:
 
 permissions:
   contents: read
   packages: write
 
 jobs:
-  build-and-push-image:
+  build:
+    strategy:
+      matrix:
+        include:
+          - platform: linux/amd64
+            targetarch: Linux_x86_64
+          - platform: linux/arm64
+            targetarch: Linux_arm64
+
     runs-on: ubuntu-latest
+    env:
+      REPOWN: ${{ github.repository_owner }}
 
     steps:
-      - name: Checkout repository
+      - name: Prepare env
+        run: echo "PLATFORM_PAIR=${{ matrix.targetarch }}" >> $GITHUB_ENV
+
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Log in to the GitHub Container Registry
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata (tags, labels) for Docker
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ github.repository }}
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-
-      - name: Build and push Docker image
+      - name: Build and push image by digest
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
+          file: Dockerfile.prebuilt
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            TARGETARCH=${{ matrix.targetarch }}
+            REPOWN=${{ env.REPOWN }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
+          tags: ghcr.io/${{ github.repository_owner }}/slimserve
+
+      - name: Export digest to file
+        run: |
+          mkdir -p ${{ runner.temp }}/digests
+          echo "${{ steps.build.outputs.digest }}" > "${{ runner.temp }}/digests/${{ matrix.targetarch }}.digest"
+
+      - name: Upload digest artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ matrix.targetarch }}
+          path: ${{ runner.temp }}/digests/*
+          retention-days: 1
+
+  manifest:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract version components
+        id: version
+        run: |
+          raw_ref="${{ github.ref_name }}"  # e.g., v1.2.3
+          version="${raw_ref#v}"            # strip leading v if present
+
+          major=$(echo "$version" | cut -d. -f1)
+          minor=$(echo "$version" | cut -d. -f1-2)
+
+          echo "ref=$version" >> $GITHUB_OUTPUT
+          echo "major=$major" >> $GITHUB_OUTPUT
+          echo "minor=$minor" >> $GITHUB_OUTPUT
+          echo "raw_ref=$raw_ref" >> $GITHUB_OUTPUT
+
+      - name: Create manifest and push all tags
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          digest_args=$(for d in *.digest; do echo -n "ghcr.io/${{ github.repository_owner }}/slimserve@$(cat "$d") "; done)
+
+          docker buildx imagetools create \
+            -t ghcr.io/${{ github.repository_owner }}/slimserve:${{ steps.version.outputs.ref }} \
+            -t ghcr.io/${{ github.repository_owner }}/slimserve:${{ steps.version.outputs.minor }} \
+            -t ghcr.io/${{ github.repository_owner }}/slimserve:${{ steps.version.outputs.major }} \
+            -t ghcr.io/${{ github.repository_owner }}/slimserve:latest \
+            -t ghcr.io/${{ github.repository_owner }}/slimserve:${{ steps.version.outputs.raw_ref }} \
+            -t ghcr.io/${{ github.repository_owner }}/slimserve:v${{ steps.version.outputs.minor }} \
+            -t ghcr.io/${{ github.repository_owner }}/slimserve:v${{ steps.version.outputs.major }} \
+            $digest_args
