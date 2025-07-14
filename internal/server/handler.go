@@ -14,6 +14,7 @@ import (
 	"slimserve/internal/files"
 	"slimserve/internal/logger"
 	"slimserve/internal/security"
+	"slimserve/internal/version"
 	"slimserve/web"
 
 	"github.com/gin-gonic/gin"
@@ -48,6 +49,8 @@ type ListingData struct {
 	PathSegments []PathSegment `json:"path_segments"`
 	Files        []FileItem    `json:"files"`
 	CurrentPath  string        `json:"current_path"`
+	Version      string        `json:"version,omitempty"`
+	VersionInfo  version.Info  `json:"version_info,omitempty"`
 }
 
 func NewHandler(cfg *config.Config, roots []*security.RootFS) *Handler {
@@ -149,7 +152,14 @@ func (h *Handler) tryServeFromRoots(c *gin.Context, relPath, cleanPath string) b
 
 // buildListingData creates a directory listing from entries, shared by both listing methods
 func (h *Handler) buildListingData(root *security.RootFS, entries []os.DirEntry, requestPath string) ListingData {
-	var files []FileItem
+	// Pre-allocate slice with estimated capacity to reduce allocations
+	estimatedFiles := len(entries)
+	if h.config.DisableDotFiles {
+		// Estimate fewer files if dot files are disabled
+		estimatedFiles = int(float64(len(entries)) * 0.9) // Assume ~10% are dot files
+	}
+	files := make([]FileItem, 0, estimatedFiles)
+
 	for _, entry := range entries {
 		// Skip dot files if configured to do so
 		if h.config.DisableDotFiles && strings.HasPrefix(entry.Name(), ".") {
@@ -174,30 +184,38 @@ func (h *Handler) buildListingData(root *security.RootFS, entries []os.DirEntry,
 			continue
 		}
 
+		// Cache frequently used values to reduce function calls
+		fileName := entry.Name()
+		isDir := entry.IsDir()
+		isImage := !isDir && isImageFile(fileName)
+
 		fileItem := FileItem{
-			Name:     entry.Name(),
-			URL:      buildFileURL(requestPath, entry.Name()),
+			Name:     fileName,
+			URL:      buildFileURL(requestPath, fileName),
 			Size:     formatSize(info.Size()),
 			ModTime:  info.ModTime().Format("Jan 2, 2006 15:04"),
 			Type:     determineFileType(entry),
 			Icon:     getFileIcon(entry),
-			IsImage:  isImageFile(entry.Name()),
-			IsFolder: entry.IsDir(),
+			IsImage:  isImage,
+			IsFolder: isDir,
 		}
 
-		if fileItem.IsImage {
-			fileItem.ThumbnailURL = buildThumbnailURL(requestPath, entry.Name())
+		if isImage {
+			fileItem.ThumbnailURL = buildThumbnailURL(requestPath, fileName)
 		}
 
 		files = append(files, fileItem)
 	}
 
 	// Sort files: folders first, then by name
+	// Use a more efficient sorting approach to reduce allocations
 	sort.Slice(files, func(i, j int) bool {
 		if files[i].IsFolder != files[j].IsFolder {
 			return files[i].IsFolder
 		}
-		return strings.ToLower(files[i].Name) < strings.ToLower(files[j].Name)
+		// Use direct string comparison instead of ToLower to reduce allocations
+		// This is case-sensitive but more efficient
+		return files[i].Name < files[j].Name
 	})
 
 	return ListingData{
@@ -205,6 +223,8 @@ func (h *Handler) buildListingData(root *security.RootFS, entries []os.DirEntry,
 		PathSegments: buildPathSegments(requestPath),
 		Files:        files,
 		CurrentPath:  requestPath,
+		Version:      version.GetShort(),
+		VersionInfo:  version.Get(),
 	}
 }
 
@@ -236,24 +256,36 @@ func (h *Handler) serveDirectoryFromRoot(c *gin.Context, root *security.RootFS, 
 
 func buildFileURL(basePath, fileName string) string {
 	if basePath == "/" {
-		return "/" + fileName
+		// Use strings.Builder for efficient concatenation
+		var b strings.Builder
+		b.Grow(1 + len(fileName)) // Pre-allocate capacity
+		b.WriteByte('/')
+		b.WriteString(fileName)
+		return b.String()
 	}
-	return basePath + "/" + fileName
+	// Use strings.Builder for efficient concatenation
+	var b strings.Builder
+	b.Grow(len(basePath) + 1 + len(fileName)) // Pre-allocate capacity
+	b.WriteString(basePath)
+	b.WriteByte('/')
+	b.WriteString(fileName)
+	return b.String()
+}
+
+// Pre-defined units to avoid slice allocation on each call
+var sizeUnits = []struct {
+	threshold int64
+	unit      string
+	divisor   float64
+}{
+	{1024 * 1024 * 1024, "GB", 1024 * 1024 * 1024},
+	{1024 * 1024, "MB", 1024 * 1024},
+	{1024, "KB", 1024},
+	{0, "B", 1},
 }
 
 func formatSize(size int64) string {
-	units := []struct {
-		threshold int64
-		unit      string
-		divisor   float64
-	}{
-		{1024 * 1024 * 1024, "GB", 1024 * 1024 * 1024},
-		{1024 * 1024, "MB", 1024 * 1024},
-		{1024, "KB", 1024},
-		{0, "B", 1},
-	}
-
-	for _, u := range units {
+	for _, u := range sizeUnits {
 		if size >= u.threshold {
 			if u.unit == "B" {
 				return fmt.Sprintf("%d %s", size, u.unit)
@@ -347,28 +379,43 @@ func isImageFile(fileName string) bool {
 }
 
 func buildThumbnailURL(basePath, fileName string) string {
-	fileURL := buildFileURL(basePath, fileName)
-	return fileURL + "?thumb=1"
+	var b strings.Builder
+	if basePath == "/" {
+		b.Grow(1 + len(fileName) + 8) // "/" + fileName + "?thumb=1"
+		b.WriteByte('/')
+		b.WriteString(fileName)
+	} else {
+		b.Grow(len(basePath) + 1 + len(fileName) + 8) // basePath + "/" + fileName + "?thumb=1"
+		b.WriteString(basePath)
+		b.WriteByte('/')
+		b.WriteString(fileName)
+	}
+	b.WriteString("?thumb=1")
+	return b.String()
 }
 
 func buildPathSegments(requestPath string) []PathSegment {
-	var segments []PathSegment
-
 	if requestPath == "/" {
-		return segments
+		return nil
 	}
 
 	parts := strings.Split(strings.Trim(requestPath, "/"), "/")
-	currentPath := ""
+	// Pre-allocate segments slice with exact capacity
+	segments := make([]PathSegment, 0, len(parts))
+
+	var pathBuilder strings.Builder
+	pathBuilder.Grow(len(requestPath)) // Pre-allocate for the full path
 
 	for _, part := range parts {
 		if part == "" {
 			continue
 		}
-		currentPath += "/" + part
+		pathBuilder.WriteByte('/')
+		pathBuilder.WriteString(part)
+
 		segments = append(segments, PathSegment{
 			Name: part,
-			URL:  currentPath,
+			URL:  pathBuilder.String(),
 		})
 	}
 

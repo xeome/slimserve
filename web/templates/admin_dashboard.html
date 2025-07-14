@@ -1,94 +1,15 @@
+{{/* Admin Dashboard Page */}}
 {{define "admin_dashboard.html"}}
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <meta name="description" content="SlimServe Admin – File Server Administration" />
-    <meta name="csrf-token" content="{{.csrf_token}}" />
-    <title>{{if .Title}}{{.Title}} — {{end}}SlimServe Admin</title>
-
-    <!-- Theme variables -->
-    <link rel="stylesheet" href="/static/css/theme.css" />
-    <link rel="icon" href="/static/favicon.ico" sizes="any">
-    <link rel="stylesheet" href="/static/css/custom.css" />
-
-    <!-- Tailwind -->
-    <script src="/static/js/tailwind.js"></script>
-
-    <!-- Admin JS -->
-    <script src="/static/js/admin.js"></script>
-
-    <!-- Alpine.js -->
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-
-    <!-- Heroicons -->
-    <script src="/static/js/heroicons.js"></script>
-
-    <style type="text/tailwindcss">
-        @theme {
-            --color-background: hsl(var(--background));
-            --color-foreground: hsl(var(--foreground));
-            --color-card: hsl(var(--card));
-            --color-card-foreground: hsl(var(--card-foreground));
-            --color-primary: hsl(var(--primary));
-            --color-primary-foreground: hsl(var(--primary-foreground));
-            --color-secondary: hsl(var(--secondary));
-            --color-secondary-foreground: hsl(var(--secondary-foreground));
-            --color-muted: hsl(var(--muted));
-            --color-muted-foreground: hsl(var(--muted-foreground));
-            --color-accent: hsl(var(--accent));
-            --color-accent-foreground: hsl(var(--accent-foreground));
-            --color-destructive: hsl(var(--destructive));
-            --color-destructive-foreground: hsl(var(--destructive-foreground));
-            --color-border: hsl(var(--border));
-            --color-input: hsl(var(--input));
-            --color-ring: hsl(var(--ring));
-        }
-    </style>
+    {{template "admin_head" .}}
 </head>
 
 <body class="bg-background text-foreground min-h-screen">
     <div class="min-h-screen bg-background">
-        <!-- Admin Navigation -->
-        <nav class="bg-card border-b border-border">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div class="flex justify-between h-16">
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0">
-                            <h1 class="text-xl font-bold text-foreground">SlimServe Admin</h1>
-                        </div>
-                        <div class="hidden md:block ml-10">
-                            <div class="flex items-baseline space-x-4">
-                                <a href="/admin"
-                                    class="text-foreground hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Dashboard</a>
-                                <a href="/admin/upload"
-                                    class="text-muted-foreground hover:text-foreground px-3 py-2 rounded-md text-sm font-medium">Upload</a>
-                                <a href="/admin/files"
-                                    class="text-muted-foreground hover:text-foreground px-3 py-2 rounded-md text-sm font-medium">Files</a>
-                                <a href="/admin/config"
-                                    class="text-muted-foreground hover:text-foreground px-3 py-2 rounded-md text-sm font-medium">Config</a>
-                                <a href="/admin/status"
-                                    class="text-muted-foreground hover:text-foreground px-3 py-2 rounded-md text-sm font-medium">Status</a>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="flex items-center space-x-4">
-                        <a href="/"
-                            class="text-muted-foreground hover:text-foreground px-3 py-2 rounded-md text-sm font-medium">View
-                            Site</a>
-                        <form action="/admin/logout" method="POST" class="inline">
-                            <input type="hidden" name="csrf_token" value="{{.csrf_token}}">
-                            <button type="submit"
-                                class="text-muted-foreground hover:text-destructive px-3 py-2 rounded-md text-sm font-medium">Logout</button>
-                        </form>
-                    </div>
-                </div>
-            </div>
-        </nav>
-
-        <!-- Main Content -->
+        {{template "admin_nav" .}}
         <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
             {{template "admin_dashboard_content" .}}
         </main>
@@ -98,7 +19,9 @@
 </html>
 {{end}}
 
+{{/* Dashboard page specific content */}}
 {{define "admin_dashboard_content"}}
+
 <div x-data="adminDashboard()" class="space-y-6">
     <!-- Header -->
     <div class="bg-card rounded-lg border border-border p-6">

@@ -2,7 +2,7 @@ image:
   main:
     repository: ghcr.io/xeome/slimserve
     pullPolicy: IfNotPresent
-    tag: 0.3.1
+    # tag: 0.3.1
 
 main:
   ports:
