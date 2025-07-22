@@ -4,6 +4,10 @@ on:
   push:
     paths:
       - 'manifests/helm/**'
+    branches:
+      - '**'
+    tags-ignore:
+      - '**'
   workflow_dispatch:
   workflow_call:
 
@@ -18,6 +22,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          ref: master
           fetch-depth: 0
 
       - name: Configure Git
