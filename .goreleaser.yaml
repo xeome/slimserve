@@ -16,7 +16,11 @@ builds:
     flags:
       - -trimpath
     ldflags:
-      - -s -w -X main.version=$VERSION
+      - -s -w
+      - -X slimserve/internal/version.Version={{.Version}}
+      - -X slimserve/internal/version.CommitHash={{.Commit}}
+      - -X slimserve/internal/version.BuildDate={{.Date}}
+      - -X slimserve/internal/version.BuildUser=goreleaser
     main: ./cmd/slimserve/main.go
 
 archives:
