@@ -29,6 +29,8 @@ spec:
       containers:
         - name: "{{ .Release.Name }}-main"
           image: {{ template "slimserve.main.image" . }}
+          securityContext:
+            fsGroup: 1001
           env:
           {{- if .Values.main.auth.enabled }}
             - name: SLIMSERVE_ENABLE_AUTH
