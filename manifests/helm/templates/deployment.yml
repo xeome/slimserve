@@ -29,6 +29,8 @@ spec:
       containers:
         - name: "{{ .Release.Name }}-main"
           image: {{ template "slimserve.main.image" . }}
+          securityContext:
+            fsGroup: 1001
           env:
           {{- if .Values.main.auth.enabled }}
             - name: SLIMSERVE_ENABLE_AUTH
@@ -39,10 +41,32 @@ spec:
               {{- if and (eq (.Values.main.auth.secret.enabled | toString) "true") (or (eq (.Values.main.auth.secret.autoCreate | toString) "true") (eq (.Values.main.auth.secret.autoCreate | toString) "kustomize")) }}
               valueFrom:
                 secretKeyRef:
-                  name: {{ if .Values.main.auth.secret.name }}{{ .Values.main.auth.secret.name }}{{ else }}{{ .Release.Name }}-secret{{ end }}
+                  name: {{ if .Values.main.auth.secret.name }}{{ .Values.main.auth.secret.name }}{{ else }}{{ .Release.Name }}-auth-secret{{ end }}
                   key: {{ .Values.main.auth.secret.key }}
               {{- else }}
               value: {{ .Values.main.auth.password | quote }}
+              {{- end }}
+          {{- end }}
+          {{- if .Values.main.dashboard.enabled }}
+            - name: SLIMSERVE_ENABLE_ADMIN
+              value: "true"
+            - name: SLIMSERVE_ADMIN_USERNAME
+              {{- if and (eq (.Values.main.dashboard.secret.enabled | toString) "true") (or (eq (.Values.main.dashboard.secret.autoCreate | toString) "true") (eq (.Values.main.dashboard.secret.autoCreate | toString) "kustomize")) }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ if .Values.main.dashboard.secret.name }}{{ .Values.main.dashboard.secret.name }}{{ else }}{{ .Release.Name }}-dashboard-secret{{ end }}
+                  key: {{ .Values.main.dashboard.secret.usernameKey }}
+              {{- else }}
+              value: {{ .Values.main.dashboard.password | quote }}
+              {{- end }}
+            - name: SLIMSERVE_ADMIN_PASSWORD
+              {{- if and (eq (.Values.main.dashboard.secret.enabled | toString) "true") (or (eq (.Values.main.dashboard.secret.autoCreate | toString) "true") (eq (.Values.main.dashboard.secret.autoCreate | toString) "kustomize")) }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ if .Values.main.dashboard.secret.name }}{{ .Values.main.dashboard.secret.name }}{{ else }}{{ .Release.Name }}-dashboard-secret{{ end }}
+                  key: {{ .Values.main.dashboard.secret.passwordKey }}
+              {{- else }}
+              value: {{ .Values.main.dashboard.password | quote }}
               {{- end }}
           {{- end }}
           {{- range $key, $value := .Values.main.options }}
