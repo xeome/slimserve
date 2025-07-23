@@ -9,13 +9,24 @@ main:
     - containerPort: 8080
   auth:
     enabled: false
-    name: admin
-    password: password
+    name: loginusr1
+    password: password1
     secret: 
       enabled: true
       autoCreate: true
-      name: admin-password
+      name: auth-password
       key: password
+  dashboard:
+    enabled: false
+    autoCreate: true
+    username: admin
+    password: password2
+    secret: 
+      enabled: true
+      autoCreate: true
+      name: admin-credentials
+      usernameKey: username
+      passwordKey: password
   options:
     slimserve_dirs: "/data"
     slimserve_disable_dotfiles: "false"
