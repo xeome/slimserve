@@ -42,7 +42,7 @@ changelog:
 
 release:
   github:
-    owner: xeome
+    owner: saveside
     name: slimserve
   footer: |-
     ---
