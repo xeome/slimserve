@@ -32,6 +32,7 @@ spec:
           securityContext:
             runAsGroup: 1001
             runAsUser: 1001
+            runAsNonRoot: true
           env:
           {{- if .Values.main.auth.enabled }}
             - name: SLIMSERVE_ENABLE_AUTH
