@@ -29,8 +29,6 @@ spec:
       containers:
         - name: "{{ .Release.Name }}-main"
           image: {{ template "slimserve.main.image" . }}
-          securityContext:
-            fsGroup: 1001
           env:
           {{- if .Values.main.auth.enabled }}
             - name: SLIMSERVE_ENABLE_AUTH
@@ -86,6 +84,14 @@ spec:
             limits:
               {{- toYaml . | nindent 14 }}
           {{- end }}
+          volumeMounts:
+            - name: "{{ .Release.Name }}-data"
+              mountPath: /data
+              subPath: subpath
+      initContainers:
+        - name: fix-permissions
+          image: busybox:latest
+          command: ["sh", "-c", "chown -R 1001:1001 /data"]
           volumeMounts:
             - name: "{{ .Release.Name }}-data"
               mountPath: /data
