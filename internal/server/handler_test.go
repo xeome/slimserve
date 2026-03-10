@@ -184,10 +184,10 @@ func TestHandler_ServeFiles(t *testing.T) {
 			expectedStatus: http.StatusOK,
 		},
 		{
-			name:           "static_heroicons_js",
-			path:           "/static/js/heroicons.js",
+			name:           "static_icons_sprite",
+			path:           "/static/icons/sprite.svg",
 			expectedStatus: http.StatusOK,
-			checkContains:  []string{"window.heroicons", "outline"},
+			checkContains:  []string{"<svg", "<symbol", "currentColor"},
 		},
 		{
 			name:           "non_existent_static_file",

@@ -56,7 +56,6 @@ func TestEmbeddedJavaScriptAssets(t *testing.T) {
 		description string
 	}{
 		{"static/js/tailwind.js", 100, 5, "Tailwind CSS framework"},
-		{"static/js/heroicons.js", 1, 1, "Heroicons SVG library"},
 		{"static/js/main.js", 0, 1, "Main application JS"},
 	}
 
