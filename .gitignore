@@ -8,3 +8,7 @@ data/*.jpg
 
 benchmark_results/*
 
+# Generated icon files
+web/static/icons/sprite.svg
+web/templates/icons.html
+

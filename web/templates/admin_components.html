@@ -84,27 +84,19 @@
 </div>
 {{end}}
 
-{{/* SVG Icon Helper Functions */}}
+{{/* SVG Icon Helper Functions - now using sprite sheet */}}
 {{define "svg_check_circle"}}
-<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-</svg>
+<svg class="w-full h-full"><use href="/static/icons/sprite.svg#check-circle"></use></svg>
 {{end}}
 
 {{define "svg_clock"}}
-<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-</svg>
+<svg class="w-full h-full"><use href="/static/icons/sprite.svg#clock"></use></svg>
 {{end}}
 
 {{define "svg_memory"}}
-<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"></path>
-</svg>
+<svg class="w-full h-full"><use href="/static/icons/sprite.svg#cpu-chip"></use></svg>
 {{end}}
 
 {{define "svg_database"}}
-<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"></path>
-</svg>
+<svg class="w-full h-full"><use href="/static/icons/sprite.svg#circle-stack"></use></svg>
 {{end}}

@@ -16,21 +16,12 @@
                     <ol class="flex items-center space-x-2 text-sm text-muted-foreground">
                         <li>
                             <a href="/" class="hover:text-foreground transition-colors" aria-label="Home">
-                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z" />
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M8 5a2 2 0 012-2h4a2 2 0 012 2v3H8V5z" />
-                                </svg>
+                                <svg class="h-4 w-4"><use href="/static/icons/sprite.svg#folder"></use></svg>
                             </a>
                         </li>
                         {{range .PathSegments}}
                         <li class="flex items-center">
-                            <svg class="h-4 w-4 text-muted-foreground mx-2" fill="currentColor" viewBox="0 0 20 20">
-                                <path fill-rule="evenodd"
-                                    d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
-                                    clip-rule="evenodd" />
-                            </svg>
+                            <svg class="h-4 w-4 text-muted-foreground mx-2"><use href="/static/icons/sprite.svg#chevron-right"></use></svg>
                             <a href="{{.URL}}" class="hover:text-foreground transition-colors">{{.Name}}</a>
                         </li>
                         {{end}}
@@ -56,21 +47,13 @@
                 <button @click="setView('grid')"
                     :class="view === 'grid' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'"
                     class="flex items-center px-3 py-1.5 text-sm font-medium rounded-sm transition-colors">
-                    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <rect x="3" y="3" width="7" height="7" />
-                        <rect x="14" y="3" width="7" height="7" />
-                        <rect x="14" y="14" width="7" height="7" />
-                        <rect x="3" y="14" width="7" height="7" />
-                    </svg>
+                    <svg class="h-4 w-4 mr-2"><use href="/static/icons/sprite.svg#squares-2x2"></use></svg>
                     <span class="hidden sm:inline">Grid</span>
                 </button>
                 <button @click="setView('list')"
                     :class="view === 'list' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'"
                     class="flex items-center px-3 py-1.5 text-sm font-medium rounded-sm transition-colors">
-                    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-                    </svg>
+                    <svg class="h-4 w-4 mr-2"><use href="/static/icons/sprite.svg#bars-3"></use></svg>
                     <span class="hidden sm:inline">List</span>
                 </button>
             </div>
@@ -85,30 +68,19 @@
                 <button @click="setFilter('folder')"
                     :class="filter === 'folder' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'"
                     class="flex items-center px-3 py-1.5 text-sm font-medium rounded-md transition-colors">
-                    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z" />
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M8 5a2 2 0 012-2h4a2 2 0 012 2v3H8V5z" />
-                    </svg>
+                    <svg class="h-4 w-4 mr-2"><use href="/static/icons/sprite.svg#folder"></use></svg>
                     Folders
                 </button>
                 <button @click="setFilter('image')"
                     :class="filter === 'image' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'"
                     class="flex items-center px-3 py-1.5 text-sm font-medium rounded-md transition-colors">
-                    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
+                    <svg class="h-4 w-4 mr-2"><use href="/static/icons/sprite.svg#photo"></use></svg>
                     Images
                 </button>
                 <button @click="setFilter('document')"
                     :class="filter === 'document' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'"
                     class="flex items-center px-3 py-1.5 text-sm font-medium rounded-md transition-colors">
-                    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
+                    <svg class="h-4 w-4 mr-2"><use href="/static/icons/sprite.svg#document-text"></use></svg>
                     Documents
                 </button>
             </div>
@@ -140,58 +112,27 @@
 
                         <td class="px-4 py-3 text-left">
                             {{if eq .Icon "folder"}}
-                            <svg class="h-5 w-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z" />
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M8 5a2 2 0 012-2h4a2 2 0 012 2v3H8V5z" />
-                            </svg>
+                            <svg class="h-5 w-5 text-blue-500"><use href="/static/icons/sprite.svg#folder"></use></svg>
                             {{else if and (eq .Icon "image") .ThumbnailURL}}
                             <div class="w-8 h-8 rounded overflow-hidden bg-muted flex items-center justify-center">
                                 <img src="{{.ThumbnailURL}}" alt="{{.Name}}" class="w-full h-full object-cover"
                                     onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
-                                <svg class="h-5 w-5 text-green-500 hidden" fill="none" stroke="currentColor"
-                                    viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                </svg>
+                                <svg class="h-5 w-5 text-green-500 hidden"><use href="/static/icons/sprite.svg#photo"></use></svg>
                             </div>
                             {{else if eq .Icon "image"}}
-                            <svg class="h-5 w-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                            </svg>
+                            <svg class="h-5 w-5 text-green-500"><use href="/static/icons/sprite.svg#photo"></use></svg>
                             {{else if eq .Icon "file-pdf"}}
-                            <svg class="h-5 w-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                            </svg>
+                            <svg class="h-5 w-5 text-red-500"><use href="/static/icons/sprite.svg#document"></use></svg>
                             {{else if eq .Icon "file-text"}}
-                            <svg class="h-5 w-5 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
+                            <svg class="h-5 w-5 text-yellow-500"><use href="/static/icons/sprite.svg#document-text"></use></svg>
                             {{else if eq .Icon "archive"}}
-                            <svg class="h-5 w-5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                            </svg>
+                            <svg class="h-5 w-5 text-purple-500"><use href="/static/icons/sprite.svg#archive-box"></use></svg>
                             {{else if eq .Icon "video"}}
-                            <svg class="h-5 w-5 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                            </svg>
+                            <svg class="h-5 w-5 text-pink-500"><use href="/static/icons/sprite.svg#film"></use></svg>
                             {{else if eq .Icon "audio"}}
-                            <svg class="h-5 w-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                            </svg>
+                            <svg class="h-5 w-5 text-indigo-500"><use href="/static/icons/sprite.svg#musical-note"></use></svg>
                             {{else}}
-                            <svg class="h-5 w-5 text-muted-foreground" fill="none" stroke="currentColor"
-                                viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
+                            <svg class="h-5 w-5 text-muted-foreground"><use href="/static/icons/sprite.svg#document-text"></use></svg>
                             {{end}}
                         </td>
 
@@ -212,13 +153,7 @@
             {{else}}
             <!-- Empty State for List View -->
             <div class="text-center py-12">
-                <svg class="mx-auto h-12 w-12 text-muted-foreground" fill="none" stroke="currentColor"
-                    viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z" />
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M8 5a2 2 0 012-2h4a2 2 0 012 2v3H8V5z" />
-                </svg>
+                <svg class="mx-auto h-12 w-12 text-muted-foreground"><use href="/static/icons/sprite.svg#folder"></use></svg>
                 <h3 class="mt-2 text-sm font-medium text-foreground">This folder is empty</h3>
                 <p class="mt-1 text-sm text-muted-foreground">No files or folders to display</p>
             </div>
@@ -234,56 +169,25 @@
                         class="bg-card border border-border rounded-lg overflow-hidden hover:bg-accent hover:border-accent-foreground/20 transition-colors transition-transform duration-200 transform hover:scale-105 hover:shadow-lg grid-card">
                         <div class="aspect-square bg-muted flex items-center justify-center">
                             {{if eq .Icon "folder"}}
-                            <svg class="h-8 w-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z" />
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M8 5a2 2 0 012-2h4a2 2 0 012 2v3H8V5z" />
-                            </svg>
+                            <svg class="h-8 w-8 text-blue-500"><use href="/static/icons/sprite.svg#folder"></use></svg>
                             {{else if and (eq .Icon "image") .ThumbnailURL}}
                             <img src="{{.ThumbnailURL}}" alt="{{.Name}}" class="w-full h-full object-cover"
                                 onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                            <svg class="h-8 w-8 text-green-500 hidden" fill="none" stroke="currentColor"
-                                viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                            </svg>
+                            <svg class="h-8 w-8 text-green-500 hidden"><use href="/static/icons/sprite.svg#photo"></use></svg>
                             {{else if eq .Icon "image"}}
-                            <svg class="h-8 w-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                            </svg>
+                            <svg class="h-8 w-8 text-green-500"><use href="/static/icons/sprite.svg#photo"></use></svg>
                             {{else if eq .Icon "file-pdf"}}
-                            <svg class="h-8 w-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                            </svg>
+                            <svg class="h-8 w-8 text-red-500"><use href="/static/icons/sprite.svg#document"></use></svg>
                             {{else if eq .Icon "file-text"}}
-                            <svg class="h-8 w-8 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
+                            <svg class="h-8 w-8 text-yellow-500"><use href="/static/icons/sprite.svg#document-text"></use></svg>
                             {{else if eq .Icon "archive"}}
-                            <svg class="h-8 w-8 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                            </svg>
+                            <svg class="h-8 w-8 text-purple-500"><use href="/static/icons/sprite.svg#archive-box"></use></svg>
                             {{else if eq .Icon "video"}}
-                            <svg class="h-8 w-8 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                            </svg>
+                            <svg class="h-8 w-8 text-pink-500"><use href="/static/icons/sprite.svg#film"></use></svg>
                             {{else if eq .Icon "audio"}}
-                            <svg class="h-8 w-8 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                            </svg>
+                            <svg class="h-8 w-8 text-indigo-500"><use href="/static/icons/sprite.svg#musical-note"></use></svg>
                             {{else}}
-                            <svg class="h-8 w-8 text-muted-foreground" fill="none" stroke="currentColor"
-                                viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
+                            <svg class="h-8 w-8 text-muted-foreground"><use href="/static/icons/sprite.svg#document-text"></use></svg>
                             {{end}}
                         </div>
                         <div class="p-2 text-center">
@@ -300,13 +204,7 @@
             <!-- Empty State for Grid View -->
             {{if not .Files}}
             <div class="col-span-full text-center py-12">
-                <svg class="mx-auto h-12 w-12 text-muted-foreground" fill="none" stroke="currentColor"
-                    viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z" />
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M8 5a2 2 0 012-2h4a2 2 0 012 2v3H8V5z" />
-                </svg>
+                <svg class="mx-auto h-12 w-12 text-muted-foreground"><use href="/static/icons/sprite.svg#folder"></use></svg>
                 <h3 class="mt-2 text-sm font-medium text-foreground">This folder is empty</h3>
                 <p class="mt-1 text-sm text-muted-foreground">No files or folders to display</p>
             </div>

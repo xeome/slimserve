@@ -16,6 +16,11 @@ LDFLAGS = -X slimserve/internal/version.Version=$(VERSION) \
 all: build
 
 help:
+	@echo "Icon Management:"
+	@echo "  icons         - Fetch Heroicons from GitHub and generate sprite sheet"
+	@echo "  icons-clean   - Remove generated icon files"
+	@echo ""
+	help:
 	@echo "Available targets:"
 	@echo "  build         - Build the SlimServe binary (development)"
 	@echo "  build-dev     - Build the SlimServe binary with debug info"
@@ -36,7 +41,16 @@ help:
 	@echo "  clean         - Clean build artifacts"
 	@echo "  help          - Show this help message"
 
-build: build-dev
+icons:
+	@echo "Fetching Heroicons..."
+	@cd tools/icons && go run main.go
+
+icons-clean:
+	@echo "Removing generated icon files..."
+	@rm -f web/static/icons/sprite.svg
+	@rm -f web/templates/icons.html
+
+build: icons build-dev
 
 build-dev:
 	@echo "Building SlimServe (development)..."

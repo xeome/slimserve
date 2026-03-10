@@ -38,12 +38,7 @@
                 class="border-2 border-dashed rounded-lg p-8 text-center transition-colors">
 
                 <div class="space-y-4">
-                    <svg class="mx-auto h-12 w-12 text-muted-foreground" fill="none" stroke="currentColor"
-                        viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12">
-                        </path>
-                    </svg>
+                    <svg class="mx-auto h-12 w-12 text-muted-foreground"><use href="/static/icons/sprite.svg#cloud-arrow-up"></use></svg>
 
                     <div>
                         <p class="text-lg font-medium text-foreground">Drop files here to upload</p>
@@ -73,12 +68,7 @@
                     <template x-for="(file, index) in selectedFiles" :key="index">
                         <div class="flex items-center justify-between p-3 bg-muted/20 rounded-lg">
                             <div class="flex items-center space-x-3">
-                                <svg class="w-5 h-5 text-muted-foreground" fill="none" stroke="currentColor"
-                                    viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
-                                    </path>
-                                </svg>
+                                <svg class="w-5 h-5 text-muted-foreground"><use href="/static/icons/sprite.svg#document-text"></use></svg>
                                 <div>
                                     <p class="text-sm font-medium text-foreground" x-text="file.name"></p>
                                     <p class="text-xs text-muted-foreground" x-text="formatFileSize(file.size)"></p>
@@ -94,26 +84,16 @@
 
                                 <!-- Status indicators -->
                                 <div x-show="file.status === 'completed'" class="text-green-500">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M5 13l4 4L19 7"></path>
-                                    </svg>
+                                    <svg class="w-5 h-5"><use href="/static/icons/sprite.svg#check"></use></svg>
                                 </div>
 
                                 <div x-show="file.status === 'error'" class="text-destructive">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M6 18L18 6M6 6l12 12"></path>
-                                    </svg>
+                                    <svg class="w-5 h-5"><use href="/static/icons/sprite.svg#x-mark"></use></svg>
                                 </div>
 
                                 <button @click="removeFile(index)" x-show="!file.uploading"
                                     class="text-muted-foreground hover:text-destructive">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16">
-                                        </path>
-                                    </svg>
+                                    <svg class="w-4 h-4"><use href="/static/icons/sprite.svg#trash"></use></svg>
                                 </button>
                             </div>
                         </div>
@@ -156,17 +136,11 @@
                     :class="result.status === 'success' ? 'bg-green-500/10 border border-green-500/20' : 'bg-destructive/10 border border-destructive/20'">
                     <div class="flex items-center space-x-3">
                         <div x-show="result.status === 'success'" class="text-green-500">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M5 13l4 4L19 7"></path>
-                            </svg>
+                            <svg class="w-5 h-5"><use href="/static/icons/sprite.svg#check"></use></svg>
                         </div>
 
                         <div x-show="result.status === 'error'" class="text-destructive">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M6 18L18 6M6 6l12 12"></path>
-                            </svg>
+                            <svg class="w-5 h-5"><use href="/static/icons/sprite.svg#x-mark"></use></svg>
                         </div>
 
                         <div>
