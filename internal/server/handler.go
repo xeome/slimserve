@@ -70,38 +70,32 @@ func (h *Handler) ServeFiles(c *gin.Context) {
 		requestPath = "/"
 	}
 
-	// Handle root directory
 	if requestPath == "/" && len(h.roots) > 0 {
 		h.serveDirectoryFromRoot(c, h.roots[0], ".", "/")
 		return
 	}
 
-	// Handle static files
 	if strings.HasPrefix(requestPath, "/static/") {
 		h.serveStaticFile(c, requestPath)
 		return
 	}
 
-	// Clean and validate path
 	cleanPath := filepath.Clean(requestPath)
 	if cleanPath == "." {
 		cleanPath = "/"
 	}
 	relPath := strings.TrimPrefix(cleanPath, "/")
 
-	// Check for dot files if disabled
 	if h.config.DisableDotFiles && h.containsDotFile(cleanPath) {
 		c.AbortWithStatus(http.StatusForbidden)
 		return
 	}
 
-	// Handle thumbnail requests
 	if c.Query("thumb") == "1" {
 		h.serveThumbnailFromRoot(c, relPath)
 		return
 	}
 
-	// Try to serve from each root
 	if h.tryServeFromRoots(c, relPath, cleanPath) {
 		return
 	}
@@ -109,7 +103,6 @@ func (h *Handler) ServeFiles(c *gin.Context) {
 	c.AbortWithStatus(http.StatusNotFound)
 }
 
-// containsDotFile checks if the path contains any dot files/directories
 func (h *Handler) containsDotFile(path string) bool {
 	pathComponents := strings.Split(strings.Trim(path, "/"), "/")
 	for _, component := range pathComponents {
@@ -120,10 +113,8 @@ func (h *Handler) containsDotFile(path string) bool {
 	return false
 }
 
-// tryServeFromRoots attempts to serve the file from available roots
 func (h *Handler) tryServeFromRoots(c *gin.Context, relPath, cleanPath string) bool {
 	for _, root := range h.roots {
-		// Check if file is ignored
 		if ignored, err := isIgnored(relPath, root, h.config); err != nil {
 			logger.Log.Error().Err(err).Str("path", relPath).Msg("Error checking if path is ignored")
 			c.AbortWithStatus(http.StatusInternalServerError)
@@ -133,13 +124,11 @@ func (h *Handler) tryServeFromRoots(c *gin.Context, relPath, cleanPath string) b
 			return true
 		}
 
-		// Try to stat the file
 		info, err := root.Stat(relPath)
 		if err != nil {
-			continue // Try next root
+			continue
 		}
 
-		// Serve file or directory
 		if info.IsDir() {
 			h.serveDirectoryFromRoot(c, root, relPath, cleanPath)
 		} else {
@@ -150,30 +139,24 @@ func (h *Handler) tryServeFromRoots(c *gin.Context, relPath, cleanPath string) b
 	return false
 }
 
-// buildListingData creates a directory listing from entries, shared by both listing methods
 func (h *Handler) buildListingData(root *security.RootFS, entries []os.DirEntry, requestPath string) ListingData {
-	// Pre-allocate slice with estimated capacity to reduce allocations
 	estimatedFiles := len(entries)
 	if h.config.DisableDotFiles {
-		// Estimate fewer files if dot files are disabled
-		estimatedFiles = int(float64(len(entries)) * 0.9) // Assume ~10% are dot files
+		estimatedFiles = int(float64(len(entries)) * 0.9)
 	}
 	files := make([]FileItem, 0, estimatedFiles)
 
 	for _, entry := range entries {
-		// Skip dot files if configured to do so
 		if h.config.DisableDotFiles && strings.HasPrefix(entry.Name(), ".") {
 			continue
 		}
 
-		// Check if the entry is ignored
-		// We build the relative path for the entry to check against ignore rules.
 		entryRelPath := filepath.Join(strings.TrimPrefix(requestPath, "/"), entry.Name())
 
 		ignored, err := isIgnored(entryRelPath, root, h.config)
 		if err != nil {
 			logger.Log.Error().Err(err).Str("path", entryRelPath).Msg("Error checking if path is ignored")
-			continue // Skip problematic files
+			continue
 		}
 		if ignored {
 			continue
@@ -184,7 +167,6 @@ func (h *Handler) buildListingData(root *security.RootFS, entries []os.DirEntry,
 			continue
 		}
 
-		// Cache frequently used values to reduce function calls
 		fileName := entry.Name()
 		isDir := entry.IsDir()
 		isImage := !isDir && isImageFile(fileName)
@@ -207,14 +189,10 @@ func (h *Handler) buildListingData(root *security.RootFS, entries []os.DirEntry,
 		files = append(files, fileItem)
 	}
 
-	// Sort files: folders first, then by name
-	// Use a more efficient sorting approach to reduce allocations
 	sort.Slice(files, func(i, j int) bool {
 		if files[i].IsFolder != files[j].IsFolder {
 			return files[i].IsFolder
 		}
-		// Use direct string comparison instead of ToLower to reduce allocations
-		// This is case-sensitive but more efficient
 		return files[i].Name < files[j].Name
 	})
 
@@ -229,7 +207,6 @@ func (h *Handler) buildListingData(root *security.RootFS, entries []os.DirEntry,
 }
 
 func (h *Handler) serveDirectoryFromRoot(c *gin.Context, root *security.RootFS, relPath, requestPath string) {
-	// Handle empty or root path cases
 	if relPath == "" {
 		relPath = "."
 	}
@@ -256,20 +233,9 @@ func (h *Handler) serveDirectoryFromRoot(c *gin.Context, root *security.RootFS, 
 
 func buildFileURL(basePath, fileName string) string {
 	if basePath == "/" {
-		// Use strings.Builder for efficient concatenation
-		var b strings.Builder
-		b.Grow(1 + len(fileName)) // Pre-allocate capacity
-		b.WriteByte('/')
-		b.WriteString(fileName)
-		return b.String()
+		return "/" + fileName
 	}
-	// Use strings.Builder for efficient concatenation
-	var b strings.Builder
-	b.Grow(len(basePath) + 1 + len(fileName)) // Pre-allocate capacity
-	b.WriteString(basePath)
-	b.WriteByte('/')
-	b.WriteString(fileName)
-	return b.String()
+	return basePath + "/" + fileName
 }
 
 // Pre-defined units to avoid slice allocation on each call
@@ -342,7 +308,6 @@ func determineFileType(entry os.DirEntry) string {
 		return info.Type
 	}
 
-	// Use MIME type for common extensions
 	mimeType := mime.TypeByExtension(ext)
 	if mimeType != "" {
 		fileType, _ := getFileTypeFromMime(mimeType)
@@ -362,7 +327,6 @@ func getFileIcon(entry os.DirEntry) string {
 		return info.Icon
 	}
 
-	// Use MIME type for common extensions
 	mimeType := mime.TypeByExtension(ext)
 	if mimeType != "" {
 		_, icon := getFileTypeFromMime(mimeType)
@@ -379,19 +343,10 @@ func isImageFile(fileName string) bool {
 }
 
 func buildThumbnailURL(basePath, fileName string) string {
-	var b strings.Builder
 	if basePath == "/" {
-		b.Grow(1 + len(fileName) + 8) // "/" + fileName + "?thumb=1"
-		b.WriteByte('/')
-		b.WriteString(fileName)
-	} else {
-		b.Grow(len(basePath) + 1 + len(fileName) + 8) // basePath + "/" + fileName + "?thumb=1"
-		b.WriteString(basePath)
-		b.WriteByte('/')
-		b.WriteString(fileName)
+		return "/" + fileName + "?thumb=1"
 	}
-	b.WriteString("?thumb=1")
-	return b.String()
+	return basePath + "/" + fileName + "?thumb=1"
 }
 
 func buildPathSegments(requestPath string) []PathSegment {
@@ -400,11 +355,10 @@ func buildPathSegments(requestPath string) []PathSegment {
 	}
 
 	parts := strings.Split(strings.Trim(requestPath, "/"), "/")
-	// Pre-allocate segments slice with exact capacity
 	segments := make([]PathSegment, 0, len(parts))
 
 	var pathBuilder strings.Builder
-	pathBuilder.Grow(len(requestPath)) // Pre-allocate for the full path
+	pathBuilder.Grow(len(requestPath))
 
 	for _, part := range parts {
 		if part == "" {
@@ -423,7 +377,6 @@ func buildPathSegments(requestPath string) []PathSegment {
 }
 
 func (h *Handler) serveStaticFile(c *gin.Context, requestPath string) {
-	// Remove leading slash and serve from embedded FS
 	filePath := strings.TrimPrefix(requestPath, "/")
 
 	fileData, err := web.TemplateFS.ReadFile(filePath)
@@ -432,7 +385,6 @@ func (h *Handler) serveStaticFile(c *gin.Context, requestPath string) {
 		return
 	}
 
-	// Set appropriate content type based on file extension
 	ext := filepath.Ext(filePath)
 	switch ext {
 	case ".css":
@@ -460,7 +412,6 @@ func (h *Handler) serveStaticFile(c *gin.Context, requestPath string) {
 	c.Data(http.StatusOK, c.GetHeader("Content-Type"), fileData)
 }
 
-// serveFileFromRoot serves a file from RootFS, returns true if successful
 func (h *Handler) serveFileFromRoot(c *gin.Context, root *security.RootFS, relPath string) bool {
 	file, err := root.Open(relPath)
 	if err != nil {
@@ -477,53 +428,41 @@ func (h *Handler) serveFileFromRoot(c *gin.Context, root *security.RootFS, relPa
 	return true
 }
 
-// serveThumbnailFromRoot handles thumbnail requests using RootFS
 func (h *Handler) serveThumbnailFromRoot(c *gin.Context, relPath string) {
-	// Try to find the file in one of the RootFS instances
 	for _, root := range h.roots {
-		// Check if file exists and is an image
 		info, err := root.Stat(relPath)
 		if err != nil {
-			continue // Try next root
+			continue
 		}
 
 		if info.IsDir() {
-			continue // Can't thumbnail a directory
+			continue
 		}
 
-		// Check if it's an image file
 		if !isImageFile(filepath.Base(relPath)) {
-			// Fallback to serving original file
 			if h.serveFileFromRoot(c, root, relPath) {
 				return
 			}
 			continue
 		}
 
-		// For thumbnail generation, we still need the full path
-		// This is a temporary approach until we refactor the thumbnail subsystem
 		fullPath := filepath.Join(root.Path(), relPath)
 
-		// Generate thumbnail with cache size limit
 		thumbPath, err := files.GenerateWithCacheLimit(fullPath, 250, h.config.MaxThumbCacheMB, h.config.ThumbJpegQuality, h.config.ThumbMaxFileSizeMB)
 		if err != nil {
-			// If file is too large, return a 413 Payload Too Large status
 			if err == files.ErrFileTooLarge {
 				c.AbortWithStatus(http.StatusRequestEntityTooLarge)
 				return
 			}
-			// Fallback to serving original file on other errors
 			if h.serveFileFromRoot(c, root, relPath) {
 				return
 			}
 			continue
 		}
 
-		// Serve the thumbnail
 		c.File(thumbPath)
 		return
 	}
 
-	// File not found in any allowed root
 	c.AbortWithStatus(http.StatusNotFound)
 }

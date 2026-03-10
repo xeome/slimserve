@@ -8,13 +8,11 @@ import (
 	"strings"
 )
 
-// Pattern represents a parsed gitignore pattern.
 type Pattern struct {
 	Regex  *regexp.Regexp
 	Negate bool
 }
 
-// Parse parses a .slimserveignore file into a list of patterns.
 func Parse(r io.Reader) ([]*Pattern, error) {
 	var (
 		lineNumber int

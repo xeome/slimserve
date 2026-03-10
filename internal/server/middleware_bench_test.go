@@ -232,10 +232,9 @@ func BenchmarkConcurrentRequests(b *testing.B) {
 func BenchmarkMiddlewareChain(b *testing.B) {
 	server := setupBenchmarkServer(b)
 
-	// Create middleware chain similar to what's used in production
 	middlewares := []gin.HandlerFunc{
 		server.accessControlMiddleware(),
-		server.conditionalAuthMiddleware(),
+		SessionAuthMiddleware(server.config, server.sessionStore),
 	}
 
 	b.ResetTimer()
@@ -244,7 +243,6 @@ func BenchmarkMiddlewareChain(b *testing.B) {
 		c, _ := gin.CreateTestContext(w)
 		c.Request = httptest.NewRequest("GET", "/file_0.txt", nil)
 
-		// Execute middleware chain
 		for _, middleware := range middlewares {
 			middleware(c)
 			if c.IsAborted() {

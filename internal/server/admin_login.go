@@ -168,15 +168,28 @@ func (s *Server) doAdminLogin(c *gin.Context) {
 // validateAdminCredentials performs constant-time admin credential comparison
 func (s *Server) validateAdminCredentials(username, password string) bool {
 	// Check if admin is enabled and credentials are configured
-	if !s.config.EnableAdmin || s.config.AdminUsername == "" || s.config.AdminPassword == "" {
+	if !s.config.EnableAdmin || s.config.AdminUsername == "" {
 		return false
 	}
 
-	// Constant-time comparison to prevent timing attacks
+	// Check username first
 	usernameMatch := constantTimeEqual(username, s.config.AdminUsername)
+	if !usernameMatch {
+		return false
+	}
+
+	// Check password - prefer hash if available, otherwise fall back to plaintext
+	if s.config.AdminPasswordHash != "" {
+		return VerifyPassword(s.config.AdminPasswordHash, password)
+	}
+
+	// Fallback to plaintext password (backward compatibility)
+	if s.config.AdminPassword == "" {
+		return false
+	}
 	passwordMatch := constantTimeEqual(password, s.config.AdminPassword)
 
-	return usernameMatch && passwordMatch
+	return passwordMatch
 }
 
 // validateAdminRedirectURL validates and sanitizes admin redirect URLs

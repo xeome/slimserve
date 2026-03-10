@@ -118,15 +118,28 @@ func (s *Server) doLogin(c *gin.Context) {
 // validateCredentials performs constant-time credential comparison
 func (s *Server) validateCredentials(username, password string) bool {
 	// Check if authentication is enabled and credentials are configured
-	if !s.config.EnableAuth || s.config.Username == "" || s.config.Password == "" {
+	if !s.config.EnableAuth || s.config.Username == "" {
 		return false
 	}
 
-	// Constant-time comparison to prevent timing attacks
+	// Check username first
 	usernameMatch := constantTimeEqual(username, s.config.Username)
+	if !usernameMatch {
+		return false
+	}
+
+	// Check password - prefer hash if available, otherwise fall back to plaintext
+	if s.config.PasswordHash != "" {
+		return VerifyPassword(s.config.PasswordHash, password)
+	}
+
+	// Fallback to plaintext password (backward compatibility)
+	if s.config.Password == "" {
+		return false
+	}
 	passwordMatch := constantTimeEqual(password, s.config.Password)
 
-	return usernameMatch && passwordMatch
+	return passwordMatch
 }
 
 // constantTimeEqual performs constant-time string comparison

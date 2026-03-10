@@ -48,6 +48,80 @@
                 </div>
             </div>
 
+            <!-- Authentication Settings -->
+            <div>
+                <h3 class="text-lg font-medium text-foreground mb-4">Authentication Settings</h3>
+                
+                <!-- User Auth Section -->
+                <div class="border border-border rounded-lg p-4 mb-4">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <h4 class="font-medium text-foreground">User Authentication</h4>
+                            <p class="text-sm text-muted-foreground">Protect file access with login</p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" x-model="authConfig.enable_auth" class="sr-only peer">
+                            <div class="w-11 h-6 bg-muted rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                        </label>
+                    </div>
+                    
+                    <div x-show="authConfig.enable_auth" class="space-y-4 mt-4">
+                        <div>
+                            <label class="block text-sm font-medium text-foreground mb-2">Username</label>
+                            <input type="text" x-model="authConfig.username"
+                                class="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-foreground mb-2">
+                                Password 
+                                <span x-show="authConfig.password_set" class="text-muted-foreground font-normal">(already set)</span>
+                            </label>
+                            <input type="password" x-model="authConfig.password" placeholder="Enter new password to change"
+                                class="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Admin Auth Section -->
+                <div class="border border-border rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <h4 class="font-medium text-foreground">Admin Panel</h4>
+                            <p class="text-sm text-muted-foreground">Enable admin panel access</p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" x-model="authConfig.enable_admin" class="sr-only peer">
+                            <div class="w-11 h-6 bg-muted rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                        </label>
+                    </div>
+                    
+                    <div x-show="authConfig.enable_admin" class="space-y-4 mt-4">
+                        <div>
+                            <label class="block text-sm font-medium text-foreground mb-2">Admin Username</label>
+                            <input type="text" x-model="authConfig.admin_username"
+                                class="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-foreground mb-2">
+                                Admin Password 
+                                <span x-show="authConfig.admin_password_set" class="text-muted-foreground font-normal">(already set)</span>
+                            </label>
+                            <input type="password" x-model="authConfig.admin_password" placeholder="Enter new password to change"
+                                class="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Save Auth Button -->
+                <div class="flex justify-end mt-4">
+                    <button type="button" @click="saveAuthConfig()" :disabled="savingAuth"
+                        class="bg-primary text-primary-foreground px-6 py-2 rounded-md font-medium hover:bg-primary/90 disabled:opacity-50">
+                        <span x-show="!savingAuth">Update Authentication</span>
+                        <span x-show="savingAuth">Saving...</span>
+                    </button>
+                </div>
+            </div>
+
             <!-- Thumbnail Settings -->
             <div>
                 <h3 class="text-lg font-medium text-foreground mb-4">Thumbnail Settings</h3>
@@ -119,12 +193,24 @@
     function adminConfig() {
         return {
             config: {},
+            authConfig: {
+                enable_auth: false,
+                username: '',
+                password: '',
+                password_set: false,
+                enable_admin: false,
+                admin_username: '',
+                admin_password: '',
+                admin_password_set: false
+            },
             saving: false,
+            savingAuth: false,
             message: '',
             messageType: 'success',
 
             init() {
                 this.loadConfig();
+                this.loadAuthConfig();
             },
 
             async loadConfig() {
@@ -135,6 +221,27 @@
                     }
                 } catch (error) {
                     console.error('Failed to load configuration:', error);
+                }
+            },
+
+            async loadAuthConfig() {
+                try {
+                    const response = await fetch('/admin/api/auth');
+                    if (response.ok) {
+                        const data = await response.json();
+                        this.authConfig = {
+                            enable_auth: data.enable_auth,
+                            username: data.username || '',
+                            password: '',
+                            password_set: data.password_set,
+                            enable_admin: data.enable_admin,
+                            admin_username: data.admin_username || '',
+                            admin_password: '',
+                            admin_password_set: data.admin_password_set
+                        };
+                    }
+                } catch (error) {
+                    console.error('Failed to load auth configuration:', error);
                 }
             },
 
@@ -173,6 +280,60 @@
                     this.messageType = 'error';
                 } finally {
                     this.saving = false;
+                    setTimeout(() => this.message = '', 5000);
+                }
+            },
+
+            async saveAuthConfig() {
+                this.savingAuth = true;
+                this.message = '';
+
+                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
+                try {
+                    const payload = {
+                        enable_auth: this.authConfig.enable_auth,
+                        username: this.authConfig.username,
+                        enable_admin: this.authConfig.enable_admin,
+                        admin_username: this.authConfig.admin_username
+                    };
+
+                    if (this.authConfig.password) {
+                        payload.password = this.authConfig.password;
+                    }
+
+                    if (this.authConfig.admin_password) {
+                        payload.admin_password = this.authConfig.admin_password;
+                    }
+
+                    const response = await fetch('/admin/api/auth', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-Token': csrfToken
+                        },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (response.ok) {
+                        this.message = 'Authentication updated successfully';
+                        this.messageType = 'success';
+                        this.authConfig.password = '';
+                        this.authConfig.admin_password = '';
+                        this.authConfig.password_set = true;
+                        this.authConfig.admin_password_set = true;
+                        this.loadAuthConfig();
+                    } else {
+                        const error = await response.json();
+                        this.message = error.error || 'Failed to update authentication';
+                        this.messageType = 'error';
+                    }
+                } catch (error) {
+                    console.error('Failed to update authentication:', error);
+                    this.message = 'Failed to update authentication';
+                    this.messageType = 'error';
+                } finally {
+                    this.savingAuth = false;
                     setTimeout(() => this.message = '', 5000);
                 }
             }

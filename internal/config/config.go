@@ -10,6 +10,7 @@ type Config struct {
 	EnableAuth         bool     `json:"enable_auth"`
 	Username           string   `json:"username"`
 	Password           string   `json:"password"`
+	PasswordHash       string   `json:"-"` // Hash for runtime verification, not serialized
 	MaxThumbCacheMB    int      `json:"thumb_cache_mb"`
 	ThumbJpegQuality   int      `json:"thumb_jpeg_quality"`
 	ThumbMaxFileSizeMB int      `json:"thumb_max_file_size_mb"`
@@ -19,6 +20,7 @@ type Config struct {
 	EnableAdmin          bool     `json:"enable_admin"`
 	AdminUsername        string   `json:"admin_username"`
 	AdminPassword        string   `json:"admin_password"`
+	AdminPasswordHash    string   `json:"-"` // Hash for runtime verification, not serialized
 	AdminUploadDir       string   `json:"admin_upload_dir"`
 	MaxUploadSizeMB      int      `json:"max_upload_size_mb"`
 	AllowedUploadTypes   []string `json:"allowed_upload_types"`

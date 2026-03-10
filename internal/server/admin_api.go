@@ -15,7 +15,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ActivityEntry represents a single admin activity
 type ActivityEntry struct {
 	ID          int       `json:"id"`
 	Type        string    `json:"type"` // "login", "upload", "config", "delete", "mkdir"
@@ -25,7 +24,6 @@ type ActivityEntry struct {
 	Details     string    `json:"details,omitempty"`
 }
 
-// ActivityStore manages recent admin activities
 type ActivityStore struct {
 	mu         sync.RWMutex
 	activities []ActivityEntry
@@ -33,7 +31,6 @@ type ActivityStore struct {
 	maxEntries int
 }
 
-// NewActivityStore creates a new activity store
 func NewActivityStore(maxEntries int) *ActivityStore {
 	return &ActivityStore{
 		activities: make([]ActivityEntry, 0, maxEntries),
@@ -42,7 +39,6 @@ func NewActivityStore(maxEntries int) *ActivityStore {
 	}
 }
 
-// AddActivity adds a new activity entry
 func (as *ActivityStore) AddActivity(activityType, description, ip, details string) {
 	as.mu.Lock()
 	defer as.mu.Unlock()
@@ -59,13 +55,11 @@ func (as *ActivityStore) AddActivity(activityType, description, ip, details stri
 	as.activities = append(as.activities, entry)
 	as.nextID++
 
-	// Keep only the most recent entries
 	if len(as.activities) > as.maxEntries {
 		as.activities = as.activities[len(as.activities)-as.maxEntries:]
 	}
 }
 
-// GetRecentActivities returns the most recent activities
 func (as *ActivityStore) GetRecentActivities(limit int) []ActivityEntry {
 	as.mu.RLock()
 	defer as.mu.RUnlock()
@@ -74,7 +68,6 @@ func (as *ActivityStore) GetRecentActivities(limit int) []ActivityEntry {
 		limit = len(as.activities)
 	}
 
-	// Return activities in reverse order (most recent first)
 	result := make([]ActivityEntry, limit)
 	for i := 0; i < limit; i++ {
 		result[i] = as.activities[len(as.activities)-1-i]
@@ -83,13 +76,11 @@ func (as *ActivityStore) GetRecentActivities(limit int) []ActivityEntry {
 	return result
 }
 
-// AdminHandler handles admin-specific routes and operations
 type AdminHandler struct {
 	server        *Server
 	activityStore *ActivityStore
 }
 
-// NewAdminHandler creates a new admin handler
 func NewAdminHandler(server *Server) *AdminHandler {
 	return &AdminHandler{
 		server:        server,
@@ -97,7 +88,6 @@ func NewAdminHandler(server *Server) *AdminHandler {
 	}
 }
 
-// getSystemStats returns system statistics for the admin dashboard
 func (ah *AdminHandler) getSystemStats(c *gin.Context) {
 	stats := gin.H{
 		"total_files":   ah.countTotalFiles(),
@@ -110,7 +100,6 @@ func (ah *AdminHandler) getSystemStats(c *gin.Context) {
 	c.JSON(http.StatusOK, stats)
 }
 
-// getSystemStatus returns detailed system status information
 func (ah *AdminHandler) getSystemStatus(c *gin.Context) {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
@@ -144,9 +133,7 @@ func (ah *AdminHandler) getSystemStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, status)
 }
 
-// getConfiguration returns the current server configuration
 func (ah *AdminHandler) getConfiguration(c *gin.Context) {
-	// Return a safe subset of configuration (excluding sensitive data)
 	config := gin.H{
 		"host":                   ah.server.config.Host,
 		"port":                   ah.server.config.Port,
@@ -168,7 +155,6 @@ func (ah *AdminHandler) getConfiguration(c *gin.Context) {
 	c.JSON(http.StatusOK, config)
 }
 
-// updateConfiguration updates server configuration (runtime changes only)
 func (ah *AdminHandler) updateConfiguration(c *gin.Context) {
 	var updates map[string]interface{}
 	if err := c.ShouldBindJSON(&updates); err != nil {
@@ -176,7 +162,6 @@ func (ah *AdminHandler) updateConfiguration(c *gin.Context) {
 		return
 	}
 
-	// Apply safe configuration updates
 	updated := false
 
 	if val, ok := updates["max_upload_size_mb"].(float64); ok && val > 0 && val <= 1000 {
@@ -204,41 +189,111 @@ func (ah *AdminHandler) updateConfiguration(c *gin.Context) {
 		Interface("updates", updates).
 		Msg("Admin configuration updated")
 
-	// Log activity
 	ah.activityStore.AddActivity("config", "Configuration updated", c.ClientIP(), fmt.Sprintf("Updated: %v", updates))
 
 	c.JSON(http.StatusOK, gin.H{"message": "configuration updated successfully"})
 }
 
-// listFiles returns files in the specified directory
+func (ah *AdminHandler) getAuthConfig(c *gin.Context) {
+	config := gin.H{
+		"enable_auth":        ah.server.config.EnableAuth,
+		"username":           ah.server.config.Username,
+		"password_set":       ah.server.config.PasswordHash != "" || ah.server.config.Password != "",
+		"enable_admin":       ah.server.config.EnableAdmin,
+		"admin_username":     ah.server.config.AdminUsername,
+		"admin_password_set": ah.server.config.AdminPasswordHash != "" || ah.server.config.AdminPassword != "",
+	}
+
+	c.JSON(http.StatusOK, config)
+}
+
+func (ah *AdminHandler) updateAuthConfig(c *gin.Context) {
+	var updates map[string]interface{}
+	if err := c.ShouldBindJSON(&updates); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid configuration data"})
+		return
+	}
+
+	updated := false
+
+	if val, ok := updates["enable_auth"].(bool); ok {
+		ah.server.config.EnableAuth = val
+		updated = true
+	}
+
+	if val, ok := updates["username"].(string); ok {
+		ah.server.config.Username = val
+		updated = true
+	}
+
+	if val, ok := updates["password"].(string); ok && val != "" {
+		hash, err := HashPassword(val)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to hash password"})
+			return
+		}
+		ah.server.config.PasswordHash = hash
+		ah.server.config.Password = ""
+		updated = true
+	}
+
+	if val, ok := updates["enable_admin"].(bool); ok {
+		ah.server.config.EnableAdmin = val
+		updated = true
+	}
+
+	if val, ok := updates["admin_username"].(string); ok {
+		ah.server.config.AdminUsername = val
+		updated = true
+	}
+
+	if val, ok := updates["admin_password"].(string); ok && val != "" {
+		hash, err := HashPassword(val)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to hash admin password"})
+			return
+		}
+		ah.server.config.AdminPasswordHash = hash
+		ah.server.config.AdminPassword = ""
+		updated = true
+	}
+
+	if !updated {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "no valid authentication updates provided"})
+		return
+	}
+
+	logger.Log.Info().
+		Str("ip", c.ClientIP()).
+		Msg("Admin authentication configuration updated")
+
+	ah.activityStore.AddActivity("config", "Authentication settings updated", c.ClientIP(), "Auth configuration changed")
+
+	c.JSON(http.StatusOK, gin.H{"message": "authentication updated successfully"})
+}
+
 func (ah *AdminHandler) listFiles(c *gin.Context) {
 	path := c.DefaultQuery("path", "/")
 
-	// Validate path is within allowed directories
 	var targetDir string
 	if path == "/" && len(ah.server.config.Directories) > 0 {
 		targetDir = ah.server.config.Directories[0]
 	} else {
-		// Convert relative path to absolute path based on configured directories
 		found := false
 		for _, dir := range ah.server.config.Directories {
-			// Convert configured directory to absolute path
 			absDir, err := filepath.Abs(dir)
 			if err != nil {
 				continue
 			}
 
-			// Build target path relative to the configured directory
 			var candidatePath string
 			if path == "/" {
 				candidatePath = absDir
 			} else {
-				// Remove leading slash and join with base directory
 				relativePath := strings.TrimPrefix(path, "/")
 				candidatePath = filepath.Join(absDir, relativePath)
 			}
 
-			// Check if the candidate path is within the allowed directory
 			if strings.HasPrefix(candidatePath, absDir) {
 				targetDir = candidatePath
 				found = true
@@ -251,7 +306,6 @@ func (ah *AdminHandler) listFiles(c *gin.Context) {
 		}
 	}
 
-	// Read directory contents
 	entries, err := os.ReadDir(targetDir)
 	if err != nil {
 		logger.Log.Error().Err(err).Str("path", targetDir).Msg("Failed to read directory")
@@ -266,7 +320,6 @@ func (ah *AdminHandler) listFiles(c *gin.Context) {
 			continue
 		}
 
-		// Skip hidden files if configured
 		if ah.server.config.DisableDotFiles && strings.HasPrefix(entry.Name(), ".") {
 			continue
 		}
@@ -285,7 +338,6 @@ func (ah *AdminHandler) listFiles(c *gin.Context) {
 	})
 }
 
-// deleteFile deletes a file or directory
 func (ah *AdminHandler) deleteFile(c *gin.Context) {
 	var req struct {
 		Path     string `json:"path" binding:"required"`
@@ -297,14 +349,12 @@ func (ah *AdminHandler) deleteFile(c *gin.Context) {
 		return
 	}
 
-	// Validate path
 	fullPath := filepath.Join(req.Path, req.Filename)
 	if !ah.isPathAllowed(fullPath) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "path not allowed"})
 		return
 	}
 
-	// Delete file/directory
 	err := os.RemoveAll(fullPath)
 	if err != nil {
 		logger.Log.Error().Err(err).Str("path", fullPath).Msg("Failed to delete file")
@@ -317,13 +367,11 @@ func (ah *AdminHandler) deleteFile(c *gin.Context) {
 		Str("path", fullPath).
 		Msg("File deleted via admin interface")
 
-	// Log activity
 	ah.activityStore.AddActivity("delete", fmt.Sprintf("Deleted: %s", req.Filename), c.ClientIP(), fullPath)
 
 	c.JSON(http.StatusOK, gin.H{"message": "file deleted successfully"})
 }
 
-// createDirectory creates a new directory
 func (ah *AdminHandler) createDirectory(c *gin.Context) {
 	var req struct {
 		Path string `json:"path" binding:"required"`
@@ -335,21 +383,18 @@ func (ah *AdminHandler) createDirectory(c *gin.Context) {
 		return
 	}
 
-	// Sanitize directory name
 	req.Name = sanitizeFilename(req.Name)
 	if req.Name == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid directory name"})
 		return
 	}
 
-	// Validate path
 	fullPath := filepath.Join(req.Path, req.Name)
 	if !ah.isPathAllowed(fullPath) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "path not allowed"})
 		return
 	}
 
-	// Create directory
 	err := os.MkdirAll(fullPath, 0755)
 	if err != nil {
 		logger.Log.Error().Err(err).Str("path", fullPath).Msg("Failed to create directory")
@@ -362,17 +407,14 @@ func (ah *AdminHandler) createDirectory(c *gin.Context) {
 		Str("path", fullPath).
 		Msg("Directory created via admin interface")
 
-	// Log activity
 	ah.activityStore.AddActivity("mkdir", fmt.Sprintf("Created directory: %s", req.Name), c.ClientIP(), fullPath)
 
 	c.JSON(http.StatusOK, gin.H{"message": "directory created successfully"})
 }
 
-// getRecentActivity returns recent admin activity
 func (ah *AdminHandler) getRecentActivity(c *gin.Context) {
-	activities := ah.activityStore.GetRecentActivities(20) // Get last 20 activities
+	activities := ah.activityStore.GetRecentActivities(20)
 
-	// Convert to the format expected by the frontend
 	result := make([]gin.H, len(activities))
 	for i, activity := range activities {
 		result[i] = gin.H{
@@ -390,11 +432,7 @@ func (ah *AdminHandler) getRecentActivity(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
-// Helper methods
-
 func (ah *AdminHandler) countTotalFiles() int {
-	// This is a simplified implementation
-	// In production, you might want to cache this or use a more efficient method
 	count := 0
 	for _, dir := range ah.server.config.Directories {
 		filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
@@ -408,7 +446,6 @@ func (ah *AdminHandler) countTotalFiles() int {
 }
 
 func (ah *AdminHandler) countUploadsToday() int {
-	// Count upload activities from today
 	today := time.Now().Truncate(24 * time.Hour)
 	count := 0
 
@@ -464,7 +501,6 @@ func (ah *AdminHandler) isPathAllowed(path string) bool {
 		}
 	}
 
-	// Also allow upload directory
 	if ah.server.config.AdminUploadDir != "" {
 		absUploadDir, err := filepath.Abs(ah.server.config.AdminUploadDir)
 		if err == nil && strings.HasPrefix(absPath, absUploadDir) {

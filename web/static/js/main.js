@@ -7,7 +7,6 @@ window.slimserveUI = function slimserveUI() {
         filter: localStorage.getItem('slimserve-filter') || 'all',
 
         init() {
-            // Set up keyboard shortcuts
             document.addEventListener('keydown', (e) => this.handleKeydown(e));
         },
 
@@ -22,12 +21,10 @@ window.slimserveUI = function slimserveUI() {
         },
 
         handleKeydown(e) {
-            // Only trigger if not in an input field
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) {
                 return;
             }
 
-            // Don't trigger if modifier keys are pressed
             if (e.ctrlKey || e.metaKey || e.altKey) {
                 return;
             }
@@ -62,64 +59,10 @@ window.slimserveUI = function slimserveUI() {
     };
 }
 
-// Download handling for files with Ctrl+Click
-document.addEventListener('DOMContentLoaded', function () {
-    // Handle file downloads for non-folder items
-    document.addEventListener('click', function (e) {
-        const row = e.target.closest('tr[data-type]');
-        if (row && row.getAttribute('data-type') !== 'folder') {
-            if (e.ctrlKey || e.metaKey) {
-                e.preventDefault();
-                const url = row.getAttribute('onclick')?.match(/'([^']+)'/)?.[1];
-                if (url) {
-                    // Create temporary link to trigger download
-                    const link = document.createElement('a');
-                    link.href = url;
-                    link.download = '';
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                }
-            }
-        }
-    });
-
-    // Add some helpful tooltips via data attributes if needed
-    const shortcuts = document.createElement('div');
-    shortcuts.style.cssText = 'position:fixed;bottom:20px;right:20px;background:var(--background);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:12px;color:var(--muted-foreground);z-index:40;display:none;';
-    shortcuts.innerHTML = `
-        <div style="margin-bottom:8px;font-weight:500;">Keyboard Shortcuts:</div>
-        <div>G - Grid view</div>
-        <div>L - List view</div>
-        <div>1 - All files</div>
-        <div>2 - Folders only</div>
-        <div>3 - Images only</div>
-        <div>4 - Documents only</div>
-        <div style="margin-top:8px;font-size:11px;">Ctrl+Click file to download</div>
-    `;
-    document.body.appendChild(shortcuts);
-
-    // Show/hide shortcuts on ? key
-    document.addEventListener('keydown', function (e) {
-        if (e.key === '?' && !e.ctrlKey && !e.metaKey && !e.altKey) {
-            e.preventDefault();
-            shortcuts.style.display = shortcuts.style.display === 'none' ? 'block' : 'none';
-        }
-        if (e.key === 'Escape') {
-            shortcuts.style.display = 'none';
-        }
-    });
-});
-// Theme toggle logic
 document.addEventListener('DOMContentLoaded', function () {
     const storageKey = 'slimserve-theme';
     const root = document.documentElement;
     const toggleBtn = document.getElementById('theme-toggle');
-
-    if (!toggleBtn) {
-        console.warn('Theme toggle button not found');
-        return;
-    }
 
     function safeGetItem(key) {
         try { return localStorage.getItem(key); }
@@ -140,34 +83,75 @@ document.addEventListener('DOMContentLoaded', function () {
         if (theme === 'dark') {
             root.classList.remove('light');
             root.setAttribute('data-theme', 'dark');
-            toggleBtn.setAttribute('aria-pressed', 'true');
+            toggleBtn && toggleBtn.setAttribute('aria-pressed', 'true');
         } else {
             root.classList.add('light');
             root.setAttribute('data-theme', 'light');
-            toggleBtn.setAttribute('aria-pressed', 'false');
+            toggleBtn && toggleBtn.setAttribute('aria-pressed', 'false');
         }
     }
 
     function initTheme() {
+        if (!toggleBtn) return;
         let theme = safeGetItem(storageKey);
         if (theme !== 'light' && theme !== 'dark') {
             theme = getPreferred();
         }
         applyTheme(theme);
+
+        toggleBtn.addEventListener('click', () => {
+            const current = root.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+            const next = current === 'dark' ? 'light' : 'dark';
+            safeSetItem(storageKey, next);
+            applyTheme(next);
+        });
     }
 
-    // Initialize theme
     initTheme();
 
-    // Add click handler
-    toggleBtn.addEventListener('click', () => {
-        const current = root.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
-        const next = current === 'dark' ? 'light' : 'dark';
-        safeSetItem(storageKey, next);
-        applyTheme(next);
+    document.addEventListener('click', function (e) {
+        const row = e.target.closest('tr[data-type]');
+        if (row && row.getAttribute('data-type') !== 'folder') {
+            if (e.ctrlKey || e.metaKey) {
+                e.preventDefault();
+                const url = row.getAttribute('onclick')?.match(/'([^']+)'/)?.[1];
+                if (url) {
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = '';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                }
+            }
+        }
+    });
+
+    const shortcuts = document.createElement('div');
+    shortcuts.style.cssText = 'position:fixed;bottom:20px;right:20px;background:var(--background);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:12px;color:var(--muted-foreground);z-index:40;display:none;';
+    shortcuts.innerHTML = `
+        <div style="margin-bottom:8px;font-weight:500;">Keyboard Shortcuts:</div>
+        <div>G - Grid view</div>
+        <div>L - List view</div>
+        <div>1 - All files</div>
+        <div>2 - Folders only</div>
+        <div>3 - Images only</div>
+        <div>4 - Documents only</div>
+        <div style="margin-top:8px;font-size:11px;">Ctrl+Click file to download</div>
+    `;
+    document.body.appendChild(shortcuts);
+
+    document.addEventListener('keydown', function (e) {
+        if (e.key === '?' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+            e.preventDefault();
+            shortcuts.style.display = shortcuts.style.display === 'none' ? 'block' : 'none';
+        }
+        if (e.key === 'Escape') {
+            shortcuts.style.display = 'none';
+        }
     });
 });
-// Login page specific logic
+
 window.loginForm = function () {
     return {
         loading: false,
@@ -182,12 +166,12 @@ window.loginForm = function () {
             const lastFocusable = focusableElements[focusableElements.length - 1];
 
             if (e.key === 'Tab') {
-                if (e.shiftKey) { // Shift + Tab
+                if (e.shiftKey) {
                     if (document.activeElement === firstFocusable) {
                         lastFocusable.focus();
                         e.preventDefault();
                     }
-                } else { // Tab
+                } else {
                     if (document.activeElement === lastFocusable) {
                         firstFocusable.focus();
                         e.preventDefault();
@@ -196,9 +180,8 @@ window.loginForm = function () {
             }
         },
         init() {
-            // Auto-focus username field on load
             this.$nextTick(() => {
-                this.$refs.username.focus();
+                this.$refs.username && this.$refs.username.focus();
             });
         }
     };
