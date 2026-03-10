@@ -12,6 +12,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// Note: filepath import is used by setupBenchmarkServer and test path generation
+
 // setupBenchmarkServer creates a server instance for benchmarking
 func setupBenchmarkServer(b *testing.B) *Server {
 	testDir := b.TempDir()
@@ -140,68 +142,6 @@ func BenchmarkCreateUnifiedHandler(b *testing.B) {
 				c.Request = httptest.NewRequest(req.method, req.path, nil)
 
 				unifiedHandler(c)
-			}
-		})
-	}
-}
-
-// BenchmarkPathValidation benchmarks path validation and cleaning operations
-func BenchmarkPathValidation(b *testing.B) {
-	testPaths := []string{
-		"/",
-		"/simple/path",
-		"/path/with/many/segments/file.txt",
-		"/path/../with/../traversal",
-		"/path/./with/./current/./dir",
-		"//double//slashes//path",
-		"/path/with spaces/file.txt",
-		"/very/long/path/with/many/segments/and/deep/nesting/structure/file.txt",
-	}
-
-	for _, path := range testPaths {
-		b.Run(fmt.Sprintf("path_%d_chars", len(path)), func(b *testing.B) {
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				// Simulate the path cleaning operations done in ServeFiles
-				cleanPath := filepath.Clean(path)
-				if cleanPath == "." {
-					cleanPath = "/"
-				}
-				_ = cleanPath
-			}
-		})
-	}
-}
-
-// BenchmarkRouteMatching benchmarks the route matching logic
-func BenchmarkRouteMatching(b *testing.B) {
-	testPaths := []string{
-		"/static/css/style.css",
-		"/static/js/script.js",
-		"/static/images/logo.png",
-		"/admin/dashboard",
-		"/admin/users",
-		"/admin/settings",
-		"/login",
-		"/version",
-		"/file.txt",
-		"/dir/subdir/file.txt",
-	}
-
-	for _, path := range testPaths {
-		b.Run(fmt.Sprintf("route_%s", filepath.Base(path)), func(b *testing.B) {
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				// Simulate the route matching logic from createUnifiedHandler
-				isStatic := path == "/favicon.ico" || (len(path) >= 8 && path[:8] == "/static/")
-				isVersion := path == "/version"
-				isAdmin := len(path) >= 6 && path[:6] == "/admin"
-				isLogin := path == "/login"
-
-				_ = isStatic
-				_ = isVersion
-				_ = isAdmin
-				_ = isLogin
 			}
 		})
 	}

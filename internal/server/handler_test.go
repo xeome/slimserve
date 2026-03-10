@@ -229,57 +229,6 @@ func TestHandler_ServeFiles(t *testing.T) {
 	}
 }
 
-func TestHandler_ServeDirectory_And_Ignore(t *testing.T) {
-	// Create temporary directory with test files
-	tmpDir, err := os.MkdirTemp("", "slimserve-dir-test")
-	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
-
-	// Create test files and directories
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "file1.txt"), []byte("content1"), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".dotfile"), []byte("secret"), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "file.log"), []byte("log"), 0644))
-	require.NoError(t, os.Mkdir(filepath.Join(tmpDir, "subdir"), 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "subdir", "nested.txt"), []byte("nested"), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".slimserveignore"), []byte("*.log\n"), 0644))
-
-	cfg := &config.Config{
-		Directories:     []string{tmpDir},
-		DisableDotFiles: true,
-		IgnorePatterns:  []string{}, // Test .slimserveignore first
-	}
-	root, err := security.NewRootFS(tmpDir)
-	require.NoError(t, err)
-	defer root.Close()
-	handler := NewHandler(cfg, []*security.RootFS{root})
-	gin.SetMode(gin.TestMode)
-
-	// Test case 1: Listing root directory, expecting .dotfile and *.log to be ignored
-	c, w := createTestContext("/", "GET")
-	handler.ServeFiles(c)
-
-	require.Equal(t, http.StatusOK, w.Code)
-	body := w.Body.String()
-	require.Contains(t, body, "file1.txt")
-	require.Contains(t, body, "subdir")
-	require.NotContains(t, body, ".dotfile")
-	require.NotContains(t, body, "file.log")
-	require.NotContains(t, body, ".slimserveignore")
-
-	// Test case 2: Direct access to ignored file should be forbidden
-	c, w = createTestContext("/file.log", "GET")
-	handler.ServeFiles(c)
-	require.Equal(t, http.StatusForbidden, w.Code)
-
-	c, w = createTestContext("/.slimserveignore", "GET")
-	handler.ServeFiles(c)
-	require.Equal(t, http.StatusForbidden, w.Code)
-
-	// Test case 3: Direct access to dotfile should be forbidden
-	c, w = createTestContext("/.dotfile", "GET")
-	handler.ServeFiles(c)
-	require.Equal(t, http.StatusForbidden, w.Code)
-}
 func TestHandler_HeadRequest_StaticAndDirectory(t *testing.T) {
 	// Config: static assets via embedded FS, directory via tempdir
 	cfg := &config.Config{

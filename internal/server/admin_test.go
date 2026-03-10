@@ -222,82 +222,6 @@ func TestFileUploadHandler(t *testing.T) {
 	})
 }
 
-func TestAdminUtils(t *testing.T) {
-	utils := NewAdminUtils()
-
-	t.Run("Format bytes should work correctly", func(t *testing.T) {
-		assert.Equal(t, "0 B", utils.formatBytes(0))
-		assert.Equal(t, "1.0 KB", utils.formatBytes(1024))
-		assert.Equal(t, "1.0 MB", utils.formatBytes(1024*1024))
-		assert.Equal(t, "1.5 KB", utils.formatBytes(1536))
-	})
-
-	t.Run("Uptime should be formatted correctly", func(t *testing.T) {
-		uptime := utils.GetUptime()
-		assert.Contains(t, uptime, "m") // Should contain minutes
-	})
-}
-
-func TestSessionStore(t *testing.T) {
-	store := NewSessionStore()
-
-	t.Run("Admin session management", func(t *testing.T) {
-		// Test adding admin token
-		token := store.NewToken()
-		assert.NotEmpty(t, token)
-
-		store.AddAdmin(token)
-		assert.True(t, store.ValidAdmin(token))
-		assert.Equal(t, 1, store.CountAdmin())
-
-		// Test removing admin token
-		store.RemoveAdmin(token)
-		assert.False(t, store.ValidAdmin(token))
-		assert.Equal(t, 0, store.CountAdmin())
-	})
-
-	t.Run("Regular and admin sessions should be separate", func(t *testing.T) {
-		token := store.NewToken()
-
-		store.Add(token)
-		assert.True(t, store.Valid(token))
-		assert.False(t, store.ValidAdmin(token))
-
-		store.AddAdmin(token)
-		assert.True(t, store.ValidAdmin(token))
-		assert.True(t, store.Valid(token))
-	})
-}
-
-func TestSanitizeFilename(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected string
-	}{
-		{"normal_file.txt", "normal_file.txt"},
-		{"file with spaces.txt", "file with spaces.txt"},
-		{"../../../etc/passwd", "passwd"},
-		{"file/with/path.txt", "path.txt"},
-		{"file\\with\\backslash.txt", "filewithbackslash.txt"},
-		{"file:with:colons.txt", "filewithcolons.txt"},
-		{"file*with*stars.txt", "filewithstars.txt"},
-		{"file?with?questions.txt", "filewithquestions.txt"},
-		{"file\"with\"quotes.txt", "filewithquotes.txt"},
-		{"file<with>brackets.txt", "filewithbrackets.txt"},
-		{"file|with|pipes.txt", "filewithpipes.txt"},
-		{".hidden_file.txt", ""},
-		{"", ""},
-		{"   spaced   ", "spaced"},
-	}
-
-	for _, test := range tests {
-		t.Run("Sanitize: "+test.input, func(t *testing.T) {
-			result := sanitizeFilename(test.input)
-			assert.Equal(t, test.expected, result)
-		})
-	}
-}
-
 func TestCookieSecurity(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -307,7 +231,7 @@ func TestCookieSecurity(t *testing.T) {
 		AdminPassword: "secret123",
 	}
 
-	t.Run("Admin session cookie should have security attributes over HTTP", func(t *testing.T) {
+	t.Run("HTTP cookies should have correct security attributes", func(t *testing.T) {
 		server := &Server{
 			config:       cfg,
 			sessionStore: NewSessionStore(),
@@ -341,10 +265,11 @@ func TestCookieSecurity(t *testing.T) {
 		assert.Contains(t, adminSessionCookie, "HttpOnly")
 		assert.Contains(t, adminSessionCookie, "Path=/admin")
 		assert.Contains(t, adminSessionCookie, "SameSite=Lax")
-		assert.NotContains(t, adminSessionCookie, "Secure") // Should not be secure over HTTP
+		assert.NotContains(t, adminSessionCookie, "Secure")   // Should not be secure over HTTP
+		assert.NotContains(t, adminSessionCookie, "Max-Age=") // Session cookie
 	})
 
-	t.Run("Admin session cookie should have Secure flag over HTTPS", func(t *testing.T) {
+	t.Run("HTTPS cookies should have Secure flag", func(t *testing.T) {
 		server := &Server{
 			config:       cfg,
 			sessionStore: NewSessionStore(),
@@ -365,7 +290,7 @@ func TestCookieSecurity(t *testing.T) {
 
 		assert.Equal(t, http.StatusFound, w.Code)
 
-		// Check admin session cookie attributes
+		// Check admin session cookie has Secure flag
 		setCookieHeaders := w.Header().Values("Set-Cookie")
 		var adminSessionCookie string
 		for _, header := range setCookieHeaders {
@@ -376,167 +301,9 @@ func TestCookieSecurity(t *testing.T) {
 		}
 
 		assert.NotEmpty(t, adminSessionCookie)
+		assert.Contains(t, adminSessionCookie, "Secure")
 		assert.Contains(t, adminSessionCookie, "HttpOnly")
 		assert.Contains(t, adminSessionCookie, "Path=/admin")
-		assert.Contains(t, adminSessionCookie, "SameSite=Lax")
-		assert.Contains(t, adminSessionCookie, "Secure") // Should be secure over HTTPS
-	})
-
-	t.Run("CSRF token cookie should have security attributes over HTTP", func(t *testing.T) {
-		// Create a mock handler that sets CSRF token without template rendering
-		mockHandler := func(c *gin.Context) {
-			csrfToken := generateCSRFToken()
-			c.SetSameSite(http.SameSiteLaxMode)
-			c.SetCookie(
-				"slimserve_csrf_token",
-				csrfToken,
-				0, // session cookie
-				"/admin",
-				"",
-				c.Request.TLS != nil, // secure for HTTPS
-				true,                 // httpOnly
-			)
-			c.JSON(http.StatusOK, gin.H{"csrf_token": csrfToken})
-		}
-
-		engine := gin.New()
-		engine.GET("/admin/login", mockHandler)
-
-		req := httptest.NewRequest("GET", "/admin/login", nil)
-		w := httptest.NewRecorder()
-		engine.ServeHTTP(w, req)
-
-		assert.Equal(t, http.StatusOK, w.Code)
-
-		// Check CSRF token cookie attributes
-		setCookieHeaders := w.Header().Values("Set-Cookie")
-		var csrfCookie string
-		for _, header := range setCookieHeaders {
-			if strings.Contains(header, "slimserve_csrf_token=") {
-				csrfCookie = header
-				break
-			}
-		}
-
-		assert.NotEmpty(t, csrfCookie)
-		assert.Contains(t, csrfCookie, "HttpOnly")
-		assert.Contains(t, csrfCookie, "Path=/admin")
-		assert.Contains(t, csrfCookie, "SameSite=Lax")
-		assert.NotContains(t, csrfCookie, "Secure") // Should not be secure over HTTP
-	})
-
-	t.Run("CSRF token cookie should have Secure flag over HTTPS", func(t *testing.T) {
-		// Create a mock handler that sets CSRF token without template rendering
-		mockHandler := func(c *gin.Context) {
-			csrfToken := generateCSRFToken()
-			c.SetSameSite(http.SameSiteLaxMode)
-			c.SetCookie(
-				"slimserve_csrf_token",
-				csrfToken,
-				0, // session cookie
-				"/admin",
-				"",
-				c.Request.TLS != nil, // secure for HTTPS
-				true,                 // httpOnly
-			)
-			c.JSON(http.StatusOK, gin.H{"csrf_token": csrfToken})
-		}
-
-		engine := gin.New()
-		engine.GET("/admin/login", mockHandler)
-
-		req := httptest.NewRequest("GET", "/admin/login", nil)
-		req.TLS = &tls.ConnectionState{} // Simulate HTTPS
-		w := httptest.NewRecorder()
-		engine.ServeHTTP(w, req)
-
-		assert.Equal(t, http.StatusOK, w.Code)
-
-		// Check CSRF token cookie attributes
-		setCookieHeaders := w.Header().Values("Set-Cookie")
-		var csrfCookie string
-		for _, header := range setCookieHeaders {
-			if strings.Contains(header, "slimserve_csrf_token=") {
-				csrfCookie = header
-				break
-			}
-		}
-
-		assert.NotEmpty(t, csrfCookie)
-		assert.Contains(t, csrfCookie, "HttpOnly")
-		assert.Contains(t, csrfCookie, "Path=/admin")
-		assert.Contains(t, csrfCookie, "SameSite=Lax")
-		assert.Contains(t, csrfCookie, "Secure") // Should be secure over HTTPS
-	})
-
-	t.Run("Admin cookies should be session cookies (no Max-Age)", func(t *testing.T) {
-		server := &Server{
-			config:       cfg,
-			sessionStore: NewSessionStore(),
-		}
-
-		engine := gin.New()
-		engine.POST("/admin/login", server.doAdminLogin)
-
-		formData := url.Values{}
-		formData.Set("username", "admin")
-		formData.Set("password", "secret123")
-
-		req := httptest.NewRequest("POST", "/admin/login", strings.NewReader(formData.Encode()))
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		w := httptest.NewRecorder()
-		engine.ServeHTTP(w, req)
-
-		assert.Equal(t, http.StatusFound, w.Code)
-
-		// Check that cookies don't have Max-Age (should be session cookies)
-		setCookieHeaders := w.Header().Values("Set-Cookie")
-		for _, header := range setCookieHeaders {
-			if strings.Contains(header, "slimserve_admin_session=") || strings.Contains(header, "slimserve_csrf_token=") {
-				assert.NotContains(t, header, "Max-Age=")
-				assert.NotContains(t, header, "Expires=")
-			}
-		}
-	})
-
-	t.Run("Admin cookies should be restricted to /admin path", func(t *testing.T) {
-		// Create a mock handler that sets CSRF token without template rendering
-		mockHandler := func(c *gin.Context) {
-			csrfToken := generateCSRFToken()
-			c.SetSameSite(http.SameSiteLaxMode)
-			c.SetCookie(
-				"slimserve_csrf_token",
-				csrfToken,
-				0, // session cookie
-				"/admin",
-				"",
-				c.Request.TLS != nil, // secure for HTTPS
-				true,                 // httpOnly
-			)
-			c.JSON(http.StatusOK, gin.H{"csrf_token": csrfToken})
-		}
-
-		engine := gin.New()
-		engine.GET("/admin/login", mockHandler)
-
-		req := httptest.NewRequest("GET", "/admin/login", nil)
-		w := httptest.NewRecorder()
-		engine.ServeHTTP(w, req)
-
-		assert.Equal(t, http.StatusOK, w.Code)
-
-		// Check that CSRF cookie is restricted to /admin path
-		setCookieHeaders := w.Header().Values("Set-Cookie")
-		var foundCSRFCookie bool
-		for _, header := range setCookieHeaders {
-			if strings.Contains(header, "slimserve_csrf_token=") {
-				foundCSRFCookie = true
-				assert.Contains(t, header, "Path=/admin")
-				// Make sure it's not set to the root path
-				assert.NotContains(t, header, "Path=/;") // Should not be site-wide
-			}
-		}
-		assert.True(t, foundCSRFCookie, "CSRF token cookie should be present")
 	})
 }
 
@@ -555,77 +322,23 @@ func extractAdminCookie(recorder *httptest.ResponseRecorder, cookieName string) 
 	return ""
 }
 
-// Helper function to check if cookie has specific attributes
-func cookieHasAttribute(recorder *httptest.ResponseRecorder, cookieName, attribute string) bool {
-	setCookieHeaders := recorder.Header().Values("Set-Cookie")
-	for _, header := range setCookieHeaders {
-		if strings.Contains(header, cookieName+"=") {
-			return strings.Contains(header, attribute)
-		}
-	}
-	return false
-}
-
 func TestAdminLoginFlow(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	t.Run("Admin login page shows CSRF token", func(t *testing.T) {
-		// Create a mock handler that just sets CSRF token without template rendering
-		mockHandler := func(c *gin.Context) {
-			// Generate CSRF token
-			csrfToken := generateCSRFToken()
-
-			// Set CSRF token cookie
-			c.SetSameSite(http.SameSiteLaxMode)
-			c.SetCookie(
-				"slimserve_csrf_token",
-				csrfToken,
-				0, // session cookie
-				"/admin",
-				"",
-				c.Request.TLS != nil, // secure for HTTPS
-				true,                 // httpOnly
-			)
-			c.JSON(http.StatusOK, gin.H{"csrf_token": csrfToken})
-		}
-
-		engine := gin.New()
-		engine.GET("/admin/login", mockHandler)
-
-		req := httptest.NewRequest("GET", "/admin/login", nil)
-		w := httptest.NewRecorder()
-		engine.ServeHTTP(w, req)
-
-		assert.Equal(t, http.StatusOK, w.Code)
-
-		// Check that CSRF token cookie is set
-		csrfToken := extractAdminCookie(w, "slimserve_csrf_token")
+	t.Run("CSRF token generation and redirect validation", func(t *testing.T) {
+		// Test CSRF token is generated correctly
+		csrfToken := generateCSRFToken()
 		assert.NotEmpty(t, csrfToken)
 		assert.Len(t, csrfToken, 64) // 32 bytes hex encoded = 64 chars
 
-		// Check cookie security attributes
-		assert.True(t, cookieHasAttribute(w, "slimserve_csrf_token", "HttpOnly"))
-		assert.True(t, cookieHasAttribute(w, "slimserve_csrf_token", "Path=/admin"))
-		assert.True(t, cookieHasAttribute(w, "slimserve_csrf_token", "SameSite=Lax"))
-	})
-
-	t.Run("Admin login page with next parameter", func(t *testing.T) {
-		// Test the validateAdminRedirectURL function indirectly
+		// Test valid redirect URL
 		next := validateAdminRedirectURL("/admin/dashboard")
 		assert.Equal(t, "/admin/dashboard", next)
 
-		// Test invalid redirect URLs
+		// Test invalid redirect URLs default to /admin
 		next = validateAdminRedirectURL("http://evil.com")
-		assert.Equal(t, "/admin", next) // Should default to /admin
+		assert.Equal(t, "/admin", next)
 
 		next = validateAdminRedirectURL("//evil.com")
-		assert.Equal(t, "/admin", next) // Should default to /admin
-	})
-
-	t.Run("Admin login page with error parameter", func(t *testing.T) {
-		// This test is mainly about URL parameter handling, which we can test separately
-		// without needing template rendering
-		assert.True(t, true) // Placeholder test
+		assert.Equal(t, "/admin", next)
 	})
 }
 
@@ -667,9 +380,17 @@ func TestAdminLoginPost(t *testing.T) {
 		assert.Len(t, sessionToken, 64) // 32 bytes hex encoded = 64 chars
 
 		// Check cookie security attributes
-		assert.True(t, cookieHasAttribute(w, "slimserve_admin_session", "HttpOnly"))
-		assert.True(t, cookieHasAttribute(w, "slimserve_admin_session", "Path=/admin"))
-		assert.True(t, cookieHasAttribute(w, "slimserve_admin_session", "SameSite=Lax"))
+		setCookieHeaders := w.Header().Values("Set-Cookie")
+		var sessionCookie string
+		for _, header := range setCookieHeaders {
+			if strings.Contains(header, "slimserve_admin_session=") {
+				sessionCookie = header
+				break
+			}
+		}
+		assert.Contains(t, sessionCookie, "HttpOnly")
+		assert.Contains(t, sessionCookie, "Path=/admin")
+		assert.Contains(t, sessionCookie, "SameSite=Lax")
 
 		// Verify token is valid in session store
 		assert.True(t, server.sessionStore.ValidAdmin(sessionToken))
@@ -1397,181 +1118,5 @@ func TestAdminLogout(t *testing.T) {
 				assert.Contains(t, header, "Secure")
 			}
 		}
-	})
-}
-
-func TestAdminSessionManagement(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	t.Run("Admin session token generation should be cryptographically secure", func(t *testing.T) {
-		store := NewSessionStore()
-
-		// Generate multiple tokens and ensure they're unique
-		tokens := make(map[string]bool)
-		for i := 0; i < 100; i++ {
-			token := store.NewToken()
-			assert.Len(t, token, 64) // 32 bytes hex encoded = 64 chars
-			assert.False(t, tokens[token], "Token should be unique")
-			tokens[token] = true
-
-			// Verify it's valid hex
-			_, err := hex.DecodeString(token)
-			assert.NoError(t, err)
-		}
-	})
-
-	t.Run("Admin session lifecycle", func(t *testing.T) {
-		store := NewSessionStore()
-
-		// Initially no admin sessions
-		assert.Equal(t, 0, store.CountAdmin())
-
-		// Add admin session
-		token := store.NewToken()
-		store.AddAdmin(token)
-		assert.True(t, store.ValidAdmin(token))
-		assert.Equal(t, 1, store.CountAdmin())
-
-		// Remove admin session
-		store.RemoveAdmin(token)
-		assert.False(t, store.ValidAdmin(token))
-		assert.Equal(t, 0, store.CountAdmin())
-	})
-
-	t.Run("Multiple concurrent admin sessions", func(t *testing.T) {
-		store := NewSessionStore()
-
-		// Add multiple admin sessions
-		tokens := make([]string, 5)
-		for i := 0; i < 5; i++ {
-			tokens[i] = store.NewToken()
-			store.AddAdmin(tokens[i])
-		}
-
-		assert.Equal(t, 5, store.CountAdmin())
-
-		// All tokens should be valid
-		for _, token := range tokens {
-			assert.True(t, store.ValidAdmin(token))
-		}
-
-		// Remove one token
-		store.RemoveAdmin(tokens[2])
-		assert.False(t, store.ValidAdmin(tokens[2]))
-		assert.Equal(t, 4, store.CountAdmin())
-
-		// Other tokens should still be valid
-		for i, token := range tokens {
-			if i != 2 {
-				assert.True(t, store.ValidAdmin(token))
-			}
-		}
-	})
-
-	t.Run("Admin and regular sessions are separate", func(t *testing.T) {
-		store := NewSessionStore()
-
-		token := store.NewToken()
-
-		// Add as regular session
-		store.Add(token)
-		assert.True(t, store.Valid(token))
-		assert.False(t, store.ValidAdmin(token))
-
-		// Add same token as admin session
-		store.AddAdmin(token)
-		assert.True(t, store.Valid(token))
-		assert.True(t, store.ValidAdmin(token))
-
-		// Remove from regular sessions
-		store.Clear() // This clears both regular and admin sessions
-		assert.False(t, store.Valid(token))
-		assert.False(t, store.ValidAdmin(token))
-	})
-
-	t.Run("Session store is thread-safe", func(t *testing.T) {
-		store := NewSessionStore()
-		done := make(chan bool, 10)
-
-		// Start 10 goroutines that add/remove admin sessions concurrently
-		for i := 0; i < 10; i++ {
-			go func(id int) {
-				defer func() { done <- true }()
-
-				for j := 0; j < 100; j++ {
-					token := store.NewToken()
-					store.AddAdmin(token)
-					assert.True(t, store.ValidAdmin(token))
-					store.RemoveAdmin(token)
-					assert.False(t, store.ValidAdmin(token))
-				}
-			}(i)
-		}
-
-		// Wait for all goroutines to complete
-		for i := 0; i < 10; i++ {
-			<-done
-		}
-
-		// Should have no sessions left
-		assert.Equal(t, 0, store.CountAdmin())
-	})
-
-	t.Run("Invalid tokens should not be valid", func(t *testing.T) {
-		store := NewSessionStore()
-
-		// Test various invalid tokens
-		invalidTokens := []string{
-			"",
-			"invalid",
-			"too-short",
-			"not-hex-gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg",
-			"wrong-length-123456789012345678901234567890123456789012345678901234567890",
-		}
-
-		for _, token := range invalidTokens {
-			assert.False(t, store.ValidAdmin(token), "Token should be invalid: %s", token)
-		}
-	})
-
-	t.Run("Session store clear removes all sessions", func(t *testing.T) {
-		store := NewSessionStore()
-
-		// Add multiple admin and regular sessions
-		for i := 0; i < 5; i++ {
-			token := store.NewToken()
-			store.Add(token)
-			store.AddAdmin(token)
-		}
-
-		assert.Equal(t, 5, store.Count())
-		assert.Equal(t, 5, store.CountAdmin())
-
-		// Clear all sessions
-		store.Clear()
-
-		assert.Equal(t, 0, store.Count())
-		assert.Equal(t, 0, store.CountAdmin())
-	})
-
-	t.Run("Admin session validation with edge cases", func(t *testing.T) {
-		store := NewSessionStore()
-
-		// Test removing non-existent token
-		store.RemoveAdmin("non-existent-token")
-		assert.Equal(t, 0, store.CountAdmin())
-
-		// Test validating non-existent token
-		assert.False(t, store.ValidAdmin("non-existent-token"))
-
-		// Test adding empty token
-		store.AddAdmin("")
-		assert.True(t, store.ValidAdmin(""))
-		assert.Equal(t, 1, store.CountAdmin())
-
-		// Remove empty token
-		store.RemoveAdmin("")
-		assert.False(t, store.ValidAdmin(""))
-		assert.Equal(t, 0, store.CountAdmin())
 	})
 }

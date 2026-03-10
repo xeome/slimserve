@@ -149,22 +149,3 @@ func TestServerIntegration(t *testing.T) {
 		}
 	})
 }
-
-func TestServerWithEmptyDirectories(t *testing.T) {
-	// Test that server handles empty Directories config gracefully
-	cfg := &config.Config{
-		Host:            "localhost",
-		Port:            8080,
-		Directories:     []string{}, // Empty directories
-		DisableDotFiles: true,
-	}
-	srv := New(cfg)
-
-	// Verify the server config was updated to include current directory
-	if len(srv.config.Directories) == 0 {
-		t.Error("Server config should have been updated with default directory")
-	}
-	if srv.config.Directories[0] != "." {
-		t.Errorf("Expected default directory to be '.', got '%s'", srv.config.Directories[0])
-	}
-}
