@@ -33,8 +33,8 @@
 <link rel="icon" href="/static/favicon.ico" sizes="any">
 <link rel="stylesheet" href="/static/css/custom.css" />
 
-<!-- Tailwind -->
-<script src="/static/js/tailwind.js"></script>
+<!-- Tailwind CSS -->
+<link rel="stylesheet" href="/static/css/tailwind.css" />
 
 <!-- Admin JS -->
 <script src="/static/js/admin.js"></script>
@@ -45,28 +45,6 @@
 <!-- Icons loaded via sprite.svg in base.html -->
 
 {{template "admin_head_extra" .}}
-
-<style type="text/tailwindcss">
-    @theme {
-            --color-background: hsl(var(--background));
-            --color-foreground: hsl(var(--foreground));
-            --color-card: hsl(var(--card));
-            --color-card-foreground: hsl(var(--card-foreground));
-            --color-primary: hsl(var(--primary));
-            --color-primary-foreground: hsl(var(--primary-foreground));
-            --color-secondary: hsl(var(--secondary));
-            --color-secondary-foreground: hsl(var(--secondary-foreground));
-            --color-muted: hsl(var(--muted));
-            --color-muted-foreground: hsl(var(--muted-foreground));
-            --color-accent: hsl(var(--accent));
-            --color-accent-foreground: hsl(var(--accent-foreground));
-            --color-destructive: hsl(var(--destructive));
-            --color-destructive-foreground: hsl(var(--destructive-foreground));
-            --color-border: hsl(var(--border));
-            --color-input: hsl(var(--input));
-            --color-ring: hsl(var(--ring));
-        }
-    </style>
 {{end}}
 
 {{/* Default empty head extra - can be overridden by specific pages */}}

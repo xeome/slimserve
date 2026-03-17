@@ -1,5 +1,10 @@
 # SlimServe Makefile
-.PHONY: help build build-dev build-release cov test clean fuzz-go fuzz-short fuzz-long docker-build docker-run version bench bench-cache bench-thumbnail bench-server bench-all
+.PHONY: help build build-dev build-release css cov test clean fuzz-go fuzz-short fuzz-long docker-build docker-run version bench bench-cache bench-thumbnail bench-server bench-all
+
+# CSS build configuration
+CSS_INPUT := web/static/css/tailwind-input.css
+CSS_OUTPUT := web/static/css/tailwind.css
+CSS_DEPS := $(CSS_INPUT) $(wildcard web/templates/*.html) $(wildcard web/templates/admin_*.html)
 
 # Version information
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -50,7 +55,19 @@ icons-clean:
 	@rm -f web/static/icons/sprite.svg
 	@rm -f web/templates/icons.html
 
-build: icons build-dev
+css: $(CSS_OUTPUT)
+
+$(CSS_OUTPUT): $(CSS_DEPS)
+	@which npm > /dev/null 2>&1 || (echo "Error: npm not found. Install Node.js to build CSS." && exit 1)
+	@test -f node_modules/.package-lock.json || npm install
+	@echo "Building Tailwind CSS..."
+	npm run build:css
+
+css-clean:
+	@echo "Removing generated CSS files..."
+	@rm -f $(CSS_OUTPUT)
+
+build: css icons build-dev
 
 build-dev:
 	@echo "Building SlimServe (development)..."

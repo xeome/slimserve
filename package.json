@@ -1,0 +1,13 @@
+{
+  "name": "slimserve",
+  "version": "1.0.0",
+  "description": "Lightweight self-hosted file server",
+  "devDependencies": {
+    "tailwindcss": "^4.2.1",
+    "@tailwindcss/cli": "^4.2.1"
+  },
+  "scripts": {
+    "build:css": "npx @tailwindcss/cli -i ./web/static/css/tailwind-input.css -o ./web/static/css/tailwind.css",
+    "watch:css": "npx @tailwindcss/cli -i ./web/static/css/tailwind-input.css -o ./web/static/css/tailwind.css --watch"
+  }
+}

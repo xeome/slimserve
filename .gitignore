@@ -1,6 +1,7 @@
 .kilocode
 .vscode
 slimserve
+tools/icons/icons
 *.log
 
 data/*.png
@@ -11,4 +12,15 @@ benchmark_results/*
 # Generated icon files
 web/static/icons/sprite.svg
 web/templates/icons.html
+
+# Generated CSS files
+web/static/css/tailwind.css
+
+# Node.js
+node_modules/
+package-lock.json
+
+# AGENTS.md context files (generated per-workspace)
+AGENTS.md
+**/AGENTS.md
 

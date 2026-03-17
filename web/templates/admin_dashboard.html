@@ -136,7 +136,7 @@
                         <svg x-show="activity.type === 'delete'" class="w-4 h-4 text-red-500"><use href="/static/icons/sprite.svg#trash"></use></svg>
                         <svg x-show="activity.type === 'mkdir'" class="w-4 h-4 text-purple-500"><use href="/static/icons/sprite.svg#plus"></use></svg>
                         <!-- Default icon for unknown types -->
-                        <svg x-show="!\['login', 'upload', 'config', 'delete', 'mkdir'\].includes(activity.type)" class="w-4 h-4 text-primary"><use href="/static/icons/sprite.svg#information-circle"></use></svg>
+                        <svg x-show="!['login', 'upload', 'config', 'delete', 'mkdir'].includes(activity.type)" class="w-4 h-4 text-primary"><use href="/static/icons/sprite.svg#information-circle"></use></svg>
                     </div>
                     <div class="flex-1">
                         <p class="text-sm font-medium text-foreground" x-text="activity.description"></p>
