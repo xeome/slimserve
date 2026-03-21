@@ -336,9 +336,8 @@ func (s *Server) processFileUpload(fileHeader *multipart.FileHeader, uploadDir s
 		}
 	}
 
-	// Create unique filename if file already exists
+	// Determine destination path
 	destPath := filepath.Join(uploadDir, filename)
-	destPath = s.getUniqueFilePath(destPath)
 
 	// Open uploaded file
 	src, err := fileHeader.Open()
@@ -416,32 +415,6 @@ func (s *Server) isAllowedFileType(filename string) bool {
 	}
 
 	return false
-}
-
-// getUniqueFilePath generates a unique file path if the file already exists
-func (s *Server) getUniqueFilePath(originalPath string) string {
-	if _, err := os.Stat(originalPath); os.IsNotExist(err) {
-		return originalPath
-	}
-
-	dir := filepath.Dir(originalPath)
-	filename := filepath.Base(originalPath)
-	ext := filepath.Ext(filename)
-	nameWithoutExt := strings.TrimSuffix(filename, ext)
-
-	for i := 1; i < 1000; i++ { // Limit attempts to prevent infinite loop
-		newFilename := fmt.Sprintf("%s_%d%s", nameWithoutExt, i, ext)
-		newPath := filepath.Join(dir, newFilename)
-
-		if _, err := os.Stat(newPath); os.IsNotExist(err) {
-			return newPath
-		}
-	}
-
-	// If we can't find a unique name, append timestamp
-	timestamp := time.Now().UnixNano()
-	newFilename := fmt.Sprintf("%s_%d%s", nameWithoutExt, timestamp, ext)
-	return filepath.Join(dir, newFilename)
 }
 
 // getUploadProgress returns the progress of active uploads
