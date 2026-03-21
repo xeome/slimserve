@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -286,19 +285,7 @@ func (s *S3Backend) List(ctx context.Context, prefix string) ([]S3Object, error)
 }
 
 func (s *S3Backend) IsIgnored(ctx context.Context, relPath string) (bool, error) {
-	if filepath.Base(relPath) == ".slimserveignore" {
-		return true, nil
-	}
-	for _, pattern := range s.ignorePatterns {
-		matched, err := filepath.Match(pattern, relPath)
-		if err != nil {
-			continue
-		}
-		if matched {
-			return true, nil
-		}
-	}
-	return false, nil
+	return MatchIgnore(relPath, s.ignorePatterns), nil
 }
 
 func (s *S3Backend) Close() error {

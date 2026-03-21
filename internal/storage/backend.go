@@ -125,20 +125,24 @@ func (l *LocalBackend) Open(ctx context.Context, name string) (io.ReadSeekCloser
 	return l.root.Open(name)
 }
 
-func (l *LocalBackend) IsIgnored(ctx context.Context, relPath string) (bool, error) {
+func MatchIgnore(relPath string, patterns []string) bool {
 	if filepath.Base(relPath) == ".slimserveignore" {
-		return true, nil
+		return true
 	}
-	for _, pattern := range l.ignorePatterns {
+	for _, pattern := range patterns {
 		matched, err := filepath.Match(pattern, relPath)
 		if err != nil {
 			continue
 		}
 		if matched {
-			return true, nil
+			return true
 		}
 	}
-	return false, nil
+	return false
+}
+
+func (l *LocalBackend) IsIgnored(ctx context.Context, relPath string) (bool, error) {
+	return MatchIgnore(relPath, l.ignorePatterns), nil
 }
 
 func (l *LocalBackend) Close() error {
