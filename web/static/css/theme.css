@@ -1,50 +1,50 @@
 :root {
     /* ---------- Core surfaces ---------- */
-    --background: 0 0% 0%;
+    --color-background: hsl(0 0% 0%);
     /* True black for maximum contrast */
-    --foreground: 0 0% 100%;
+    --color-foreground: hsl(0 0% 100%);
     /* Pure white text */
 
-    --card: 240 6% 6%;
+    --color-card: hsl(240 6% 6%);
     /* Subtle zinc elevation */
-    --card-foreground: var(--foreground);
+    --color-card-foreground: var(--color-foreground);
 
-    --popover: 240 8% 8%;
+    --color-popover: hsl(240 8% 8%);
     /* Slightly elevated */
-    --popover-foreground: var(--foreground);
+    --color-popover-foreground: var(--color-foreground);
 
     /* ---------- Brand / Primary ----------- */
-    --primary: 240 6% 88%;
+    --color-primary: hsl(240 6% 88%);
     /* 🔘 Bright silver - professional & vibrant */
-    --primary-foreground: 240 12% 8%;
+    --color-primary-foreground: hsl(240 12% 8%);
     /* Dark text on bright silver for readability */
 
     /* ---------- Subtle interactive states -- */
-    --secondary: 240 5% 18%;
+    --color-secondary: hsl(240 5% 18%);
     /* Muted zinc for secondary actions */
-    --secondary-foreground: 240 6% 88%;
+    --color-secondary-foreground: hsl(240 6% 88%);
     /* Silver text on dark zinc */
 
-    --muted: 240 4% 12%;
+    --color-muted: hsl(240 4% 12%);
     /* Background for disabled/inactive */
-    --muted-foreground: 240 5% 64%;
+    --color-muted-foreground: hsl(240 5% 64%);
     /* Mid-tone zinc for subtle text */
 
-    --accent: 240 6% 22%;
+    --color-accent: hsl(240 6% 22%);
     /* Hover states, selected items */
-    --accent-foreground: var(--foreground);
+    --color-accent-foreground: var(--color-foreground);
 
     /* ---------- System colors ------------ */
-    --destructive: 0 84% 60%;
+    --color-destructive: hsl(0 84% 60%);
     /* Warm red for errors */
-    --destructive-foreground: 0 0% 100%;
+    --color-destructive-foreground: hsl(0 0% 100%);
 
     /* ---------- Borders & inputs --------- */
-    --border: 240 6% 20%;
+    --color-border: hsl(240 6% 20%);
     /* Subtle but visible boundaries */
-    --input: 240 5% 16%;
+    --color-input: hsl(240 5% 16%);
     /* Input backgrounds slightly recessed */
-    --ring: var(--primary);
+    --color-ring: var(--color-primary);
     /* Focus ring uses primary silver */
 
     /* ---------- Radius ------------------- */
@@ -52,43 +52,43 @@
 }
 
 .light {
-    --background: 0 0% 100%;
+    --color-background: hsl(0 0% 100%);
     /* Pure white */
-    --foreground: 240 12% 8%;
+    --color-foreground: hsl(240 12% 8%);
     /* Very dark zinc */
 
-    --card: 240 6% 98%;
+    --color-card: hsl(240 6% 98%);
     /* Barely tinted white */
-    --card-foreground: var(--foreground);
+    --color-card-foreground: var(--color-foreground);
 
-    --popover: var(--background);
-    --popover-foreground: var(--foreground);
+    --color-popover: var(--color-background);
+    --color-popover-foreground: var(--color-foreground);
 
-    --primary: 240 8% 24%;
+    --color-primary: hsl(240 8% 24%);
     /* Dark zinc primary for light mode */
-    --primary-foreground: 0 0% 100%;
+    --color-primary-foreground: hsl(0 0% 100%);
     /* White text on dark primary */
 
-    --secondary: 240 5% 96%;
+    --color-secondary: hsl(240 5% 96%);
     /* Very light zinc */
-    --secondary-foreground: 240 12% 8%;
+    --color-secondary-foreground: hsl(240 12% 8%);
 
-    --muted: 240 5% 96%;
+    --color-muted: hsl(240 5% 96%);
     /* Light muted backgrounds */
-    --muted-foreground: 240 4% 46%;
+    --color-muted-foreground: hsl(240 4% 46%);
     /* Medium zinc for muted text */
 
-    --accent: 240 5% 94%;
+    --color-accent: hsl(240 5% 94%);
     /* Subtle accent backgrounds */
-    --accent-foreground: var(--foreground);
+    --color-accent-foreground: var(--color-foreground);
 
-    --destructive: 0 84% 50%;
+    --color-destructive: hsl(0 84% 50%);
     /* Slightly darker red for light mode */
-    --destructive-foreground: 0 0% 100%;
+    --color-destructive-foreground: hsl(0 0% 100%);
 
-    --border: 240 6% 88%;
+    --color-border: hsl(240 6% 88%);
     /* Light zinc borders */
-    --input: 240 6% 92%;
+    --color-input: hsl(240 6% 92%);
     /* Input field backgrounds */
-    --ring: var(--primary);
+    --color-ring: var(--color-primary);
 }

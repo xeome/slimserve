@@ -42,8 +42,8 @@ html[data-theme="dark"] .icon-moon {
     bottom: 100%;
     left: 50%;
     transform: translateX(-50%);
-    background: var(--background);
-    border: 1px solid var(--border);
+    background: var(--color-background);
+    border: 1px solid var(--color-border);
     padding: 0.25rem 0.5rem;
     font-size: 0.75rem;
     border-radius: 0.25rem;
@@ -65,16 +65,16 @@ html[data-theme="dark"] .icon-moon {
 }
 
 ::-webkit-scrollbar-track {
-    background: var(--background);
+    background: var(--color-background);
 }
 
 ::-webkit-scrollbar-thumb {
-    background: var(--muted);
+    background: var(--color-muted);
     border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: var(--muted-foreground);
+    background: var(--color-muted-foreground);
 }
 
 /* Focus styles for accessibility */

@@ -128,7 +128,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     const shortcuts = document.createElement('div');
-    shortcuts.style.cssText = 'position:fixed;bottom:20px;right:20px;background:var(--background);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:12px;color:var(--muted-foreground);z-index:40;display:none;';
+    shortcuts.style.cssText = 'position:fixed;bottom:20px;right:20px;background:var(--color-background);border:1px solid var(--color-border);border-radius:8px;padding:12px;font-size:12px;color:var(--color-muted-foreground);z-index:40;display:none;';
     shortcuts.innerHTML = `
         <div style="margin-bottom:8px;font-weight:500;">Keyboard Shortcuts:</div>
         <div>G - Grid view</div>
