@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"slimserve/internal/logger"
+	"slimserve/internal/storage"
 
 	"github.com/gin-gonic/gin"
 )
@@ -89,20 +91,29 @@ func (s *Server) handleFileUpload(c *gin.Context) {
 		return
 	}
 
-	// Ensure upload directory exists
-	uploadDir := s.config.AdminUploadDir
-	if err := s.ensureUploadDirectory(uploadDir); err != nil {
-		logger.Log.Error().
-			Err(err).
-			Str("dir", uploadDir).
-			Msg("Failed to create upload directory")
+	storageDir := s.config.GetStorageDir()
+	var results []gin.H
 
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create upload directory"})
-		return
+	if storageDir.IsS3() {
+		uploader, ok := s.backend.(storage.Uploader)
+		if !ok {
+			logger.Log.Error().Msg("Backend does not support uploads")
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "upload backend does not support uploads"})
+			return
+		}
+		results = s.processUploadsWithUploader(c.Request.Context(), files, uploader, c.ClientIP())
+	} else {
+		if err := s.ensureUploadDirectory(storageDir.Path); err != nil {
+			logger.Log.Error().
+				Err(err).
+				Str("dir", storageDir.Path).
+				Msg("Failed to create upload directory")
+
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create upload directory"})
+			return
+		}
+		results = s.processUploads(files, storageDir.Path, c.ClientIP())
 	}
-
-	// Process uploads
-	results := s.processUploads(files, uploadDir, c.ClientIP())
 
 	// Determine response status
 	status := http.StatusOK
@@ -137,6 +148,121 @@ func (s *Server) handleFileUpload(c *gin.Context) {
 			"failed":     errorCount,
 		},
 	})
+}
+
+// processUploadsWithUploader handles uploads to any backend that implements Uploader
+func (s *Server) processUploadsWithUploader(ctx context.Context, files []*multipart.FileHeader, uploader storage.Uploader, clientIP string) []gin.H {
+	results := make([]gin.H, 0, len(files))
+
+	for _, fileHeader := range files {
+		result := s.processFileUploadWithUploader(ctx, fileHeader, uploader)
+		results = append(results, result)
+
+		if result["status"] == "success" {
+			logger.Log.Info().
+				Str("ip", clientIP).
+				Str("filename", fileHeader.Filename).
+				Str("key", result["key"].(string)).
+				Int64("size", result["size"].(int64)).
+				Msg("File uploaded to backend successfully")
+
+			if s.adminHandler != nil {
+				s.adminHandler.activityStore.AddActivity("upload",
+					fmt.Sprintf("File uploaded: %s", fileHeader.Filename),
+					clientIP,
+					fmt.Sprintf("Size: %d bytes, Key: %s", result["size"].(int64), result["key"].(string)))
+			}
+		} else {
+			logger.Log.Warn().
+				Str("ip", clientIP).
+				Str("filename", fileHeader.Filename).
+				Str("error", result["error"].(string)).
+				Msg("Upload failed")
+		}
+	}
+
+	return results
+}
+
+// processFileUploadWithUploader processes a single file upload using the provided uploader
+func (s *Server) processFileUploadWithUploader(ctx context.Context, fileHeader *multipart.FileHeader, uploader storage.Uploader) gin.H {
+	// Apply timeout for upload operations
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	defer cancel()
+
+	// Validate file size
+	if fileHeader.Size > int64(s.config.MaxUploadSizeMB)<<20 {
+		return gin.H{
+			"filename": fileHeader.Filename,
+			"status":   "error",
+			"error":    fmt.Sprintf("file size exceeds maximum of %dMB", s.config.MaxUploadSizeMB),
+		}
+	}
+
+	// Validate file type
+	if !s.isAllowedFileType(fileHeader.Filename) {
+		return gin.H{
+			"filename": fileHeader.Filename,
+			"status":   "error",
+			"error":    "file type not allowed",
+		}
+	}
+
+	// Sanitize filename - filepath.Base is single source of truth for path safety
+	filename := filepath.Base(fileHeader.Filename)
+	if filename == "" || filename == "." {
+		return gin.H{
+			"filename": fileHeader.Filename,
+			"status":   "error",
+			"error":    "invalid filename",
+		}
+	}
+
+	// Open uploaded file
+	src, err := fileHeader.Open()
+	if err != nil {
+		logger.Log.Error().Err(err).Str("filename", filename).Msg("Failed to open uploaded file")
+		return gin.H{
+			"filename": fileHeader.Filename,
+			"status":   "error",
+			"error":    "failed to open uploaded file",
+		}
+	}
+	defer src.Close()
+
+	// Read file content
+	data, err := io.ReadAll(src)
+	if err != nil {
+		logger.Log.Error().Err(err).Str("filename", filename).Msg("Failed to read uploaded file")
+		return gin.H{
+			"filename": fileHeader.Filename,
+			"status":   "error",
+			"error":    "failed to read uploaded file",
+		}
+	}
+
+	// Upload to backend
+	key := filename
+	if err := uploader.Put(ctx, key, data); err != nil {
+		logger.Log.Error().Err(err).Str("key", key).Msg("Failed to upload to backend")
+		return gin.H{
+			"filename": fileHeader.Filename,
+			"status":   "error",
+			"error":    "failed to upload to backend",
+		}
+	}
+
+	logger.Log.Info().
+		Str("key", key).
+		Int64("size", int64(len(data))).
+		Msg("File uploaded to backend successfully")
+
+	return gin.H{
+		"filename": fileHeader.Filename,
+		"key":      key,
+		"size":     int64(len(data)),
+		"status":   "success",
+	}
 }
 
 // ensureUploadDirectory creates the upload directory if it doesn't exist
@@ -200,18 +326,9 @@ func (s *Server) processFileUpload(fileHeader *multipart.FileHeader, uploadDir s
 		}
 	}
 
-	// Additional security checks
-	if !s.isSecureFilename(fileHeader.Filename) {
-		return gin.H{
-			"filename": fileHeader.Filename,
-			"status":   "error",
-			"error":    "filename contains unsafe characters",
-		}
-	}
-
-	// Sanitize filename
-	filename := sanitizeFilename(fileHeader.Filename)
-	if filename == "" {
+	// Sanitize filename - filepath.Base is single source of truth for path safety
+	filename := filepath.Base(fileHeader.Filename)
+	if filename == "" || filename == "." {
 		return gin.H{
 			"filename": fileHeader.Filename,
 			"status":   "error",
@@ -251,8 +368,9 @@ func (s *Server) processFileUpload(fileHeader *multipart.FileHeader, uploadDir s
 	written, err := io.Copy(dst, src)
 	if err != nil {
 		logger.Log.Error().Err(err).Str("filename", filename).Msg("Failed to copy uploaded file")
-		// Clean up partial file
-		os.Remove(destPath)
+		if rmErr := os.Remove(destPath); rmErr != nil {
+			logger.Log.Warn().Err(rmErr).Str("path", destPath).Msg("Failed to remove partial file after copy error")
+		}
 		return gin.H{
 			"filename": fileHeader.Filename,
 			"status":   "error",
@@ -282,96 +400,22 @@ func (s *Server) isAllowedFileType(filename string) bool {
 		return true // No restrictions if list is empty
 	}
 
-	// Check for wildcard (allow all types)
-	for _, allowedType := range s.config.AllowedUploadTypes {
-		if strings.TrimSpace(allowedType) == "*" {
-			return true
-		}
-	}
-
 	ext := strings.ToLower(filepath.Ext(filename))
 	if ext != "" && ext[0] == '.' {
 		ext = ext[1:] // Remove the dot
 	}
 
-	// Check against allowed types
 	for _, allowedType := range s.config.AllowedUploadTypes {
-		if strings.ToLower(allowedType) == ext {
+		lowerAllowed := strings.ToLower(strings.TrimSpace(allowedType))
+		if lowerAllowed == "*" {
+			return true
+		}
+		if lowerAllowed == ext {
 			return true
 		}
 	}
 
 	return false
-}
-
-// isSecureFilename performs additional security checks on filenames
-func (s *Server) isSecureFilename(filename string) bool {
-	// Check for dangerous extensions
-	dangerousExts := []string{
-		"exe", "bat", "cmd", "com", "pif", "scr", "vbs", "js", "jar",
-		"sh", "py", "pl", "php", "asp", "aspx", "jsp", "cgi",
-	}
-
-	ext := strings.ToLower(filepath.Ext(filename))
-	if ext != "" && ext[0] == '.' {
-		ext = ext[1:]
-	}
-
-	for _, dangerous := range dangerousExts {
-		if ext == dangerous {
-			return false
-		}
-	}
-
-	// Check for suspicious patterns
-	suspicious := []string{
-		"../", "..\\", "..", "~", "$", "`", "|", "&", ";",
-		"<", ">", "?", "*", ":", "\"", "'",
-	}
-
-	for _, pattern := range suspicious {
-		if strings.Contains(filename, pattern) {
-			return false
-		}
-	}
-
-	// Check filename length
-	if len(filename) > 255 {
-		return false
-	}
-
-	// Check for null bytes
-	if strings.Contains(filename, "\x00") {
-		return false
-	}
-
-	return true
-}
-
-// sanitizeFilename removes dangerous characters from filename
-func sanitizeFilename(filename string) string {
-	// Remove path separators and other dangerous characters
-	filename = filepath.Base(filename)
-	filename = strings.ReplaceAll(filename, "..", "")
-	filename = strings.ReplaceAll(filename, "/", "")
-	filename = strings.ReplaceAll(filename, "\\", "")
-	filename = strings.ReplaceAll(filename, ":", "")
-	filename = strings.ReplaceAll(filename, "*", "")
-	filename = strings.ReplaceAll(filename, "?", "")
-	filename = strings.ReplaceAll(filename, "\"", "")
-	filename = strings.ReplaceAll(filename, "<", "")
-	filename = strings.ReplaceAll(filename, ">", "")
-	filename = strings.ReplaceAll(filename, "|", "")
-
-	// Trim whitespace
-	filename = strings.TrimSpace(filename)
-
-	// Ensure filename is not empty and not a hidden file
-	if filename == "" || strings.HasPrefix(filename, ".") {
-		return ""
-	}
-
-	return filename
 }
 
 // getUniqueFilePath generates a unique file path if the file already exists
@@ -395,7 +439,7 @@ func (s *Server) getUniqueFilePath(originalPath string) string {
 	}
 
 	// If we can't find a unique name, append timestamp
-	timestamp := time.Now().Unix()
+	timestamp := time.Now().UnixNano()
 	newFilename := fmt.Sprintf("%s_%d%s", nameWithoutExt, timestamp, ext)
 	return filepath.Join(dir, newFilename)
 }
