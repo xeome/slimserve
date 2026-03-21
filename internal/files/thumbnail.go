@@ -7,9 +7,9 @@ import (
 	"image"
 	"image/jpeg"
 	_ "image/png" // import for side effects
+	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 	"slimserve/internal/logger"
 	"syscall"
 	"time"
@@ -20,14 +20,12 @@ import (
 )
 
 var (
-	// ErrCacheSizeExceeded is deprecated and no longer returned, kept for API compatibility
-	ErrCacheSizeExceeded = errors.New("thumbnail cache size limit exceeded")
 	// ErrFileTooLarge is returned when a source image exceeds the size limit for thumbnailing.
 	ErrFileTooLarge = errors.New("file too large for thumbnail generation")
 )
 
 // Generate creates a thumbnail for the given source file path with the specified maximum dimension.
-// It is a wrapper around GenerateWithCacheLimit for backward compatibility.
+// It is kept for API compatibility - external code may still call this function.
 func Generate(srcPath string, maxDim int) (string, error) {
 	return GenerateWithCacheLimit(srcPath, maxDim, 0, 85, 10)
 }
@@ -36,31 +34,23 @@ func Generate(srcPath string, maxDim int) (string, error) {
 // It now supports forcing JPEG output, configurable JPEG quality, and a conditional scaling algorithm.
 func GenerateWithCacheLimit(srcPath string, maxDim, maxCacheMB, jpegQuality, maxFileMB int) (string, error) {
 	start := time.Now()
-	logger.Debugf("Starting thumbnail generation for %s (max dimension: %d)", srcPath, maxDim)
-	defer func() {
-		runtime.GC()
-		logger.Debugf("Forced garbage collection after thumbnail generation for %s", srcPath)
-	}()
+	logger.Log.Debug().Msgf("Starting thumbnail generation for %s (max dimension: %d)", srcPath, maxDim)
 
 	info, err := os.Stat(srcPath)
 	if err != nil {
-		logger.Errorf("Failed to stat source file %s: %v", srcPath, err)
+		logger.Log.Error().Msgf("Failed to stat source file %s: %v", srcPath, err)
 		return "", fmt.Errorf("failed to stat source file: %w", err)
 	}
 
 	maxFileSizeBytes := int64(maxFileMB) * 1024 * 1024
 	if info.Size() > maxFileSizeBytes {
-		logger.Errorf("File too large for thumbnail generation: %s (%d bytes > %d MB)", srcPath, info.Size(), maxFileMB)
+		logger.Log.Error().Msgf("File too large for thumbnail generation: %s (%d bytes > %d MB)", srcPath, info.Size(), maxFileMB)
 		return "", ErrFileTooLarge
 	}
 
 	cacheDir := os.Getenv("SLIMSERVE_CACHE_DIR")
 	if cacheDir == "" {
 		cacheDir = filepath.Join(os.TempDir(), "slimserve", "thumbcache")
-	}
-
-	if err := os.MkdirAll(cacheDir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create cache directory: %w", err)
 	}
 
 	cacheKey, err := generateCacheKey(srcPath, maxDim)
@@ -71,28 +61,35 @@ func GenerateWithCacheLimit(srcPath string, maxDim, maxCacheMB, jpegQuality, max
 	outputExt := ".jpg"
 	thumbPath := filepath.Join(cacheDir, fmt.Sprintf("%s%s", cacheKey, outputExt))
 
-	if thumbInfo, err := os.Stat(thumbPath); err == nil {
-		if thumbInfo.ModTime().After(info.ModTime()) || thumbInfo.ModTime().Equal(info.ModTime()) {
-			logger.Debugf("Using cached thumbnail for %s", srcPath)
+	var cacheManager *CacheManager
+	if maxCacheMB > 0 {
+		cacheManager, err = NewCacheManager(cacheDir, maxCacheMB)
+		if err != nil {
+			logger.Log.Warn().Msgf("Failed to create cache manager: %v, proceeding without cache", err)
+		} else if cacheManager.Contains(cacheKey) {
+			logger.Log.Debug().Msgf("Using cached thumbnail for %s", srcPath)
 			return thumbPath, nil
 		}
-	}
-
-	if maxCacheMB > 0 {
-		cacheManager := NewCacheManager(cacheDir)
-		if _, _, _, err := cacheManager.PruneIfNeeded(maxCacheMB); err != nil {
-			logger.Errorf("Failed to prune thumbnail cache: %v", err)
+	} else {
+		if err := os.MkdirAll(cacheDir, 0755); err != nil {
+			return "", fmt.Errorf("failed to create cache directory: %w", err)
 		}
 	}
 
 	scaler := draw.ApproxBiLinear
 	if err := generateThumbnail(srcPath, thumbPath, maxDim, jpegQuality, scaler); err != nil {
-		logger.Errorf("Failed to generate thumbnail for %s: %v", srcPath, err)
+		logger.Log.Error().Msgf("Failed to generate thumbnail for %s: %v", srcPath, err)
 		return "", fmt.Errorf("failed to generate thumbnail: %w", err)
 	}
 
+	if cacheManager != nil {
+		if thumbInfo, err := os.Stat(thumbPath); err == nil {
+			cacheManager.Set(cacheKey, thumbInfo.Size(), ".jpg")
+		}
+	}
+
 	duration := time.Since(start)
-	logger.Infof("Thumbnail generated successfully for %s (scaler: %T, took: %v)", srcPath, scaler, duration)
+	logger.Log.Info().Msgf("Thumbnail generated successfully for %s (scaler: %T, took: %v)", srcPath, scaler, duration)
 	return thumbPath, nil
 }
 
@@ -165,17 +162,17 @@ func generateCacheKey(imagePath string, maxDim int) (string, error) {
 	var size int64
 	var ctime int64
 
-	if stat, err := os.Stat(canonicalPath); err == nil {
-		size = stat.Size()
+	stat, err := os.Stat(canonicalPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to stat file for cache key: %w", err)
+	}
+	size = stat.Size()
 
-		if sys := stat.Sys(); sys != nil {
-			if statT, ok := sys.(*syscall.Stat_t); ok {
-				inode = statT.Ino
-				ctime = statT.Ctim.Sec
-			}
+	if sys := stat.Sys(); sys != nil {
+		if statT, ok := sys.(*syscall.Stat_t); ok {
+			inode = statT.Ino
+			ctime = statT.Ctim.Sec
 		}
-	} else {
-		size = 0
 	}
 
 	var contentHash uint64
@@ -183,11 +180,14 @@ func generateCacheKey(imagePath string, maxDim int) (string, error) {
 		defer file.Close()
 
 		buffer := make([]byte, 64*1024)
-		n, _ := file.Read(buffer)
-
-		hasher := xxhash.New()
-		hasher.Write(buffer[:n])
-		contentHash = hasher.Sum64()
+		n, err := file.Read(buffer)
+		if err != nil && err != io.EOF {
+			logger.Log.Debug().Msgf("Failed to read file for content hash: %v", err)
+		} else {
+			hasher := xxhash.New()
+			hasher.Write(buffer[:n])
+			contentHash = hasher.Sum64()
+		}
 	}
 
 	keyString := fmt.Sprintf("path:%s|inode:%d|size:%d|ctime:%d|content:%016x|dims:%d",

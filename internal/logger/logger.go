@@ -43,7 +43,8 @@ func parseLogLevel(levelStr string) (zerolog.Level, error) {
 	}
 	level, err := zerolog.ParseLevel(levelStr)
 	if err != nil {
-		return zerolog.InfoLevel, nil // Fallback to default without error
+		Log.Warn().Str("level", levelStr).Msg("Invalid log level, using info")
+		return zerolog.InfoLevel, nil
 	}
 	return level, nil
 }
@@ -72,26 +73,4 @@ func Middleware() gin.HandlerFunc {
 			Str("user_agent", userAgent).
 			Msg("HTTP request")
 	})
-}
-
-// Ergonomic helper functions for common logging patterns
-
-// Infof logs an info message with formatting
-func Infof(format string, v ...interface{}) {
-	Log.Info().Msgf(format, v...)
-}
-
-// Debugf logs a debug message with formatting
-func Debugf(format string, v ...interface{}) {
-	Log.Debug().Msgf(format, v...)
-}
-
-// Errorf logs an error message with formatting
-func Errorf(format string, v ...interface{}) {
-	Log.Error().Msgf(format, v...)
-}
-
-// Warnf logs a warning message with formatting
-func Warnf(format string, v ...interface{}) {
-	Log.Warn().Msgf(format, v...)
 }

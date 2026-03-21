@@ -200,11 +200,8 @@ func TestGenerateWithCacheLimit(t *testing.T) {
 				}
 
 				// Verify cache size is above limit
-				cacheManager := NewCacheManager(customCacheDir)
-				cacheSize, err := cacheManager.SizeMB()
-				if err != nil {
-					t.Fatalf("Failed to get cache size: %v", err)
-				}
+				cacheManager, _ := NewCacheManager(customCacheDir, test.cacheLimitMB)
+				cacheSize := cacheManager.SizeMB()
 				t.Logf("Cache size before test: %d MB, limit: %d MB", cacheSize, test.cacheLimitMB)
 				if cacheSize <= int64(test.cacheLimitMB) {
 					t.Fatalf("Cache size %d MB should be > limit %d MB for this test", cacheSize, test.cacheLimitMB)
@@ -260,15 +257,11 @@ func TestGenerateWithCacheLimit(t *testing.T) {
 
 				// For cache limit exceeded test, verify cache size is within limit after generation
 				if strings.Contains(test.name, "cache limit exceeded") {
-					cacheManager := NewCacheManager(customCacheDir)
-					finalCacheSize, err := cacheManager.SizeMB()
-					if err != nil {
-						t.Errorf("Failed to get final cache size: %v", err)
-					} else {
-						t.Logf("Final cache size: %d MB, limit: %d MB", finalCacheSize, test.cacheLimitMB)
-						if finalCacheSize > int64(test.cacheLimitMB) {
-							t.Errorf("Cache size %d MB exceeds limit %d MB after generation", finalCacheSize, test.cacheLimitMB)
-						}
+					cacheManager, _ := NewCacheManager(customCacheDir, test.cacheLimitMB)
+					finalCacheSize := cacheManager.SizeMB()
+					t.Logf("Final cache size: %d MB, limit: %d MB", finalCacheSize, test.cacheLimitMB)
+					if finalCacheSize > int64(test.cacheLimitMB) {
+						t.Errorf("Cache size %d MB exceeds limit %d MB after generation", finalCacheSize, test.cacheLimitMB)
 					}
 				}
 			}
@@ -281,11 +274,8 @@ func TestCacheSizeMB(t *testing.T) {
 	customCacheDir := filepath.Join(testDir, "cache")
 
 	// Initially empty cache should have size 0
-	cacheManager := NewCacheManager(customCacheDir)
-	size, err := cacheManager.SizeMB()
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
+	cacheManager, _ := NewCacheManager(customCacheDir, 100)
+	size := cacheManager.SizeMB()
 	if size != 0 {
 		t.Errorf("expected empty cache size 0, got %d", size)
 	}
@@ -314,10 +304,7 @@ func TestCacheSizeMB(t *testing.T) {
 	}
 
 	// Cache should now have some size
-	size, err = cacheManager.SizeMB()
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
+	size = cacheManager.SizeMB()
 	// Size should be small but non-negative (thumbnail files are typically small, may be 0 MB due to rounding)
 	if size < 0 {
 		t.Errorf("expected non-negative cache size, got %d", size)
