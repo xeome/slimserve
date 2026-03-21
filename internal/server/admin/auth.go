@@ -1,4 +1,4 @@
-package server
+package admin
 
 import (
 	"crypto/subtle"
@@ -10,11 +10,12 @@ import (
 
 	"slimserve/internal/config"
 	"slimserve/internal/logger"
+	"slimserve/internal/server/auth"
 
 	"github.com/gin-gonic/gin"
 )
 
-func AdminAuthMiddleware(cfg *config.Config, store *SessionStore) gin.HandlerFunc {
+func AdminAuthMiddleware(cfg *config.Config, store *auth.SessionStore) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if !cfg.EnableAdmin {
 			c.JSON(http.StatusNotFound, gin.H{"error": "admin interface not enabled"})

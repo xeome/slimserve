@@ -167,7 +167,12 @@
                 try {
                     const response = await fetch('/admin/api/stats');
                     if (response.ok) {
-                        this.stats = await response.json();
+                        const data = await response.json();
+                        this.stats = {
+                            totalFiles: data.total_files,
+                            uploadsToday: data.uploads_today,
+                            storageUsed: data.storage_used,
+                        };
                     }
                 } catch (error) {
                     console.error('Failed to load stats:', error);

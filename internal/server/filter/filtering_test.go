@@ -1,4 +1,4 @@
-package server
+package filter
 
 import (
 	"os"
@@ -96,7 +96,7 @@ secret.*
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ignored, err := isIgnored(tt.path, root, cfg)
+			ignored, err := IsIgnored(tt.path, root, cfg)
 			require.NoError(t, err)
 			require.Equal(t, tt.expected, ignored)
 		})

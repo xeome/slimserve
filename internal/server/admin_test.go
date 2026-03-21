@@ -15,6 +15,10 @@ import (
 	"testing"
 
 	"slimserve/internal/config"
+	"slimserve/internal/security"
+	"slimserve/internal/server/admin"
+	"slimserve/internal/server/auth"
+	"slimserve/internal/storage"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -32,12 +36,12 @@ func TestAdminAuthentication(t *testing.T) {
 
 	server := &Server{
 		config:       cfg,
-		sessionStore: NewSessionStore(),
-		adminUtils:   NewAdminUtils(),
+		sessionStore: auth.NewSessionStore(),
+		adminUtils:   admin.NewUtils(),
 	}
 
 	engine := gin.New()
-	engine.Use(AdminAuthMiddleware(cfg, server.sessionStore))
+	engine.Use(admin.AdminAuthMiddleware(cfg, server.sessionStore))
 	engine.GET("/admin/test", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": "authenticated"})
 	})
@@ -78,7 +82,7 @@ func TestAdminLogin(t *testing.T) {
 
 	server := &Server{
 		config:       cfg,
-		sessionStore: NewSessionStore(),
+		sessionStore: auth.NewSessionStore(),
 	}
 
 	t.Run("Valid credentials should create session", func(t *testing.T) {
@@ -140,9 +144,16 @@ func TestFileUploadHandler(t *testing.T) {
 		AllowedUploadTypes: []string{"txt"},
 	}
 
+	root, err := security.NewRootFS(tmpDir)
+	require.NoError(t, err)
+
+	backend := storage.NewLocalBackend(root, nil)
+
 	server := &Server{
 		config:        cfg,
-		uploadManager: NewUploadManager(3),
+		uploadManager: admin.NewUploadManager(3),
+		localRoot:     root,
+		backend:       backend,
 	}
 
 	engine := gin.New()
@@ -228,7 +239,7 @@ func TestCookieSecurity(t *testing.T) {
 	t.Run("HTTP cookies should have correct security attributes", func(t *testing.T) {
 		server := &Server{
 			config:       cfg,
-			sessionStore: NewSessionStore(),
+			sessionStore: auth.NewSessionStore(),
 		}
 
 		engine := gin.New()
@@ -266,7 +277,7 @@ func TestCookieSecurity(t *testing.T) {
 	t.Run("HTTPS cookies should have Secure flag", func(t *testing.T) {
 		server := &Server{
 			config:       cfg,
-			sessionStore: NewSessionStore(),
+			sessionStore: auth.NewSessionStore(),
 		}
 
 		engine := gin.New()
@@ -348,7 +359,7 @@ func TestAdminLoginPost(t *testing.T) {
 	t.Run("Valid admin login with form data", func(t *testing.T) {
 		server := &Server{
 			config:       cfg,
-			sessionStore: NewSessionStore(),
+			sessionStore: auth.NewSessionStore(),
 		}
 
 		engine := gin.New()
@@ -393,7 +404,7 @@ func TestAdminLoginPost(t *testing.T) {
 	t.Run("Valid admin login with JSON data", func(t *testing.T) {
 		server := &Server{
 			config:       cfg,
-			sessionStore: NewSessionStore(),
+			sessionStore: auth.NewSessionStore(),
 		}
 
 		engine := gin.New()
@@ -429,7 +440,7 @@ func TestAdminLoginPost(t *testing.T) {
 	t.Run("Invalid admin credentials with form data", func(t *testing.T) {
 		server := &Server{
 			config:       cfg,
-			sessionStore: NewSessionStore(),
+			sessionStore: auth.NewSessionStore(),
 		}
 
 		engine := gin.New()
@@ -461,7 +472,7 @@ func TestAdminLoginPost(t *testing.T) {
 	t.Run("Invalid admin credentials with JSON data", func(t *testing.T) {
 		server := &Server{
 			config:       cfg,
-			sessionStore: NewSessionStore(),
+			sessionStore: auth.NewSessionStore(),
 		}
 
 		engine := gin.New()
@@ -502,7 +513,7 @@ func TestCSRFProtectionMiddleware(t *testing.T) {
 
 	t.Run("GET requests should bypass CSRF check", func(t *testing.T) {
 		engine := gin.New()
-		engine.Use(CSRFProtectionMiddleware())
+		engine.Use(admin.CSRFProtectionMiddleware())
 		engine.GET("/admin/test", testHandler)
 
 		req := httptest.NewRequest("GET", "/admin/test", nil)
@@ -514,7 +525,7 @@ func TestCSRFProtectionMiddleware(t *testing.T) {
 
 	t.Run("Admin login should bypass CSRF check", func(t *testing.T) {
 		engine := gin.New()
-		engine.Use(CSRFProtectionMiddleware())
+		engine.Use(admin.CSRFProtectionMiddleware())
 		engine.POST("/admin/login", testHandler)
 
 		req := httptest.NewRequest("POST", "/admin/login", nil)
@@ -526,7 +537,7 @@ func TestCSRFProtectionMiddleware(t *testing.T) {
 
 	t.Run("POST request with valid CSRF token in header should pass", func(t *testing.T) {
 		engine := gin.New()
-		engine.Use(CSRFProtectionMiddleware())
+		engine.Use(admin.CSRFProtectionMiddleware())
 		engine.POST("/admin/test", testHandler)
 
 		// Generate a test CSRF token
@@ -546,7 +557,7 @@ func TestCSRFProtectionMiddleware(t *testing.T) {
 
 	t.Run("POST request with valid CSRF token in form should pass", func(t *testing.T) {
 		engine := gin.New()
-		engine.Use(CSRFProtectionMiddleware())
+		engine.Use(admin.CSRFProtectionMiddleware())
 		engine.POST("/admin/test", testHandler)
 
 		csrfToken := "test-csrf-token-456"
@@ -568,7 +579,7 @@ func TestCSRFProtectionMiddleware(t *testing.T) {
 
 	t.Run("POST request with missing CSRF token should fail", func(t *testing.T) {
 		engine := gin.New()
-		engine.Use(CSRFProtectionMiddleware())
+		engine.Use(admin.CSRFProtectionMiddleware())
 		engine.POST("/admin/test", testHandler)
 
 		req := httptest.NewRequest("POST", "/admin/test", nil)
@@ -585,7 +596,7 @@ func TestCSRFProtectionMiddleware(t *testing.T) {
 
 	t.Run("POST request with mismatched CSRF token should fail", func(t *testing.T) {
 		engine := gin.New()
-		engine.Use(CSRFProtectionMiddleware())
+		engine.Use(admin.CSRFProtectionMiddleware())
 		engine.POST("/admin/test", testHandler)
 
 		req := httptest.NewRequest("POST", "/admin/test", nil)
@@ -607,7 +618,7 @@ func TestCSRFProtectionMiddleware(t *testing.T) {
 
 	t.Run("POST request with missing CSRF cookie should fail", func(t *testing.T) {
 		engine := gin.New()
-		engine.Use(CSRFProtectionMiddleware())
+		engine.Use(admin.CSRFProtectionMiddleware())
 		engine.POST("/admin/test", testHandler)
 
 		req := httptest.NewRequest("POST", "/admin/test", nil)
@@ -620,7 +631,7 @@ func TestCSRFProtectionMiddleware(t *testing.T) {
 
 	t.Run("PUT request should also be protected by CSRF", func(t *testing.T) {
 		engine := gin.New()
-		engine.Use(CSRFProtectionMiddleware())
+		engine.Use(admin.CSRFProtectionMiddleware())
 		engine.PUT("/admin/test", testHandler)
 
 		csrfToken := "test-csrf-token-put"
@@ -639,7 +650,7 @@ func TestCSRFProtectionMiddleware(t *testing.T) {
 
 	t.Run("DELETE request should also be protected by CSRF", func(t *testing.T) {
 		engine := gin.New()
-		engine.Use(CSRFProtectionMiddleware())
+		engine.Use(admin.CSRFProtectionMiddleware())
 		engine.DELETE("/admin/test", testHandler)
 
 		csrfToken := "test-csrf-token-delete"
@@ -760,10 +771,10 @@ func TestAdminAuthMiddleware(t *testing.T) {
 		cfg := &config.Config{
 			EnableAdmin: false,
 		}
-		store := NewSessionStore()
+		store := auth.NewSessionStore()
 
 		engine := gin.New()
-		engine.Use(AdminAuthMiddleware(cfg, store))
+		engine.Use(admin.AdminAuthMiddleware(cfg, store))
 		engine.GET("/admin/test", testHandler)
 
 		req := httptest.NewRequest("GET", "/admin/test", nil)
@@ -782,10 +793,10 @@ func TestAdminAuthMiddleware(t *testing.T) {
 		cfg := &config.Config{
 			EnableAdmin: true,
 		}
-		store := NewSessionStore()
+		store := auth.NewSessionStore()
 
 		engine := gin.New()
-		engine.Use(AdminAuthMiddleware(cfg, store))
+		engine.Use(admin.AdminAuthMiddleware(cfg, store))
 		engine.GET("/admin/login", testHandler)
 
 		req := httptest.NewRequest("GET", "/admin/login", nil)
@@ -799,10 +810,10 @@ func TestAdminAuthMiddleware(t *testing.T) {
 		cfg := &config.Config{
 			EnableAdmin: true,
 		}
-		store := NewSessionStore()
+		store := auth.NewSessionStore()
 
 		engine := gin.New()
-		engine.Use(AdminAuthMiddleware(cfg, store))
+		engine.Use(admin.AdminAuthMiddleware(cfg, store))
 		engine.GET("/admin/static/css/style.css", testHandler)
 
 		req := httptest.NewRequest("GET", "/admin/static/css/style.css", nil)
@@ -816,14 +827,14 @@ func TestAdminAuthMiddleware(t *testing.T) {
 		cfg := &config.Config{
 			EnableAdmin: true,
 		}
-		store := NewSessionStore()
+		store := auth.NewSessionStore()
 
 		// Create valid admin session
 		token := store.NewToken()
 		store.AddAdmin(token)
 
 		engine := gin.New()
-		engine.Use(AdminAuthMiddleware(cfg, store))
+		engine.Use(admin.AdminAuthMiddleware(cfg, store))
 		engine.GET("/admin/dashboard", testHandler)
 
 		req := httptest.NewRequest("GET", "/admin/dashboard", nil)
@@ -841,10 +852,10 @@ func TestAdminAuthMiddleware(t *testing.T) {
 		cfg := &config.Config{
 			EnableAdmin: true,
 		}
-		store := NewSessionStore()
+		store := auth.NewSessionStore()
 
 		engine := gin.New()
-		engine.Use(AdminAuthMiddleware(cfg, store))
+		engine.Use(admin.AdminAuthMiddleware(cfg, store))
 		engine.GET("/admin/dashboard", testHandler)
 
 		req := httptest.NewRequest("GET", "/admin/dashboard", nil)
@@ -867,10 +878,10 @@ func TestAdminAuthMiddleware(t *testing.T) {
 		cfg := &config.Config{
 			EnableAdmin: true,
 		}
-		store := NewSessionStore()
+		store := auth.NewSessionStore()
 
 		engine := gin.New()
-		engine.Use(AdminAuthMiddleware(cfg, store))
+		engine.Use(admin.AdminAuthMiddleware(cfg, store))
 		engine.GET("/admin/dashboard", testHandler)
 
 		req := httptest.NewRequest("GET", "/admin/dashboard", nil)
@@ -888,10 +899,10 @@ func TestAdminAuthMiddleware(t *testing.T) {
 		cfg := &config.Config{
 			EnableAdmin: true,
 		}
-		store := NewSessionStore()
+		store := auth.NewSessionStore()
 
 		engine := gin.New()
-		engine.Use(AdminAuthMiddleware(cfg, store))
+		engine.Use(admin.AdminAuthMiddleware(cfg, store))
 		engine.GET("/admin/api/data", testHandler)
 
 		req := httptest.NewRequest("GET", "/admin/api/data", nil)
@@ -915,10 +926,10 @@ func TestAdminAuthMiddleware(t *testing.T) {
 		cfg := &config.Config{
 			EnableAdmin: true,
 		}
-		store := NewSessionStore()
+		store := auth.NewSessionStore()
 
 		engine := gin.New()
-		engine.Use(AdminAuthMiddleware(cfg, store))
+		engine.Use(admin.AdminAuthMiddleware(cfg, store))
 		engine.POST("/admin/api/upload", testHandler)
 
 		req := httptest.NewRequest("POST", "/admin/api/upload", nil)
@@ -938,10 +949,10 @@ func TestAdminAuthMiddleware(t *testing.T) {
 		cfg := &config.Config{
 			EnableAdmin: true,
 		}
-		store := NewSessionStore()
+		store := auth.NewSessionStore()
 
 		engine := gin.New()
-		engine.Use(AdminAuthMiddleware(cfg, store))
+		engine.Use(admin.AdminAuthMiddleware(cfg, store))
 		engine.GET("/admin/dashboard", testHandler)
 
 		req := httptest.NewRequest("GET", "/admin/dashboard", nil)
@@ -971,7 +982,7 @@ func TestAdminLogout(t *testing.T) {
 	t.Run("Admin logout should clear session and cookies", func(t *testing.T) {
 		server := &Server{
 			config:       cfg,
-			sessionStore: NewSessionStore(),
+			sessionStore: auth.NewSessionStore(),
 		}
 
 		// Create valid admin session
@@ -1024,7 +1035,7 @@ func TestAdminLogout(t *testing.T) {
 	t.Run("Admin logout without session should still redirect", func(t *testing.T) {
 		server := &Server{
 			config:       cfg,
-			sessionStore: NewSessionStore(),
+			sessionStore: auth.NewSessionStore(),
 		}
 
 		engine := gin.New()
@@ -1045,7 +1056,7 @@ func TestAdminLogout(t *testing.T) {
 	t.Run("Admin logout with invalid session should clear cookies", func(t *testing.T) {
 		server := &Server{
 			config:       cfg,
-			sessionStore: NewSessionStore(),
+			sessionStore: auth.NewSessionStore(),
 		}
 
 		engine := gin.New()
@@ -1079,7 +1090,7 @@ func TestAdminLogout(t *testing.T) {
 	t.Run("Admin logout should work with HTTPS", func(t *testing.T) {
 		server := &Server{
 			config:       cfg,
-			sessionStore: NewSessionStore(),
+			sessionStore: auth.NewSessionStore(),
 		}
 
 		// Create valid admin session

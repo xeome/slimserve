@@ -1,4 +1,4 @@
-package server
+package auth
 
 import (
 	"net/http"
@@ -11,12 +11,12 @@ import (
 )
 
 const (
-	sessionCookieName = "slimserve_session"
-	loginPath         = "/login"
-	staticPrefix      = "/static/"
-	adminPrefix       = "/admin"
-	faviconPath       = "/favicon.ico"
-	loginQueryPrefix  = "/login?next="
+	SessionCookieName = "slimserve_session"
+	LoginPath         = "/login"
+	StaticPrefix      = "/static/"
+	AdminPrefix       = "/admin"
+	FaviconPath       = "/favicon.ico"
+	LoginQueryPrefix  = "/login?next="
 )
 
 var unauthorizedResponse = gin.H{"error": "unauthenticated"}
@@ -30,22 +30,22 @@ func SessionAuthMiddleware(cfg *config.Config, store *SessionStore) gin.HandlerF
 
 		path := c.Request.URL.Path
 
-		if path == loginPath {
+		if path == LoginPath {
 			c.Next()
 			return
 		}
 
-		if strings.HasPrefix(path, staticPrefix) || path == faviconPath {
+		if strings.HasPrefix(path, StaticPrefix) || path == FaviconPath {
 			c.Next()
 			return
 		}
 
-		if strings.HasPrefix(path, adminPrefix) {
+		if strings.HasPrefix(path, AdminPrefix) {
 			c.Next()
 			return
 		}
 
-		cookie, err := c.Cookie(sessionCookieName)
+		cookie, err := c.Cookie(SessionCookieName)
 		if err == nil && store.Valid(cookie) {
 			c.Next()
 			return
@@ -57,7 +57,7 @@ func SessionAuthMiddleware(cfg *config.Config, store *SessionStore) gin.HandlerF
 
 		if isBrowser {
 			nextURL := url.QueryEscape(c.Request.URL.RequestURI())
-			c.Redirect(http.StatusFound, loginQueryPrefix+nextURL)
+			c.Redirect(http.StatusFound, LoginQueryPrefix+nextURL)
 			c.Abort()
 		} else {
 			c.JSON(http.StatusUnauthorized, unauthorizedResponse)

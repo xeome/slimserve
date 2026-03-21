@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"slimserve/internal/config"
+	"slimserve/internal/server/auth"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -47,10 +48,10 @@ func TestSessionAuthMiddleware(t *testing.T) {
 			Username:   "admin",
 			Password:   "secret",
 		}
-		store := NewSessionStore()
+		store := auth.NewSessionStore()
 
 		engine := gin.New()
-		engine.Use(SessionAuthMiddleware(cfg, store))
+		engine.Use(auth.SessionAuthMiddleware(cfg, store))
 		engine.GET("/test", testHandler)
 
 		req := httptest.NewRequest("GET", "/test", nil)
@@ -67,10 +68,10 @@ func TestSessionAuthMiddleware(t *testing.T) {
 			Username:   "admin",
 			Password:   "secret",
 		}
-		store := NewSessionStore()
+		store := auth.NewSessionStore()
 
 		engine := gin.New()
-		engine.Use(SessionAuthMiddleware(cfg, store))
+		engine.Use(auth.SessionAuthMiddleware(cfg, store))
 		engine.GET("/test", testHandler)
 
 		req := httptest.NewRequest("GET", "/test", nil)
@@ -90,10 +91,10 @@ func TestSessionAuthMiddleware(t *testing.T) {
 			Username:   "admin",
 			Password:   "secret",
 		}
-		store := NewSessionStore()
+		store := auth.NewSessionStore()
 
 		engine := gin.New()
-		engine.Use(SessionAuthMiddleware(cfg, store))
+		engine.Use(auth.SessionAuthMiddleware(cfg, store))
 		engine.GET("/api/test", testHandler)
 
 		req := httptest.NewRequest("GET", "/api/test", nil)
@@ -116,14 +117,14 @@ func TestSessionAuthMiddleware(t *testing.T) {
 			Username:   "admin",
 			Password:   "secret",
 		}
-		store := NewSessionStore()
+		store := auth.NewSessionStore()
 
 		// Create a valid session token
 		token := store.NewToken()
 		store.Add(token)
 
 		engine := gin.New()
-		engine.Use(SessionAuthMiddleware(cfg, store))
+		engine.Use(auth.SessionAuthMiddleware(cfg, store))
 		engine.GET("/test", testHandler)
 
 		req := httptest.NewRequest("GET", "/test", nil)
@@ -141,10 +142,10 @@ func TestSessionAuthMiddleware(t *testing.T) {
 			Username:   "admin",
 			Password:   "secret",
 		}
-		store := NewSessionStore()
+		store := auth.NewSessionStore()
 
 		engine := gin.New()
-		engine.Use(SessionAuthMiddleware(cfg, store))
+		engine.Use(auth.SessionAuthMiddleware(cfg, store))
 		engine.GET("/test", testHandler)
 
 		req := httptest.NewRequest("GET", "/test", nil)
@@ -166,15 +167,15 @@ func TestSessionAuthMiddleware(t *testing.T) {
 		}
 
 		// Create first session store and token
-		store1 := NewSessionStore()
+		store1 := auth.NewSessionStore()
 		token := store1.NewToken()
 		store1.Add(token)
 
 		// Simulate server restart by creating new session store
-		store2 := NewSessionStore()
+		store2 := auth.NewSessionStore()
 
 		engine := gin.New()
-		engine.Use(SessionAuthMiddleware(cfg, store2))
+		engine.Use(auth.SessionAuthMiddleware(cfg, store2))
 		engine.GET("/test", testHandler)
 
 		req := httptest.NewRequest("GET", "/test", nil)

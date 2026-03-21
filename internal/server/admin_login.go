@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"slimserve/internal/logger"
+	"slimserve/internal/server/auth"
 
 	"github.com/gin-gonic/gin"
 )
@@ -178,7 +179,7 @@ func (s *Server) validateAdminCredentials(username, password string) bool {
 	}
 
 	if s.config.AdminPasswordHash != "" {
-		return VerifyPassword(s.config.AdminPasswordHash, password)
+		return auth.VerifyPassword(s.config.AdminPasswordHash, password)
 	}
 
 	if s.config.AdminPassword == "" {

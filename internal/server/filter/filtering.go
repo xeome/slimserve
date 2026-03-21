@@ -1,4 +1,4 @@
-package server
+package filter
 
 import (
 	"fmt"
@@ -24,7 +24,7 @@ var (
 	ignoreCacheMutex = &sync.RWMutex{}
 )
 
-func isIgnored(relPath string, root *security.RootFS, cfg *config.Config) (bool, error) {
+func IsIgnored(relPath string, root *security.RootFS, cfg *config.Config) (bool, error) {
 	if filepath.Base(relPath) == ignoreFileName {
 		return true, nil
 	}

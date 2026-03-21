@@ -145,6 +145,20 @@ func (l *LocalBackend) Close() error {
 	return l.root.Close()
 }
 
+func (l *LocalBackend) Put(ctx context.Context, key string, data []byte) error {
+	f, err := l.root.Create(key)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = f.Write(data)
+	return err
+}
+
+func (l *LocalBackend) Delete(ctx context.Context, key string) error {
+	return l.root.Remove(key)
+}
+
 type bytesReadSeekCloser struct {
 	*io.SectionReader
 	data []byte

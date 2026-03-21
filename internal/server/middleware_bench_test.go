@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"slimserve/internal/config"
+	"slimserve/internal/server/auth"
+	handlerpkg "slimserve/internal/server/handler"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -74,7 +76,7 @@ func BenchmarkAccessControlMiddleware(b *testing.B) {
 // BenchmarkSessionAuthMiddleware benchmarks the session authentication middleware
 func BenchmarkSessionAuthMiddleware(b *testing.B) {
 	server := setupBenchmarkServer(b)
-	middleware := SessionAuthMiddleware(server.config, server.sessionStore)
+	middleware := auth.SessionAuthMiddleware(server.config, server.sessionStore)
 
 	// Test scenarios: with and without valid session
 	scenarios := []struct {
@@ -117,8 +119,8 @@ func BenchmarkSessionAuthMiddleware(b *testing.B) {
 // BenchmarkCreateUnifiedHandler benchmarks the unified request handler
 func BenchmarkCreateUnifiedHandler(b *testing.B) {
 	server := setupBenchmarkServer(b)
-	handler := NewHandler(server.config, server.backend, server.localRoot)
-	unifiedHandler := server.createUnifiedHandler(handler)
+	h := handlerpkg.NewHandler(server.config, server.backend, server.localRoot)
+	unifiedHandler := server.createUnifiedHandler(h)
 
 	testRequests := []struct {
 		method string
@@ -151,8 +153,8 @@ func BenchmarkCreateUnifiedHandler(b *testing.B) {
 // BenchmarkConcurrentRequests benchmarks handling multiple concurrent requests
 func BenchmarkConcurrentRequests(b *testing.B) {
 	server := setupBenchmarkServer(b)
-	handler := NewHandler(server.config, server.backend, server.localRoot)
-	unifiedHandler := server.createUnifiedHandler(handler)
+	h := handlerpkg.NewHandler(server.config, server.backend, server.localRoot)
+	unifiedHandler := server.createUnifiedHandler(h)
 
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
@@ -175,7 +177,7 @@ func BenchmarkMiddlewareChain(b *testing.B) {
 
 	middlewares := []gin.HandlerFunc{
 		server.accessControlMiddleware(),
-		SessionAuthMiddleware(server.config, server.sessionStore),
+		auth.SessionAuthMiddleware(server.config, server.sessionStore),
 	}
 
 	b.ResetTimer()

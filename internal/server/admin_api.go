@@ -7,93 +7,25 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
 	"time"
 
 	"slimserve/internal/logger"
+	"slimserve/internal/server/admin"
+	"slimserve/internal/server/auth"
 	"slimserve/internal/version"
 
 	"github.com/gin-gonic/gin"
 )
 
-const (
-	ActivityLogin  = "login"
-	ActivityUpload = "upload"
-	ActivityConfig = "config"
-	ActivityDelete = "delete"
-	ActivityMkdir  = "mkdir"
-)
-
-type ActivityEntry struct {
-	ID          int       `json:"id"`
-	Type        string    `json:"type"` // "login", "upload", "config", "delete", "mkdir"
-	Description string    `json:"description"`
-	Timestamp   time.Time `json:"timestamp"`
-	IP          string    `json:"ip"`
-	Details     string    `json:"details,omitempty"`
-}
-
-type ActivityStore struct {
-	mu         sync.RWMutex
-	activities []ActivityEntry
-	nextID     int
-	maxEntries int
-}
-
-func NewActivityStore(maxEntries int) *ActivityStore {
-	return &ActivityStore{
-		activities: make([]ActivityEntry, 0, maxEntries),
-		nextID:     1,
-		maxEntries: maxEntries,
-	}
-}
-
-func (as *ActivityStore) AddActivity(activityType, description, ip, details string) {
-	as.mu.Lock()
-	defer as.mu.Unlock()
-
-	entry := ActivityEntry{
-		ID:          as.nextID,
-		Type:        activityType,
-		Description: description,
-		Timestamp:   time.Now(),
-		IP:          ip,
-		Details:     details,
-	}
-
-	as.activities = append(as.activities, entry)
-	as.nextID++
-
-	if len(as.activities) > as.maxEntries {
-		as.activities = as.activities[len(as.activities)-as.maxEntries:]
-	}
-}
-
-func (as *ActivityStore) GetRecentActivities(limit int) []ActivityEntry {
-	as.mu.RLock()
-	defer as.mu.RUnlock()
-
-	if limit <= 0 || limit > len(as.activities) {
-		limit = len(as.activities)
-	}
-
-	result := make([]ActivityEntry, limit)
-	for i := 0; i < limit; i++ {
-		result[i] = as.activities[len(as.activities)-1-i]
-	}
-
-	return result
-}
-
 type AdminHandler struct {
 	server        *Server
-	activityStore *ActivityStore
+	activityStore *admin.ActivityStore
 }
 
 func NewAdminHandler(server *Server) *AdminHandler {
 	return &AdminHandler{
 		server:        server,
-		activityStore: NewActivityStore(100), // Keep last 100 activities
+		activityStore: admin.NewActivityStore(100),
 	}
 }
 
@@ -123,9 +55,9 @@ func (ah *AdminHandler) getSystemStatus(c *gin.Context) {
 			"go_version": runtime.Version(),
 		},
 		"memory": gin.H{
-			"allocated":   ah.server.adminUtils.formatBytes(m.Alloc),
-			"total_alloc": ah.server.adminUtils.formatBytes(m.TotalAlloc),
-			"sys":         ah.server.adminUtils.formatBytes(m.Sys),
+			"allocated":   ah.server.adminUtils.FormatBytes(m.Alloc),
+			"total_alloc": ah.server.adminUtils.FormatBytes(m.TotalAlloc),
+			"sys":         ah.server.adminUtils.FormatBytes(m.Sys),
 			"num_gc":      m.NumGC,
 		},
 		"storage": gin.H{
@@ -202,7 +134,7 @@ func (ah *AdminHandler) updateConfiguration(c *gin.Context) {
 		Interface("updates", updates).
 		Msg("Admin configuration updated")
 
-	ah.activityStore.AddActivity("config", "Configuration updated", c.ClientIP(), fmt.Sprintf("Updated: %v", updates))
+	ah.activityStore.AddActivity(admin.ActivityConfig, "Configuration updated", c.ClientIP(), fmt.Sprintf("Updated: %v", updates))
 
 	c.JSON(http.StatusOK, gin.H{"message": "configuration updated successfully"})
 }
@@ -240,7 +172,7 @@ func (ah *AdminHandler) updateAuthConfig(c *gin.Context) {
 	}
 
 	if val, ok := updates["password"].(string); ok && val != "" {
-		hash, err := HashPassword(val)
+		hash, err := auth.HashPassword(val)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to hash password"})
 			return
@@ -261,7 +193,7 @@ func (ah *AdminHandler) updateAuthConfig(c *gin.Context) {
 	}
 
 	if val, ok := updates["admin_password"].(string); ok && val != "" {
-		hash, err := HashPassword(val)
+		hash, err := auth.HashPassword(val)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to hash admin password"})
 			return
@@ -280,7 +212,7 @@ func (ah *AdminHandler) updateAuthConfig(c *gin.Context) {
 		Str("ip", c.ClientIP()).
 		Msg("Admin authentication configuration updated")
 
-	ah.activityStore.AddActivity("config", "Authentication settings updated", c.ClientIP(), "Auth configuration changed")
+	ah.activityStore.AddActivity(admin.ActivityConfig, "Authentication settings updated", c.ClientIP(), "Auth configuration changed")
 
 	c.JSON(http.StatusOK, gin.H{"message": "authentication updated successfully"})
 }
@@ -366,7 +298,7 @@ func (ah *AdminHandler) deleteFile(c *gin.Context) {
 		Str("path", fullPath).
 		Msg("File deleted via admin interface")
 
-	ah.activityStore.AddActivity("delete", fmt.Sprintf("Deleted: %s", req.Filename), c.ClientIP(), fullPath)
+	ah.activityStore.AddActivity(admin.ActivityDelete, fmt.Sprintf("Deleted: %s", req.Filename), c.ClientIP(), fullPath)
 
 	c.JSON(http.StatusOK, gin.H{"message": "file deleted successfully"})
 }
@@ -406,7 +338,7 @@ func (ah *AdminHandler) createDirectory(c *gin.Context) {
 		Str("path", fullPath).
 		Msg("Directory created via admin interface")
 
-	ah.activityStore.AddActivity("mkdir", fmt.Sprintf("Created directory: %s", req.Name), c.ClientIP(), fullPath)
+	ah.activityStore.AddActivity(admin.ActivityMkdir, fmt.Sprintf("Created directory: %s", req.Name), c.ClientIP(), fullPath)
 
 	c.JSON(http.StatusOK, gin.H{"message": "directory created successfully"})
 }
@@ -447,19 +379,7 @@ func (ah *AdminHandler) countTotalFiles() int {
 }
 
 func (ah *AdminHandler) countUploadsToday() int {
-	today := time.Now().Truncate(24 * time.Hour)
-	count := 0
-
-	ah.activityStore.mu.RLock()
-	defer ah.activityStore.mu.RUnlock()
-
-	for _, activity := range ah.activityStore.activities {
-		if activity.Type == "upload" && activity.Timestamp.After(today) {
-			count++
-		}
-	}
-
-	return count
+	return ah.activityStore.CountUploadsToday()
 }
 
 func (ah *AdminHandler) getStorageUsed() string {
@@ -474,7 +394,7 @@ func (ah *AdminHandler) getStorageUsed() string {
 		}
 		return nil
 	})
-	return ah.server.adminUtils.formatBytes(uint64(totalSize))
+	return ah.server.adminUtils.FormatBytes(uint64(totalSize))
 }
 
 func (ah *AdminHandler) getServerUptime() string {
@@ -484,7 +404,7 @@ func (ah *AdminHandler) getServerUptime() string {
 func (ah *AdminHandler) getMemoryUsage() string {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
-	return ah.server.adminUtils.formatBytes(uint64(m.Alloc))
+	return ah.server.adminUtils.FormatBytes(uint64(m.Alloc))
 }
 
 func (ah *AdminHandler) isPathAllowed(path string) bool {

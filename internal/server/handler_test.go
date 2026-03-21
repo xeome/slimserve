@@ -10,6 +10,7 @@ import (
 
 	"slimserve/internal/config"
 	"slimserve/internal/security"
+	handlerpkg "slimserve/internal/server/handler"
 	"slimserve/internal/storage"
 
 	"github.com/gin-gonic/gin"
@@ -19,7 +20,7 @@ import (
 // Test helper functions
 
 // setupTestHandler creates a test handler with temporary directory and test files
-func setupTestHandler(t *testing.T) (*Handler, string, func()) {
+func setupTestHandler(t *testing.T) (*handlerpkg.Handler, string, func()) {
 	t.Helper()
 
 	// Create temporary directory with test files
@@ -57,7 +58,7 @@ func setupTestHandler(t *testing.T) (*Handler, string, func()) {
 	require.NoError(t, err)
 
 	backend := storage.NewLocalBackend(root, nil)
-	handler := NewHandler(cfg, backend, root)
+	h := handlerpkg.NewHandler(cfg, backend, root)
 	gin.SetMode(gin.TestMode)
 
 	// Return cleanup function
@@ -66,7 +67,7 @@ func setupTestHandler(t *testing.T) (*Handler, string, func()) {
 		os.RemoveAll(tmpDir)
 	}
 
-	return handler, tmpDir, cleanup
+	return h, tmpDir, cleanup
 }
 
 // createTestContext creates a Gin test context for the given path and method
@@ -242,7 +243,7 @@ func TestHandler_HeadRequest_StaticAndDirectory(t *testing.T) {
 	defer root.Close()
 
 	backend := storage.NewLocalBackend(root, nil)
-	handler := NewHandler(cfg, backend, root)
+	h := handlerpkg.NewHandler(cfg, backend, root)
 	gin.SetMode(gin.TestMode)
 
 	t.Run("HEAD static asset returns 200 and correct headers", func(t *testing.T) {
@@ -252,7 +253,7 @@ func TestHandler_HeadRequest_StaticAndDirectory(t *testing.T) {
 		c.Params = gin.Params{
 			{Key: "path", Value: "/static/css/theme.css"},
 		}
-		handler.ServeFiles(c)
+		h.ServeFiles(c)
 
 		if w.Code != http.StatusOK {
 			t.Errorf("Expected 200, got %d", w.Code)
@@ -285,7 +286,7 @@ func TestHandler_HeadRequest_StaticAndDirectory(t *testing.T) {
 		defer root.Close()
 
 		backend := storage.NewLocalBackend(root, nil)
-		handler := NewHandler(cfg, backend, root)
+		testHandler := handlerpkg.NewHandler(cfg, backend, root)
 
 		subDir := filepath.Join(tmpDir, "subdir-abc")
 		err = os.Mkdir(subDir, 0755)
@@ -303,7 +304,7 @@ func TestHandler_HeadRequest_StaticAndDirectory(t *testing.T) {
 		c.Params = gin.Params{
 			{Key: "path", Value: "/subdir-abc"},
 		}
-		handler.ServeFiles(c)
+		testHandler.ServeFiles(c)
 
 		if w.Code != http.StatusOK {
 			t.Errorf("Expected 200 for HEAD dir, got %d", w.Code)

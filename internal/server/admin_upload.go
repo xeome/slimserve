@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"slimserve/internal/logger"
@@ -18,33 +17,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// UploadManager manages concurrent uploads and tracks progress
-type UploadManager struct {
-	mu            sync.RWMutex
-	activeUploads map[string]*UploadProgress
-	maxConcurrent int
-}
-
-// UploadProgress tracks the progress of an individual upload
-type UploadProgress struct {
-	ID        string    `json:"id"`
-	Filename  string    `json:"filename"`
-	TotalSize int64     `json:"total_size"`
-	Uploaded  int64     `json:"uploaded"`
-	Status    string    `json:"status"` // "uploading", "completed", "failed"
-	StartTime time.Time `json:"start_time"`
-	Error     string    `json:"error,omitempty"`
-}
-
-// NewUploadManager creates a new upload manager
-func NewUploadManager(maxConcurrent int) *UploadManager {
-	return &UploadManager{
-		activeUploads: make(map[string]*UploadProgress),
-		maxConcurrent: maxConcurrent,
-	}
-}
-
-// handleFileUpload handles multiple file uploads with validation and progress tracking
 func (s *Server) handleFileUpload(c *gin.Context) {
 	// Log upload attempt
 	logger.Log.Info().
@@ -53,22 +25,21 @@ func (s *Server) handleFileUpload(c *gin.Context) {
 		Msg("File upload attempt")
 
 	// Check concurrent upload limit
-	if len(s.uploadManager.activeUploads) >= s.uploadManager.maxConcurrent {
+	if s.uploadManager.ActiveUploadsCount() >= s.uploadManager.GetMaxConcurrent() {
 		logger.Log.Warn().
 			Str("ip", c.ClientIP()).
-			Int("active_uploads", len(s.uploadManager.activeUploads)).
-			Int("max_concurrent", s.uploadManager.maxConcurrent).
+			Int("active_uploads", s.uploadManager.ActiveUploadsCount()).
+			Int("max_concurrent", s.uploadManager.GetMaxConcurrent()).
 			Msg("Upload rejected: concurrent limit reached")
 
 		c.JSON(http.StatusTooManyRequests, gin.H{
 			"error":          "maximum concurrent uploads reached",
-			"max_concurrent": s.uploadManager.maxConcurrent,
+			"max_concurrent": s.uploadManager.GetMaxConcurrent(),
 		})
 		return
 	}
 
-	// Parse multipart form with size limit
-	maxFormSize := int64(s.config.MaxUploadSizeMB) << 20 // Convert MB to bytes
+	maxFormSize := int64(s.config.MaxUploadSizeMB) * 1024 * 1024
 	if err := c.Request.ParseMultipartForm(maxFormSize); err != nil {
 		logger.Log.Error().
 			Err(err).
@@ -150,7 +121,6 @@ func (s *Server) handleFileUpload(c *gin.Context) {
 	})
 }
 
-// processUploadsWithUploader handles uploads to any backend that implements Uploader
 func (s *Server) processUploadsWithUploader(ctx context.Context, files []*multipart.FileHeader, uploader storage.Uploader, clientIP string) []gin.H {
 	results := make([]gin.H, 0, len(files))
 
@@ -184,14 +154,12 @@ func (s *Server) processUploadsWithUploader(ctx context.Context, files []*multip
 	return results
 }
 
-// processFileUploadWithUploader processes a single file upload using the provided uploader
 func (s *Server) processFileUploadWithUploader(ctx context.Context, fileHeader *multipart.FileHeader, uploader storage.Uploader) gin.H {
 	// Apply timeout for upload operations
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
 
-	// Validate file size
-	if fileHeader.Size > int64(s.config.MaxUploadSizeMB)<<20 {
+	if fileHeader.Size > int64(s.config.MaxUploadSizeMB)*1024*1024 {
 		return gin.H{
 			"filename": fileHeader.Filename,
 			"status":   "error",
@@ -199,45 +167,41 @@ func (s *Server) processFileUploadWithUploader(ctx context.Context, fileHeader *
 		}
 	}
 
-	// Validate file type
 	if !s.isAllowedFileType(fileHeader.Filename) {
 		return gin.H{
 			"filename": fileHeader.Filename,
 			"status":   "error",
-			"error":    "file type not allowed",
+			"error":    fmt.Sprintf("file type not allowed: %s", fileHeader.Filename),
 		}
 	}
 
-	// Sanitize filename - filepath.Base is single source of truth for path safety
 	filename := filepath.Base(fileHeader.Filename)
 	if filename == "" || filename == "." {
 		return gin.H{
 			"filename": fileHeader.Filename,
 			"status":   "error",
-			"error":    "invalid filename",
+			"error":    fmt.Sprintf("invalid filename: %s", fileHeader.Filename),
 		}
 	}
 
-	// Open uploaded file
 	src, err := fileHeader.Open()
 	if err != nil {
 		logger.Log.Error().Err(err).Str("filename", filename).Msg("Failed to open uploaded file")
 		return gin.H{
 			"filename": fileHeader.Filename,
 			"status":   "error",
-			"error":    "failed to open uploaded file",
+			"error":    fmt.Sprintf("failed to open file %s: %v", fileHeader.Filename, err),
 		}
 	}
-	defer src.Close()
+	defer src.Close() //nolint:errcheck
 
-	// Read file content
 	data, err := io.ReadAll(src)
 	if err != nil {
 		logger.Log.Error().Err(err).Str("filename", filename).Msg("Failed to read uploaded file")
 		return gin.H{
 			"filename": fileHeader.Filename,
 			"status":   "error",
-			"error":    "failed to read uploaded file",
+			"error":    fmt.Sprintf("failed to read file %s: %v", fileHeader.Filename, err),
 		}
 	}
 
@@ -265,20 +229,32 @@ func (s *Server) processFileUploadWithUploader(ctx context.Context, fileHeader *
 	}
 }
 
-// ensureUploadDirectory creates the upload directory if it doesn't exist
 func (s *Server) ensureUploadDirectory(uploadDir string) error {
 	return os.MkdirAll(uploadDir, 0755)
 }
 
-// processUploads processes multiple file uploads
 func (s *Server) processUploads(files []*multipart.FileHeader, uploadDir, clientIP string) []gin.H {
+	uploader, ok := s.backend.(storage.Uploader)
+	if !ok {
+		logger.Log.Error().Msg("Backend does not support uploads")
+		results := make([]gin.H, 0, len(files))
+		for _, fileHeader := range files {
+			results = append(results, gin.H{
+				"filename": fileHeader.Filename,
+				"status":   "error",
+				"error":    "upload backend does not support uploads",
+			})
+		}
+		return results
+	}
+
+	ctx := context.Background()
 	results := make([]gin.H, 0, len(files))
 
 	for _, fileHeader := range files {
-		result := s.processFileUpload(fileHeader, uploadDir)
+		result := s.processFileUpload(ctx, fileHeader, uploader)
 		results = append(results, result)
 
-		// Log individual file result
 		if result["status"] == "success" {
 			logger.Log.Info().
 				Str("ip", clientIP).
@@ -287,7 +263,6 @@ func (s *Server) processUploads(files []*multipart.FileHeader, uploadDir, client
 				Int64("size", result["size"].(int64)).
 				Msg("File uploaded successfully")
 
-			// Log activity
 			if s.adminHandler != nil {
 				s.adminHandler.activityStore.AddActivity("upload",
 					fmt.Sprintf("File uploaded: %s", fileHeader.Filename),
@@ -306,10 +281,8 @@ func (s *Server) processUploads(files []*multipart.FileHeader, uploadDir, client
 	return results
 }
 
-// processFileUpload processes a single file upload
-func (s *Server) processFileUpload(fileHeader *multipart.FileHeader, uploadDir string) gin.H {
-	// Validate file size
-	if fileHeader.Size > int64(s.config.MaxUploadSizeMB)<<20 {
+func (s *Server) processFileUpload(ctx context.Context, fileHeader *multipart.FileHeader, uploader storage.Uploader) gin.H {
+	if fileHeader.Size > int64(s.config.MaxUploadSizeMB)*1024*1024 {
 		return gin.H{
 			"filename": fileHeader.Filename,
 			"status":   "error",
@@ -317,83 +290,66 @@ func (s *Server) processFileUpload(fileHeader *multipart.FileHeader, uploadDir s
 		}
 	}
 
-	// Validate file type
 	if !s.isAllowedFileType(fileHeader.Filename) {
 		return gin.H{
 			"filename": fileHeader.Filename,
 			"status":   "error",
-			"error":    "file type not allowed",
+			"error":    fmt.Sprintf("file type not allowed: %s", fileHeader.Filename),
 		}
 	}
 
-	// Sanitize filename - filepath.Base is single source of truth for path safety
 	filename := filepath.Base(fileHeader.Filename)
 	if filename == "" || filename == "." {
 		return gin.H{
 			"filename": fileHeader.Filename,
 			"status":   "error",
-			"error":    "invalid filename",
+			"error":    fmt.Sprintf("invalid filename: %s", fileHeader.Filename),
 		}
 	}
 
-	// Determine destination path
-	destPath := filepath.Join(uploadDir, filename)
-
-	// Open uploaded file
 	src, err := fileHeader.Open()
 	if err != nil {
 		logger.Log.Error().Err(err).Str("filename", filename).Msg("Failed to open uploaded file")
 		return gin.H{
 			"filename": fileHeader.Filename,
 			"status":   "error",
-			"error":    "failed to open uploaded file",
+			"error":    fmt.Sprintf("failed to open file %s: %v", fileHeader.Filename, err),
 		}
 	}
-	defer src.Close()
+	defer src.Close() //nolint:errcheck
 
-	// Create destination file
-	dst, err := os.Create(destPath)
+	data, err := io.ReadAll(src)
 	if err != nil {
-		logger.Log.Error().Err(err).Str("path", destPath).Msg("Failed to create destination file")
+		logger.Log.Error().Err(err).Str("filename", filename).Msg("Failed to read uploaded file")
 		return gin.H{
 			"filename": fileHeader.Filename,
 			"status":   "error",
-			"error":    "failed to create destination file",
+			"error":    fmt.Sprintf("failed to read file %s: %v", fileHeader.Filename, err),
 		}
 	}
-	defer dst.Close()
 
-	// Copy file with progress tracking
-	written, err := io.Copy(dst, src)
-	if err != nil {
-		logger.Log.Error().Err(err).Str("filename", filename).Msg("Failed to copy uploaded file")
-		if rmErr := os.Remove(destPath); rmErr != nil {
-			logger.Log.Warn().Err(rmErr).Str("path", destPath).Msg("Failed to remove partial file after copy error")
-		}
+	if err := uploader.Put(ctx, filename, data); err != nil {
+		logger.Log.Error().Err(err).Str("filename", filename).Msg("Failed to upload file")
 		return gin.H{
 			"filename": fileHeader.Filename,
 			"status":   "error",
-			"error":    "failed to save file",
+			"error":    fmt.Sprintf("failed to save file %s: %v", fileHeader.Filename, err),
 		}
 	}
 
-	// Log successful upload
 	logger.Log.Info().
 		Str("filename", filename).
-		Str("path", destPath).
-		Int64("size", written).
+		Int64("size", int64(len(data))).
 		Msg("File uploaded successfully")
 
 	return gin.H{
-		"filename":    fileHeader.Filename,
-		"saved_as":    filepath.Base(destPath),
-		"size":        written,
-		"status":      "success",
-		"upload_path": destPath,
+		"filename": fileHeader.Filename,
+		"saved_as": filename,
+		"size":     int64(len(data)),
+		"status":   "success",
 	}
 }
 
-// isAllowedFileType checks if the file type is allowed for upload
 func (s *Server) isAllowedFileType(filename string) bool {
 	if len(s.config.AllowedUploadTypes) == 0 {
 		return true // No restrictions if list is empty
@@ -417,18 +373,11 @@ func (s *Server) isAllowedFileType(filename string) bool {
 	return false
 }
 
-// getUploadProgress returns the progress of active uploads
 func (s *Server) getUploadProgress(c *gin.Context) {
-	s.uploadManager.mu.RLock()
-	defer s.uploadManager.mu.RUnlock()
-
-	var uploads []*UploadProgress
-	for _, upload := range s.uploadManager.activeUploads {
-		uploads = append(uploads, upload)
-	}
+	uploads := s.uploadManager.GetActiveUploads()
 
 	c.JSON(http.StatusOK, gin.H{
 		"active_uploads": uploads,
-		"max_concurrent": s.uploadManager.maxConcurrent,
+		"max_concurrent": s.uploadManager.GetMaxConcurrent(),
 	})
 }

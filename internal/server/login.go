@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"strings"
 
+	"slimserve/internal/server/auth"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -77,7 +79,7 @@ func (s *Server) validateCredentials(username, password string) bool {
 	}
 
 	if s.config.PasswordHash != "" {
-		return VerifyPassword(s.config.PasswordHash, password)
+		return auth.VerifyPassword(s.config.PasswordHash, password)
 	}
 
 	if s.config.Password == "" {

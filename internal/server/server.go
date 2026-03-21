@@ -10,6 +10,10 @@ import (
 	"slimserve/internal/config"
 	"slimserve/internal/logger"
 	"slimserve/internal/security"
+	"slimserve/internal/server/admin"
+	"slimserve/internal/server/auth"
+	"slimserve/internal/server/filter"
+	"slimserve/internal/server/handler"
 	"slimserve/internal/storage"
 	"slimserve/internal/version"
 	"slimserve/web"
@@ -23,13 +27,13 @@ type Server struct {
 	server         *http.Server
 	backend        storage.Backend
 	localRoot      *security.RootFS
-	sessionStore   *SessionStore
+	sessionStore   *auth.SessionStore
 	loginTmpl      *template.Template
 	adminLoginTmpl *template.Template
 	adminTmpl      *template.Template
-	uploadManager  *UploadManager
+	uploadManager  *admin.UploadManager
 	adminHandler   *AdminHandler
-	adminUtils     *AdminUtils
+	adminUtils     *admin.Utils
 }
 
 func New(cfg *config.Config) *Server {
@@ -84,12 +88,12 @@ func New(cfg *config.Config) *Server {
 		engine:         engine,
 		backend:        backend,
 		localRoot:      localRoot,
-		sessionStore:   NewSessionStore(),
+		sessionStore:   auth.NewSessionStore(),
 		loginTmpl:      loginTmpl,
 		adminLoginTmpl: adminLoginTmpl,
 		adminTmpl:      adminTmpl,
-		uploadManager:  NewUploadManager(cfg.MaxConcurrentUploads),
-		adminUtils:     NewAdminUtils(),
+		uploadManager:  admin.NewUploadManager(cfg.MaxConcurrentUploads),
+		adminUtils:     admin.NewUtils(),
 	}
 
 	if cfg.EnableAdmin {
@@ -101,25 +105,25 @@ func New(cfg *config.Config) *Server {
 }
 
 func (s *Server) applyAdminMiddleware(c *gin.Context) bool {
-	adminAuth := AdminAuthMiddleware(s.config, s.sessionStore)
+	adminAuth := admin.AdminAuthMiddleware(s.config, s.sessionStore)
 	adminAuth(c)
 	if c.IsAborted() {
 		return false
 	}
 
-	rateLimit := AdminRateLimitMiddleware()
+	rateLimit := admin.AdminRateLimitMiddleware()
 	rateLimit(c)
 	if c.IsAborted() {
 		return false
 	}
 
-	inputValidation := InputValidationMiddleware()
+	inputValidation := admin.InputValidationMiddleware()
 	inputValidation(c)
 	if c.IsAborted() {
 		return false
 	}
 
-	csrfProtection := CSRFProtectionMiddleware()
+	csrfProtection := admin.CSRFProtectionMiddleware()
 	csrfProtection(c)
 	if c.IsAborted() {
 		return false
@@ -187,7 +191,7 @@ func (s *Server) handleAdminRoute(c *gin.Context, path, method string) {
 	}
 }
 
-func (s *Server) createUnifiedHandler(fileHandler *Handler) gin.HandlerFunc {
+func (s *Server) createUnifiedHandler(fileHandler *handler.Handler) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		path := c.Request.URL.Path
 		method := c.Request.Method
@@ -208,7 +212,7 @@ func (s *Server) createUnifiedHandler(fileHandler *Handler) gin.HandlerFunc {
 			return
 		}
 
-		sessionAuth := SessionAuthMiddleware(s.config, s.sessionStore)
+		sessionAuth := auth.SessionAuthMiddleware(s.config, s.sessionStore)
 		sessionAuth(c)
 		if c.IsAborted() {
 			return
@@ -237,11 +241,11 @@ func (s *Server) createUnifiedHandler(fileHandler *Handler) gin.HandlerFunc {
 }
 
 func (s *Server) setupRoutes() {
-	handler := NewHandler(s.config, s.backend, s.localRoot)
+	fileHandler := handler.NewHandler(s.config, s.backend, s.localRoot)
 
 	s.engine.Use(logger.Middleware())
 
-	unifiedHandler := s.createUnifiedHandler(handler)
+	unifiedHandler := s.createUnifiedHandler(fileHandler)
 
 	s.engine.NoRoute(unifiedHandler)
 }
@@ -347,4 +351,8 @@ func (s *Server) addVersionToTemplateData(data gin.H) gin.H {
 	data["Version"] = version.GetShort()
 	data["VersionInfo"] = version.Get()
 	return data
+}
+
+func isIgnored(relPath string, root *security.RootFS, cfg *config.Config) (bool, error) {
+	return filter.IsIgnored(relPath, root, cfg)
 }

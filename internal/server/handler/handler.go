@@ -1,4 +1,4 @@
-package server
+package handler
 
 import (
 	"context"
@@ -16,6 +16,7 @@ import (
 	"slimserve/internal/files"
 	"slimserve/internal/logger"
 	"slimserve/internal/security"
+	"slimserve/internal/server/filter"
 	"slimserve/internal/storage"
 	"slimserve/internal/version"
 	"slimserve/web"
@@ -35,7 +36,7 @@ type FileItem struct {
 	URL          string `json:"url"`
 	Size         string `json:"size"`
 	ModTime      string `json:"mod_time"`
-	Type         string `json:"type"` // folder, image, document, video, audio
+	Type         string `json:"type"`
 	Icon         string `json:"icon"`
 	IsImage      bool   `json:"is_image"`
 	IsFolder     bool   `json:"is_folder"`
@@ -296,7 +297,7 @@ func (h *Handler) serveDirectoryFromBackend(c *gin.Context, backend storage.Back
 	isIgnoredFunc := func(ctx context.Context, entryRelPath string) (bool, error) {
 		fullRelPath := filepath.Join(strings.TrimPrefix(requestPath, "/"), entryRelPath)
 		if _, ok := backend.(*storage.LocalBackend); ok {
-			return isIgnored(fullRelPath, h.localRoot, h.config)
+			return filter.IsIgnored(fullRelPath, h.localRoot, h.config)
 		}
 		return backend.IsIgnored(ctx, fullRelPath)
 	}
@@ -348,7 +349,7 @@ func (h *Handler) serveDirectoryFromRoot(c *gin.Context, root *security.RootFS, 
 	}
 
 	data := buildListingData(c.Request.Context(), entries, requestPath,
-		func(ctx context.Context, path string) (bool, error) { return isIgnored(path, root, h.config) },
+		func(ctx context.Context, path string) (bool, error) { return filter.IsIgnored(path, root, h.config) },
 		determineFileType,
 		getFileIcon,
 	)
@@ -371,7 +372,6 @@ func buildFileURL(basePath, fileName string) string {
 	return basePath + "/" + fileName
 }
 
-// Pre-defined units to avoid slice allocation on each call
 var sizeUnits = []struct {
 	threshold int64
 	unit      string
@@ -395,15 +395,12 @@ func formatSize(size int64) string {
 	return fmt.Sprintf("%d B", size)
 }
 
-// FileTypeInfo holds both type and icon for a file extension
 type FileTypeInfo struct {
 	Type string
 	Icon string
 }
 
-// fileExtMap maps file extensions to their type and icon for special cases
 var fileExtMap = map[string]FileTypeInfo{
-	// Archives and special files that don't have standard MIME types
 	".zip":  {Type: "file", Icon: "archive"},
 	".tar":  {Type: "file", Icon: "archive"},
 	".gz":   {Type: "file", Icon: "archive"},
@@ -415,7 +412,6 @@ var fileExtMap = map[string]FileTypeInfo{
 	".txt":  {Type: "document", Icon: "file-text"},
 }
 
-// getFileTypeFromMime determines file type and icon based on MIME type
 func getFileTypeFromMime(mimeType string) (string, string) {
 	switch {
 	case strings.HasPrefix(mimeType, "image/"):

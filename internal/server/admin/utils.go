@@ -1,21 +1,21 @@
-package server
+package admin
 
 import (
 	"fmt"
 	"time"
 )
 
-type AdminUtils struct {
+type Utils struct {
 	startTime time.Time
 }
 
-func NewAdminUtils() *AdminUtils {
-	return &AdminUtils{
+func NewUtils() *Utils {
+	return &Utils{
 		startTime: time.Now(),
 	}
 }
 
-func (au *AdminUtils) formatBytes(bytes uint64) string {
+func (au *Utils) FormatBytes(bytes uint64) string {
 	if bytes == 0 {
 		return "0 B"
 	}
@@ -33,7 +33,7 @@ func (au *AdminUtils) formatBytes(bytes uint64) string {
 	return fmt.Sprintf("%.1f %s", size, sizes[i])
 }
 
-func (au *AdminUtils) GetUptime() string {
+func (au *Utils) GetUptime() string {
 	uptime := time.Since(au.startTime)
 
 	days := int(uptime.Hours()) / 24
