@@ -223,8 +223,7 @@
                     fileObj.status = 'uploading';
                 });
 
-                // Add CSRF token
-                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+                const csrfToken = adminUtils.getCSRFToken();
                 if (csrfToken) {
                     formData.append('csrf_token', csrfToken);
                 }
