@@ -28,7 +28,8 @@ func setupBenchmarkServer(b *testing.B) *Server {
 	}
 
 	cfg := &config.Config{
-		Directories:     []string{testDir},
+		StoragePath:     testDir,
+		StorageType:     "local",
 		DisableDotFiles: true,
 		EnableAuth:      false, // Disable auth to avoid template issues in benchmarks
 		EnableAdmin:     false, // Disable admin to avoid template issues in benchmarks
@@ -116,7 +117,7 @@ func BenchmarkSessionAuthMiddleware(b *testing.B) {
 // BenchmarkCreateUnifiedHandler benchmarks the unified request handler
 func BenchmarkCreateUnifiedHandler(b *testing.B) {
 	server := setupBenchmarkServer(b)
-	handler := NewHandler(server.config, server.roots)
+	handler := NewHandler(server.config, server.backend, server.localRoot)
 	unifiedHandler := server.createUnifiedHandler(handler)
 
 	testRequests := []struct {
@@ -150,7 +151,7 @@ func BenchmarkCreateUnifiedHandler(b *testing.B) {
 // BenchmarkConcurrentRequests benchmarks handling multiple concurrent requests
 func BenchmarkConcurrentRequests(b *testing.B) {
 	server := setupBenchmarkServer(b)
-	handler := NewHandler(server.config, server.roots)
+	handler := NewHandler(server.config, server.backend, server.localRoot)
 	unifiedHandler := server.createUnifiedHandler(handler)
 
 	b.RunParallel(func(pb *testing.PB) {

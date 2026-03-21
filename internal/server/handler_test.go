@@ -10,6 +10,7 @@ import (
 
 	"slimserve/internal/config"
 	"slimserve/internal/security"
+	"slimserve/internal/storage"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -47,25 +48,21 @@ func setupTestHandler(t *testing.T) (*Handler, string, func()) {
 	cfg := &config.Config{
 		Host:            "localhost",
 		Port:            8080,
-		Directories:     []string{tmpDir},
+		StoragePath:     tmpDir,
+		StorageType:     "local",
 		DisableDotFiles: true,
 	}
 
-	var roots []*security.RootFS
-	for _, dir := range cfg.Directories {
-		root, err := security.NewRootFS(dir)
-		require.NoError(t, err)
-		roots = append(roots, root)
-	}
+	root, err := security.NewRootFS(tmpDir)
+	require.NoError(t, err)
 
-	handler := NewHandler(cfg, roots)
+	backend := storage.NewLocalBackend(root, nil)
+	handler := NewHandler(cfg, backend, root)
 	gin.SetMode(gin.TestMode)
 
 	// Return cleanup function
 	cleanup := func() {
-		for _, root := range roots {
-			root.Close()
-		}
+		root.Close()
 		os.RemoveAll(tmpDir)
 	}
 
@@ -234,24 +231,18 @@ func TestHandler_HeadRequest_StaticAndDirectory(t *testing.T) {
 	cfg := &config.Config{
 		Host:            "localhost",
 		Port:            8080,
-		Directories:     []string{"."}, // Dir testing only - static test below uses embedded
+		StoragePath:     ".",
+		StorageType:     "local",
 		DisableDotFiles: true,
 	}
 
-	// Create RootFS instances
-	var roots []*security.RootFS
-	for _, dir := range cfg.Directories {
-		root, err := security.NewRootFS(dir)
-		require.NoError(t, err)
-		roots = append(roots, root)
-	}
-	defer func() {
-		for _, root := range roots {
-			root.Close()
-		}
-	}()
+	// Create single RootFS
+	root, err := security.NewRootFS(".")
+	require.NoError(t, err)
+	defer root.Close()
 
-	handler := NewHandler(cfg, roots)
+	backend := storage.NewLocalBackend(root, nil)
+	handler := NewHandler(cfg, backend, root)
 	gin.SetMode(gin.TestMode)
 
 	t.Run("HEAD static asset returns 200 and correct headers", func(t *testing.T) {
@@ -284,24 +275,17 @@ func TestHandler_HeadRequest_StaticAndDirectory(t *testing.T) {
 		cfg := &config.Config{
 			Host:            "localhost",
 			Port:            8081,
-			Directories:     []string{tmpDir},
+			StoragePath:     tmpDir,
+			StorageType:     "local",
 			DisableDotFiles: true,
 		}
 
-		// Create RootFS instances
-		var roots []*security.RootFS
-		for _, dir := range cfg.Directories {
-			root, err := security.NewRootFS(dir)
-			require.NoError(t, err)
-			roots = append(roots, root)
-		}
-		defer func() {
-			for _, root := range roots {
-				root.Close()
-			}
-		}()
+		root, err := security.NewRootFS(tmpDir)
+		require.NoError(t, err)
+		defer root.Close()
 
-		handler := NewHandler(cfg, roots)
+		backend := storage.NewLocalBackend(root, nil)
+		handler := NewHandler(cfg, backend, root)
 
 		subDir := filepath.Join(tmpDir, "subdir-abc")
 		err = os.Mkdir(subDir, 0755)
