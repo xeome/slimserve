@@ -62,7 +62,11 @@ func isIgnored(relPath string, root *security.RootFS, cfg *config.Config) (bool,
 		for _, p := range patterns {
 			pathToCheck := relPath
 			if currentCheckPath != "." {
-				pathToCheck, _ = filepath.Rel(currentCheckPath, relPath)
+				rel, err := filepath.Rel(currentCheckPath, relPath)
+				if err != nil {
+					continue
+				}
+				pathToCheck = rel
 			}
 
 			if p.Regex.MatchString(pathToCheck) {
@@ -87,13 +91,13 @@ func getOrReadIgnoreFile(root *security.RootFS, path string) ([]*Pattern, error)
 	}
 	currentModTime := info.ModTime()
 
-	ignoreCacheMutex.RLock()
+	ignoreCacheMutex.Lock()
 	cached, found := ignoreCache[fullPath]
-	ignoreCacheMutex.RUnlock()
-
 	if found && cached.modTime.Equal(currentModTime) {
+		ignoreCacheMutex.Unlock()
 		return cached.patterns, nil
 	}
+	ignoreCacheMutex.Unlock()
 
 	file, err := root.Open(path)
 	if err != nil {

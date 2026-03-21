@@ -215,9 +215,8 @@ func validateAdminRedirectURL(next string) string {
 func generateCSRFToken() string {
 	bytes := make([]byte, 32)
 	if _, err := rand.Read(bytes); err != nil {
-		// Fallback to a simple token if crypto/rand fails
-		logger.Log.Error().Err(err).Msg("Failed to generate CSRF token")
-		return "fallback-token"
+		logger.Log.Error().Err(err).Msg("Failed to generate CSRF token - cryptographically secure random unavailable")
+		panic("crypto/rand unavailable: cannot generate secure CSRF token")
 	}
 	return hex.EncodeToString(bytes)
 }
