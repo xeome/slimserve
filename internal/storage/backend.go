@@ -62,6 +62,7 @@ type Uploader interface {
 	Backend
 	Put(ctx context.Context, key string, data []byte) error
 	Delete(ctx context.Context, key string) error
+	Move(ctx context.Context, srcKey, destKey string) error
 }
 
 type LocalBackend struct {
@@ -161,6 +162,12 @@ func (l *LocalBackend) Put(ctx context.Context, key string, data []byte) error {
 
 func (l *LocalBackend) Delete(ctx context.Context, key string) error {
 	return l.root.Remove(key)
+}
+
+func (l *LocalBackend) Move(ctx context.Context, srcKey, destKey string) error {
+	srcPath := filepath.Join(l.path, srcKey)
+	destPath := filepath.Join(l.path, destKey)
+	return os.Rename(srcPath, destPath)
 }
 
 type bytesReadSeekCloser struct {

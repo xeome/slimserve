@@ -11,6 +11,7 @@ const (
 	ActivityConfig = "config"
 	ActivityDelete = "delete"
 	ActivityMkdir  = "mkdir"
+	ActivityMove   = "move"
 )
 
 type ActivityEntry struct {

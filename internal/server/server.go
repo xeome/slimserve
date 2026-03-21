@@ -182,6 +182,8 @@ func (s *Server) handleAdminRoute(c *gin.Context, path, method string) {
 		s.adminHandler.deleteFile(c)
 	case path == "/admin/api/files/mkdir" && method == "POST":
 		s.adminHandler.createDirectory(c)
+	case path == "/admin/api/files/move" && method == "POST":
+		s.adminHandler.moveFile(c)
 	case path == "/admin/api/upload" && method == "POST":
 		s.handleFileUpload(c)
 	case path == "/admin/api/upload/progress" && (method == "GET" || method == "HEAD"):

@@ -70,7 +70,9 @@
                                 <div class="col-span-2 text-muted-foreground"
                                     x-text="file.is_dir ? '-' : formatBytes(file.size)"></div>
                                 <div class="col-span-3 text-muted-foreground" x-text="formatDate(file.mod_time)"></div>
-                                <div class="col-span-1">
+                                <div class="col-span-1 flex items-center space-x-2">
+                                    <button @click="renameFile(file.name)"
+                                        class="text-primary hover:text-primary/80 text-xs">Rename</button>
                                     <button @click="deleteFile(file.name)" x-show="!file.is_dir"
                                         class="text-destructive hover:text-destructive/80 text-xs">Delete</button>
                                 </div>
@@ -81,6 +83,28 @@
             </div>
         </div>
     </div>
+
+    <!-- Rename Modal -->
+    <div x-show="showRenameModal" x-cloak class="modal-overlay" @keydown.escape.window="showRenameModal = false">
+        <div class="modal-content" @click.stop>
+            <h3 class="text-lg font-semibold text-foreground mb-2">Rename File</h3>
+            <p class="text-sm text-muted-foreground mb-1">Current name:</p>
+            <p class="text-sm font-mono bg-muted px-2 py-1 rounded mb-3 truncate" x-text="renameTarget"></p>
+            <label for="renameInput" class="text-sm text-muted-foreground">New name:</label>
+            <input type="text" id="renameInput" x-model="renameNewName" @keyup.enter="confirmRename()"
+                class="w-full" placeholder="Enter new name">
+            <div class="modal-actions">
+                <button @click="showRenameModal = false"
+                    class="bg-secondary text-secondary-foreground px-4 py-2 rounded text-sm font-medium hover:bg-secondary/80">
+                    Cancel
+                </button>
+                <button @click="confirmRename()"
+                    class="bg-primary text-primary-foreground px-4 py-2 rounded text-sm font-medium hover:bg-primary/90">
+                    Rename
+                </button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -88,6 +112,9 @@
         return {
             currentPath: '/',
             files: [],
+            showRenameModal: false,
+            renameTarget: '',
+            renameNewName: '',
 
             init() {
                 this.loadFiles();
@@ -175,6 +202,49 @@
                 } catch (error) {
                     console.error('Failed to create directory:', error);
                     alert('Failed to create directory');
+                }
+            },
+
+            renameFile(filename) {
+                this.renameTarget = filename;
+                this.renameNewName = filename;
+                this.showRenameModal = true;
+                setTimeout(() => document.getElementById('renameInput')?.focus(), 50);
+            },
+
+            async confirmRename() {
+                if (!this.renameNewName || this.renameNewName === this.renameTarget) {
+                    this.showRenameModal = false;
+                    return;
+                }
+
+                const csrfToken = adminUtils.getCSRFToken();
+                const sourcePath = this.currentPath === '/' ? `/${this.renameTarget}` : `${this.currentPath}/${this.renameTarget}`;
+                const destPath = this.currentPath === '/' ? `/${this.renameNewName}` : `${this.currentPath}/${this.renameNewName}`;
+
+                try {
+                    const response = await fetch('/admin/api/files/move', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-Token': csrfToken
+                        },
+                        body: JSON.stringify({
+                            source: sourcePath,
+                            destination: destPath
+                        })
+                    });
+
+                    if (response.ok) {
+                        this.showRenameModal = false;
+                        this.loadFiles(this.currentPath);
+                    } else {
+                        const data = await response.json();
+                        alert(data.error || 'Failed to rename file');
+                    }
+                } catch (error) {
+                    console.error('Failed to rename file:', error);
+                    alert('Failed to rename file');
                 }
             },
 

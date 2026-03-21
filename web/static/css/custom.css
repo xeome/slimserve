@@ -154,3 +154,50 @@ html[data-theme="dark"] .icon-moon {
         transform: rotate(360deg);
     }
 }
+
+/* Modal styles */
+[x-cloak] {
+    display: none !important;
+}
+
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+}
+
+.modal-content {
+    background-color: var(--color-card);
+    border: 1px solid var(--color-border);
+    border-radius: 0.5rem;
+    padding: 1.5rem;
+    width: 100%;
+    max-width: 24rem;
+}
+
+.modal-content input[type="text"] {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--color-border);
+    border-radius: 0.375rem;
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    margin-top: 0.5rem;
+}
+
+.modal-content input[type="text"]:focus {
+    outline: none;
+    ring: 2px;
+    ring-color: var(--color-ring);
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-top: 1rem;
+}

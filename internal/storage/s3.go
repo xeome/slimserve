@@ -291,3 +291,28 @@ func (s *S3Backend) IsIgnored(ctx context.Context, relPath string) (bool, error)
 func (s *S3Backend) Close() error {
 	return nil
 }
+
+func (s *S3Backend) Move(ctx context.Context, srcKey, destKey string) error {
+	srcFullKey := s.fullPath(srcKey)
+	destFullKey := s.fullPath(destKey)
+
+	_, err := s.client.CopyObject(ctx, &s3.CopyObjectInput{
+		Bucket:     aws.String(s.bucket),
+		CopySource: aws.String(s.bucket + "/" + srcFullKey),
+		Key:        aws.String(destFullKey),
+	})
+	if err != nil {
+		return fmt.Errorf("copy object: %w", err)
+	}
+
+	err = s.Delete(ctx, srcKey)
+	if err != nil {
+		s.client.DeleteObject(ctx, &s3.DeleteObjectInput{
+			Bucket: aws.String(s.bucket),
+			Key:    aws.String(destFullKey),
+		})
+		return fmt.Errorf("delete source after copy: %w", err)
+	}
+
+	return nil
+}

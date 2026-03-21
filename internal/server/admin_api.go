@@ -12,6 +12,7 @@ import (
 	"slimserve/internal/logger"
 	"slimserve/internal/server/admin"
 	"slimserve/internal/server/auth"
+	"slimserve/internal/storage"
 	"slimserve/internal/version"
 
 	"github.com/gin-gonic/gin"
@@ -220,46 +221,37 @@ func (ah *AdminHandler) updateAuthConfig(c *gin.Context) {
 func (ah *AdminHandler) listFiles(c *gin.Context) {
 	path := c.DefaultQuery("path", "/")
 
-	storageDir := ah.server.config.GetStorageDir()
-	if storageDir.IsS3() {
-		c.JSON(http.StatusOK, gin.H{
-			"path":  path,
-			"files": []gin.H{},
-			"error": "S3 storage does not support file listing via admin interface",
-		})
-		return
+	relPath := strings.TrimPrefix(path, "/")
+	if relPath == "" {
+		relPath = "."
 	}
 
-	targetDir := storageDir.Path
-	if path != "/" {
-		relativePath := strings.TrimPrefix(path, "/")
-		targetDir = filepath.Join(targetDir, relativePath)
-	}
-
-	entries, err := os.ReadDir(targetDir)
+	entries, err := ah.server.backend.ReadDir(c.Request.Context(), relPath)
 	if err != nil {
-		logger.Log.Error().Err(err).Str("path", targetDir).Msg("Failed to read directory")
+		logger.Log.Error().Err(err).Str("path", path).Msg("Failed to read directory")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read directory"})
 		return
 	}
 
 	var files []gin.H
 	for _, entry := range entries {
-		info, err := entry.Info()
-		if err != nil {
-			logger.Log.Debug().Err(err).Str("name", entry.Name()).Msg("Failed to get file info in admin listing")
-			continue
-		}
-
 		if ah.server.config.DisableDotFiles && strings.HasPrefix(entry.Name(), ".") {
 			continue
 		}
 
+		info, _ := entry.Info()
+		var size int64
+		var modTime time.Time
+		if info != nil {
+			size = info.Size()
+			modTime = info.ModTime()
+		}
+
 		files = append(files, gin.H{
 			"name":     entry.Name(),
-			"size":     info.Size(),
+			"size":     size,
 			"is_dir":   entry.IsDir(),
-			"mod_time": info.ModTime(),
+			"mod_time": modTime,
 		})
 	}
 
@@ -301,6 +293,57 @@ func (ah *AdminHandler) deleteFile(c *gin.Context) {
 	ah.activityStore.AddActivity(admin.ActivityDelete, fmt.Sprintf("Deleted: %s", req.Filename), c.ClientIP(), fullPath)
 
 	c.JSON(http.StatusOK, gin.H{"message": "file deleted successfully"})
+}
+
+func (ah *AdminHandler) moveFile(c *gin.Context) {
+	var req struct {
+		Source      string `json:"source" binding:"required"`
+		Destination string `json:"destination" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	if !ah.isPathAllowed(req.Source) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "source path not allowed"})
+		return
+	}
+
+	if !ah.isPathAllowed(req.Destination) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "destination path not allowed"})
+		return
+	}
+
+	uploader, ok := ah.server.backend.(storage.Uploader)
+	if !ok {
+		c.JSON(http.StatusNotImplemented, gin.H{"error": "backend does not support move operations"})
+		return
+	}
+
+	relSrc := strings.TrimPrefix(req.Source, "/")
+	relDest := strings.TrimPrefix(req.Destination, "/")
+
+	err := uploader.Move(c.Request.Context(), relSrc, relDest)
+	if err != nil {
+		logger.Log.Error().Err(err).
+			Str("source", req.Source).
+			Str("destination", req.Destination).
+			Msg("Failed to move file")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to move file"})
+		return
+	}
+
+	logger.Log.Info().
+		Str("ip", c.ClientIP()).
+		Str("source", req.Source).
+		Str("destination", req.Destination).
+		Msg("File moved via admin interface")
+
+	ah.activityStore.AddActivity(admin.ActivityMove, fmt.Sprintf("Moved: %s -> %s", req.Source, req.Destination), c.ClientIP(), "")
+
+	c.JSON(http.StatusOK, gin.H{"message": "file moved successfully"})
 }
 
 func (ah *AdminHandler) createDirectory(c *gin.Context) {
@@ -412,11 +455,12 @@ func (ah *AdminHandler) isPathAllowed(path string) bool {
 	if storageDir.IsS3() {
 		return true
 	}
-	absPath, err := filepath.Abs(path)
+
+	fullPath := filepath.Join(storageDir.Path, path)
+	absPath, err := filepath.Abs(fullPath)
 	if err != nil {
 		return false
 	}
-
 	absAllowed, err := filepath.Abs(storageDir.Path)
 	if err != nil {
 		return false
