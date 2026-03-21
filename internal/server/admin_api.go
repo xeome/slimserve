@@ -11,8 +11,17 @@ import (
 	"time"
 
 	"slimserve/internal/logger"
+	"slimserve/internal/version"
 
 	"github.com/gin-gonic/gin"
+)
+
+const (
+	ActivityLogin  = "login"
+	ActivityUpload = "upload"
+	ActivityConfig = "config"
+	ActivityDelete = "delete"
+	ActivityMkdir  = "mkdir"
 )
 
 type ActivityEntry struct {
@@ -104,11 +113,13 @@ func (ah *AdminHandler) getSystemStatus(c *gin.Context) {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 
+	storageDir := ah.server.config.GetStorageDir()
+
 	status := gin.H{
 		"server": gin.H{
 			"status":     "online",
 			"uptime":     ah.getServerUptime(),
-			"version":    "1.0.0", // TODO: Get from build info
+			"version":    version.Get().Version,
 			"go_version": runtime.Version(),
 		},
 		"memory": gin.H{
@@ -118,15 +129,16 @@ func (ah *AdminHandler) getSystemStatus(c *gin.Context) {
 			"num_gc":      m.NumGC,
 		},
 		"storage": gin.H{
-			"upload_dir":   ah.server.config.AdminUploadDir,
+			"storage_type": storageDir.Type,
+			"storage_path": storageDir.Path,
 			"total_files":  ah.countTotalFiles(),
 			"storage_used": ah.getStorageUsed(),
 		},
 		"configuration": gin.H{
-			"max_upload_size":    fmt.Sprintf("%dMB", ah.server.config.MaxUploadSizeMB),
-			"max_concurrent":     ah.server.config.MaxConcurrentUploads,
-			"allowed_types":      ah.server.config.AllowedUploadTypes,
-			"directories_served": ah.server.config.Directories,
+			"max_upload_size": fmt.Sprintf("%dMB", ah.server.config.MaxUploadSizeMB),
+			"max_concurrent":  ah.server.config.MaxConcurrentUploads,
+			"allowed_types":   ah.server.config.AllowedUploadTypes,
+			"storage_path":    storageDir.Path,
 		},
 	}
 
@@ -134,10 +146,12 @@ func (ah *AdminHandler) getSystemStatus(c *gin.Context) {
 }
 
 func (ah *AdminHandler) getConfiguration(c *gin.Context) {
+	storageDir := ah.server.config.GetStorageDir()
 	config := gin.H{
 		"host":                   ah.server.config.Host,
 		"port":                   ah.server.config.Port,
-		"directories":            ah.server.config.Directories,
+		"storage_type":           storageDir.Type,
+		"storage_path":           storageDir.Path,
 		"disable_dot_files":      ah.server.config.DisableDotFiles,
 		"log_level":              ah.server.config.LogLevel,
 		"enable_auth":            ah.server.config.EnableAuth,
@@ -146,7 +160,6 @@ func (ah *AdminHandler) getConfiguration(c *gin.Context) {
 		"thumb_max_file_size_mb": ah.server.config.ThumbMaxFileSizeMB,
 		"ignore_patterns":        ah.server.config.IgnorePatterns,
 		"enable_admin":           ah.server.config.EnableAdmin,
-		"admin_upload_dir":       ah.server.config.AdminUploadDir,
 		"max_upload_size_mb":     ah.server.config.MaxUploadSizeMB,
 		"allowed_upload_types":   ah.server.config.AllowedUploadTypes,
 		"max_concurrent_uploads": ah.server.config.MaxConcurrentUploads,
@@ -275,35 +288,20 @@ func (ah *AdminHandler) updateAuthConfig(c *gin.Context) {
 func (ah *AdminHandler) listFiles(c *gin.Context) {
 	path := c.DefaultQuery("path", "/")
 
-	var targetDir string
-	if path == "/" && len(ah.server.config.Directories) > 0 {
-		targetDir = ah.server.config.Directories[0]
-	} else {
-		found := false
-		for _, dir := range ah.server.config.Directories {
-			absDir, err := filepath.Abs(dir)
-			if err != nil {
-				continue
-			}
+	storageDir := ah.server.config.GetStorageDir()
+	if storageDir.IsS3() {
+		c.JSON(http.StatusOK, gin.H{
+			"path":  path,
+			"files": []gin.H{},
+			"error": "S3 storage does not support file listing via admin interface",
+		})
+		return
+	}
 
-			var candidatePath string
-			if path == "/" {
-				candidatePath = absDir
-			} else {
-				relativePath := strings.TrimPrefix(path, "/")
-				candidatePath = filepath.Join(absDir, relativePath)
-			}
-
-			if strings.HasPrefix(candidatePath, absDir) {
-				targetDir = candidatePath
-				found = true
-				break
-			}
-		}
-		if !found {
-			c.JSON(http.StatusForbidden, gin.H{"error": "path not allowed"})
-			return
-		}
+	targetDir := storageDir.Path
+	if path != "/" {
+		relativePath := strings.TrimPrefix(path, "/")
+		targetDir = filepath.Join(targetDir, relativePath)
 	}
 
 	entries, err := os.ReadDir(targetDir)
@@ -317,6 +315,7 @@ func (ah *AdminHandler) listFiles(c *gin.Context) {
 	for _, entry := range entries {
 		info, err := entry.Info()
 		if err != nil {
+			logger.Log.Debug().Err(err).Str("name", entry.Name()).Msg("Failed to get file info in admin listing")
 			continue
 		}
 
@@ -383,8 +382,8 @@ func (ah *AdminHandler) createDirectory(c *gin.Context) {
 		return
 	}
 
-	req.Name = sanitizeFilename(req.Name)
-	if req.Name == "" {
+	req.Name = filepath.Base(req.Name)
+	if req.Name == "" || req.Name == "." {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid directory name"})
 		return
 	}
@@ -433,15 +432,17 @@ func (ah *AdminHandler) getRecentActivity(c *gin.Context) {
 }
 
 func (ah *AdminHandler) countTotalFiles() int {
-	count := 0
-	for _, dir := range ah.server.config.Directories {
-		filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-			if err == nil && !info.IsDir() {
-				count++
-			}
-			return nil
-		})
+	storageDir := ah.server.config.GetStorageDir()
+	if storageDir.IsS3() {
+		return 0
 	}
+	count := 0
+	filepath.Walk(storageDir.Path, func(path string, info os.FileInfo, err error) error {
+		if err == nil && !info.IsDir() {
+			count++
+		}
+		return nil
+	})
 	return count
 }
 
@@ -462,15 +463,17 @@ func (ah *AdminHandler) countUploadsToday() int {
 }
 
 func (ah *AdminHandler) getStorageUsed() string {
-	var totalSize int64
-	for _, dir := range ah.server.config.Directories {
-		filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-			if err == nil && !info.IsDir() {
-				totalSize += info.Size()
-			}
-			return nil
-		})
+	storageDir := ah.server.config.GetStorageDir()
+	if storageDir.IsS3() {
+		return "N/A"
 	}
+	var totalSize int64
+	filepath.Walk(storageDir.Path, func(path string, info os.FileInfo, err error) error {
+		if err == nil && !info.IsDir() {
+			totalSize += info.Size()
+		}
+		return nil
+	})
 	return ah.server.adminUtils.formatBytes(uint64(totalSize))
 }
 
@@ -485,28 +488,19 @@ func (ah *AdminHandler) getMemoryUsage() string {
 }
 
 func (ah *AdminHandler) isPathAllowed(path string) bool {
+	storageDir := ah.server.config.GetStorageDir()
+	if storageDir.IsS3() {
+		return true
+	}
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return false
 	}
 
-	for _, allowedDir := range ah.server.config.Directories {
-		absAllowed, err := filepath.Abs(allowedDir)
-		if err != nil {
-			continue
-		}
-
-		if strings.HasPrefix(absPath, absAllowed) {
-			return true
-		}
+	absAllowed, err := filepath.Abs(storageDir.Path)
+	if err != nil {
+		return false
 	}
 
-	if ah.server.config.AdminUploadDir != "" {
-		absUploadDir, err := filepath.Abs(ah.server.config.AdminUploadDir)
-		if err == nil && strings.HasPrefix(absPath, absUploadDir) {
-			return true
-		}
-	}
-
-	return false
+	return strings.HasPrefix(absPath, absAllowed)
 }

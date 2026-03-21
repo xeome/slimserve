@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"slimserve/internal/config"
@@ -59,17 +60,49 @@ func AdminAuthMiddleware(cfg *config.Config, store *SessionStore) gin.HandlerFun
 
 func AdminRateLimitMiddleware() gin.HandlerFunc {
 	type rateLimiter struct {
+		mu       sync.Mutex
 		requests map[string][]time.Time
+		stopCh   chan struct{}
 	}
 
 	limiter := &rateLimiter{
 		requests: make(map[string][]time.Time),
+		stopCh:   make(chan struct{}),
 	}
+
+	go func() {
+		ticker := time.NewTicker(2 * time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				limiter.mu.Lock()
+				now := time.Now()
+				for ip, requests := range limiter.requests {
+					var validRequests []time.Time
+					for _, reqTime := range requests {
+						if now.Sub(reqTime) < time.Minute {
+							validRequests = append(validRequests, reqTime)
+						}
+					}
+					if len(validRequests) == 0 {
+						delete(limiter.requests, ip)
+					} else {
+						limiter.requests[ip] = validRequests
+					}
+				}
+				limiter.mu.Unlock()
+			case <-limiter.stopCh:
+				return
+			}
+		}
+	}()
 
 	return func(c *gin.Context) {
 		ip := c.ClientIP()
 		now := time.Now()
 
+		limiter.mu.Lock()
 		if requests, exists := limiter.requests[ip]; exists {
 			var validRequests []time.Time
 			for _, reqTime := range requests {
@@ -81,6 +114,7 @@ func AdminRateLimitMiddleware() gin.HandlerFunc {
 		}
 
 		if len(limiter.requests[ip]) >= 30 {
+			limiter.mu.Unlock()
 			logger.Log.Warn().
 				Str("ip", ip).
 				Msg("Admin rate limit exceeded")
@@ -90,6 +124,7 @@ func AdminRateLimitMiddleware() gin.HandlerFunc {
 		}
 
 		limiter.requests[ip] = append(limiter.requests[ip], now)
+		limiter.mu.Unlock()
 		c.Next()
 	}
 }
