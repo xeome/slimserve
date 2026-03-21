@@ -1,172 +1,98 @@
 package server
 
 import (
+	"crypto/subtle"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 )
 
-// showLogin renders the login template with optional error message and next path from query param
 func (s *Server) showLogin(c *gin.Context) {
-	// Get the next parameter from query string, default to "/"
-	next := c.DefaultQuery("next", "/")
-	next = validateRedirectURL(next)
-
-	// Get error message from query string if present
-	errorMsg := c.Query("error")
-
-	// Prepare template data
-	data := gin.H{
-		"next": next,
+	next := validateRedirectURL(c.DefaultQuery("next", "/"))
+	data := s.addVersionToTemplateData(gin.H{"next": next})
+	if errMsg := c.Query("error"); errMsg != "" {
+		data["error"] = errMsg
 	}
 
-	// Add error message if present
-	if errorMsg != "" {
-		data["error"] = errorMsg
-	}
-
-	// Add version information
-	data = s.addVersionToTemplateData(data)
-
-	// Render the login template
 	c.Status(http.StatusOK)
 	if err := s.loginTmpl.ExecuteTemplate(c.Writer, "base", data); err != nil {
 		http.Error(c.Writer, "failed to render login page", http.StatusInternalServerError)
 	}
 }
 
-// doLogin handles login form submission (both form-encoded and JSON)
 func (s *Server) doLogin(c *gin.Context) {
 	var username, password, next string
-
-	// Parse credentials based on content type
 	contentType := c.GetHeader("Content-Type")
+
 	if strings.Contains(contentType, "application/json") {
-		// Handle JSON request
 		var jsonData struct {
 			Username string `json:"username"`
 			Password string `json:"password"`
 			Next     string `json:"next"`
 		}
-
 		if err := c.ShouldBindJSON(&jsonData); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request format"})
 			return
 		}
-
-		username = jsonData.Username
-		password = jsonData.Password
-		next = jsonData.Next
+		username, password, next = jsonData.Username, jsonData.Password, jsonData.Next
 	} else {
-		// Handle form-encoded request
-		username = c.PostForm("username")
-		password = c.PostForm("password")
-		next = c.PostForm("next")
+		username, password, next = c.PostForm("username"), c.PostForm("password"), c.PostForm("next")
 	}
 
-	// Validate and sanitize next URL to prevent open redirect attacks
 	next = validateRedirectURL(next)
 
-	// Validate credentials against config
 	if !s.validateCredentials(username, password) {
-		// Handle failure based on Accept header
-		acceptHeader := c.GetHeader("Accept")
-		if strings.Contains(acceptHeader, "application/json") {
+		if strings.Contains(c.GetHeader("Accept"), "application/json") {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 			return
-		} else {
-			// Re-render login page with error
-			data := gin.H{
-				"error": "Invalid username or password",
-				"next":  next,
-			}
-			c.Status(http.StatusOK)
-			if err := s.loginTmpl.ExecuteTemplate(c.Writer, "base", data); err != nil {
-				http.Error(c.Writer, "failed to render login page", http.StatusInternalServerError)
-			}
-			return
 		}
+		c.Status(http.StatusOK)
+		if err := s.loginTmpl.ExecuteTemplate(c.Writer, "base", gin.H{"error": "Invalid username or password", "next": next}); err != nil {
+			http.Error(c.Writer, "failed to render login page", http.StatusInternalServerError)
+		}
+		return
 	}
 
-	// Generate session token
 	token := s.sessionStore.NewToken()
 	s.sessionStore.Add(token)
 
-	// Set session cookie with enhanced security attributes
-	secure := c.Request.TLS != nil // Set Secure flag only for HTTPS
 	c.SetSameSite(http.SameSiteLaxMode)
-	c.SetCookie(
-		"slimserve_session", // name (matches auth.go line 24)
-		token,               // value
-		0,                   // maxAge (session cookie)
-		"/",                 // path
-		"",                  // domain
-		secure,              // secure (true for HTTPS)
-		true,                // httpOnly
-	)
+	c.SetCookie("slimserve_session", token, 0, "/", "", c.Request.TLS != nil, true)
 
-	// Handle success based on content type
 	if strings.Contains(contentType, "application/json") {
 		c.JSON(http.StatusOK, gin.H{"success": true, "redirect": next})
 	} else {
-		// Redirect to next page
 		c.Redirect(http.StatusFound, next)
 	}
 }
 
-// validateCredentials performs constant-time credential comparison
 func (s *Server) validateCredentials(username, password string) bool {
-	// Check if authentication is enabled and credentials are configured
 	if !s.config.EnableAuth || s.config.Username == "" {
 		return false
 	}
 
-	// Check username first
-	usernameMatch := constantTimeEqual(username, s.config.Username)
-	if !usernameMatch {
+	if subtle.ConstantTimeCompare([]byte(username), []byte(s.config.Username)) != 1 {
 		return false
 	}
 
-	// Check password - prefer hash if available, otherwise fall back to plaintext
 	if s.config.PasswordHash != "" {
 		return VerifyPassword(s.config.PasswordHash, password)
 	}
 
-	// Fallback to plaintext password (backward compatibility)
 	if s.config.Password == "" {
 		return false
 	}
-	passwordMatch := constantTimeEqual(password, s.config.Password)
 
-	return passwordMatch
+	return subtle.ConstantTimeCompare([]byte(password), []byte(s.config.Password)) == 1
 }
 
-// constantTimeEqual performs constant-time string comparison
-func constantTimeEqual(a, b string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-
-	result := byte(0)
-	for i := 0; i < len(a); i++ {
-		result |= a[i] ^ b[i]
-	}
-
-	return result == 0
-}
-
-// validateRedirectURL validates the next URL to prevent open redirect attacks
 func validateRedirectURL(next string) string {
-	// Default to root if empty
 	if next == "" {
 		return "/"
 	}
-
-	// Only allow relative paths that start with "/" and don't contain "://" or start with "//"
 	if !strings.HasPrefix(next, "/") || strings.Contains(next, "://") || strings.HasPrefix(next, "//") {
 		return "/"
 	}
-
 	return next
 }

@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"crypto/subtle"
 	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
@@ -727,23 +728,23 @@ func TestCSRFTokenGeneration(t *testing.T) {
 }
 
 func TestConstantTimeEqual(t *testing.T) {
-	t.Run("Equal strings should return true", func(t *testing.T) {
-		assert.True(t, constantTimeEqual("hello", "hello"))
-		assert.True(t, constantTimeEqual("", ""))
-		assert.True(t, constantTimeEqual("test123", "test123"))
+	t.Run("Equal strings should return 1", func(t *testing.T) {
+		assert.Equal(t, 1, subtle.ConstantTimeCompare([]byte("hello"), []byte("hello")))
+		assert.Equal(t, 1, subtle.ConstantTimeCompare([]byte(""), []byte("")))
+		assert.Equal(t, 1, subtle.ConstantTimeCompare([]byte("test123"), []byte("test123")))
 	})
 
-	t.Run("Different strings should return false", func(t *testing.T) {
-		assert.False(t, constantTimeEqual("hello", "world"))
-		assert.False(t, constantTimeEqual("test", ""))
-		assert.False(t, constantTimeEqual("", "test"))
-		assert.False(t, constantTimeEqual("abc", "abcd"))
-		assert.False(t, constantTimeEqual("abcd", "abc"))
+	t.Run("Different strings should return 0", func(t *testing.T) {
+		assert.Equal(t, 0, subtle.ConstantTimeCompare([]byte("hello"), []byte("world")))
+		assert.Equal(t, 0, subtle.ConstantTimeCompare([]byte("test"), []byte("")))
+		assert.Equal(t, 0, subtle.ConstantTimeCompare([]byte(""), []byte("test")))
+		assert.Equal(t, 0, subtle.ConstantTimeCompare([]byte("abc"), []byte("abcd")))
+		assert.Equal(t, 0, subtle.ConstantTimeCompare([]byte("abcd"), []byte("abc")))
 	})
 
-	t.Run("Different length strings should return false", func(t *testing.T) {
-		assert.False(t, constantTimeEqual("short", "longer"))
-		assert.False(t, constantTimeEqual("longer", "short"))
+	t.Run("Different length strings should return 0", func(t *testing.T) {
+		assert.Equal(t, 0, subtle.ConstantTimeCompare([]byte("short"), []byte("longer")))
+		assert.Equal(t, 0, subtle.ConstantTimeCompare([]byte("longer"), []byte("short")))
 	})
 }
 

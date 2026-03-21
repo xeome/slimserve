@@ -2,6 +2,7 @@ package server
 
 import (
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/hex"
 	"fmt"
 	"net/http"
@@ -172,24 +173,19 @@ func (s *Server) validateAdminCredentials(username, password string) bool {
 		return false
 	}
 
-	// Check username first
-	usernameMatch := constantTimeEqual(username, s.config.AdminUsername)
-	if !usernameMatch {
+	if subtle.ConstantTimeCompare([]byte(username), []byte(s.config.AdminUsername)) != 1 {
 		return false
 	}
 
-	// Check password - prefer hash if available, otherwise fall back to plaintext
 	if s.config.AdminPasswordHash != "" {
 		return VerifyPassword(s.config.AdminPasswordHash, password)
 	}
 
-	// Fallback to plaintext password (backward compatibility)
 	if s.config.AdminPassword == "" {
 		return false
 	}
-	passwordMatch := constantTimeEqual(password, s.config.AdminPassword)
 
-	return passwordMatch
+	return subtle.ConstantTimeCompare([]byte(password), []byte(s.config.AdminPassword)) == 1
 }
 
 // validateAdminRedirectURL validates and sanitizes admin redirect URLs

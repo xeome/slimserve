@@ -1,6 +1,7 @@
 package server
 
 import (
+	"crypto/subtle"
 	"net/http"
 	"net/url"
 	"strings"
@@ -142,7 +143,7 @@ func CSRFProtectionMiddleware() gin.HandlerFunc {
 		}
 
 		expectedToken, err := c.Cookie("slimserve_csrf_token")
-		if err != nil || token == "" || !constantTimeEqual(token, expectedToken) {
+		if err != nil || token == "" || subtle.ConstantTimeCompare([]byte(token), []byte(expectedToken)) != 1 {
 			logger.Log.Warn().
 				Str("ip", c.ClientIP()).
 				Str("path", c.Request.URL.Path).
