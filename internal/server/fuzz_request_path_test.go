@@ -163,7 +163,8 @@ func FuzzRequestPath(f *testing.F) {
 		cfg := &config.Config{
 			Port:            8080,
 			Host:            "localhost",
-			Directories:     []string{tmpDir},
+			StoragePath:     tmpDir,
+			StorageType:     "local",
 			DisableDotFiles: true, // Block dot files by default
 		}
 
@@ -349,7 +350,8 @@ func FuzzThumbnailQuery(f *testing.F) {
 		cfg := &config.Config{
 			Port:            8080,
 			Host:            "localhost",
-			Directories:     []string{tmpDir},
+			StoragePath:     tmpDir,
+			StorageType:     "local",
 			DisableDotFiles: true,
 		}
 
@@ -429,7 +431,8 @@ func FuzzStaticAssets(f *testing.F) {
 	cfg := &config.Config{
 		Port:            8080,
 		Host:            "localhost",
-		Directories:     []string{tmpDir},
+		StoragePath:     tmpDir,
+		StorageType:     "local",
 		DisableDotFiles: true,
 	}
 

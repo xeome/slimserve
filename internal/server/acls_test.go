@@ -36,11 +36,6 @@ func TestAccessControlSecurity(t *testing.T) {
 		t.Fatal("Failed to create test file 1:", err)
 	}
 
-	testFile2 := filepath.Join(allowedDir2, "test2.txt")
-	if err := os.WriteFile(testFile2, []byte("content2"), 0644); err != nil {
-		t.Fatal("Failed to create test file 2:", err)
-	}
-
 	siblingFile := filepath.Join(siblingDir, "secret.txt")
 	if err := os.WriteFile(siblingFile, []byte("secret content"), 0644); err != nil {
 		t.Fatal("Failed to create sibling file:", err)
@@ -52,11 +47,12 @@ func TestAccessControlSecurity(t *testing.T) {
 		t.Fatal("Failed to create hidden file:", err)
 	}
 
-	// Create server with multiple allowed roots
+	// Create server with single storage
 	cfg := &config.Config{
 		Host:            "localhost",
 		Port:            8080,
-		Directories:     []string{allowedDir1, allowedDir2},
+		StoragePath:     allowedDir1,
+		StorageType:     "local",
 		DisableDotFiles: true,
 	}
 	srv := New(cfg)
@@ -79,12 +75,6 @@ func TestAccessControlSecurity(t *testing.T) {
 			path:           "/test1.txt",
 			expectedStatus: http.StatusOK,
 			description:    "Access to file in first allowed directory should work",
-		},
-		{
-			name:           "access_allowed_file_2",
-			path:           "/test2.txt",
-			expectedStatus: http.StatusOK,
-			description:    "Access to file in second allowed directory should work",
 		},
 		{
 			name:           "access_sibling_directory",
@@ -163,22 +153,18 @@ func TestMultipleAllowedRoots(t *testing.T) {
 		t.Fatal("Failed to create file in root2:", err)
 	}
 
-	// Create unique files in each root
+	// Create unique file in root1
 	unique1 := filepath.Join(root1, "unique1.txt")
 	if err := os.WriteFile(unique1, []byte("unique content 1"), 0644); err != nil {
 		t.Fatal("Failed to create unique file 1:", err)
 	}
 
-	unique2 := filepath.Join(root2, "unique2.txt")
-	if err := os.WriteFile(unique2, []byte("unique content 2"), 0644); err != nil {
-		t.Fatal("Failed to create unique file 2:", err)
-	}
-
-	// Create server with multiple roots
+	// Create server with single root
 	cfg := &config.Config{
 		Host:            "localhost",
 		Port:            8080,
-		Directories:     []string{root1, root2},
+		StoragePath:     root1,
+		StorageType:     "local",
 		DisableDotFiles: true,
 	}
 	srv := New(cfg)
@@ -192,11 +178,11 @@ func TestMultipleAllowedRoots(t *testing.T) {
 		description    string
 	}{
 		{
-			name:           "shared_file_first_match",
+			name:           "shared_file_root1",
 			path:           "/shared.txt",
 			expectedStatus: http.StatusOK,
-			expectedBody:   "content from root1", // First root should match
-			description:    "Shared file should serve from first matching root",
+			expectedBody:   "content from root1",
+			description:    "Shared file should serve from root1",
 		},
 		{
 			name:           "unique_file_root1",
@@ -204,13 +190,6 @@ func TestMultipleAllowedRoots(t *testing.T) {
 			expectedStatus: http.StatusOK,
 			expectedBody:   "unique content 1",
 			description:    "Unique file in root1 should be accessible",
-		},
-		{
-			name:           "unique_file_root2",
-			path:           "/unique2.txt",
-			expectedStatus: http.StatusOK,
-			expectedBody:   "unique content 2",
-			description:    "Unique file in root2 should be accessible",
 		},
 		{
 			name:           "nonexistent_file",
@@ -272,7 +251,8 @@ func TestAccessControlMiddleware(t *testing.T) {
 	cfg := &config.Config{
 		Host:            "localhost",
 		Port:            8080,
-		Directories:     []string{allowedDir},
+		StoragePath:     allowedDir,
+		StorageType:     "local",
 		DisableDotFiles: true,
 	}
 	srv := New(cfg)

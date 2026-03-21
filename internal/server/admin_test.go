@@ -121,20 +121,6 @@ func TestFileUploadSecurity(t *testing.T) {
 		assert.False(t, server.isAllowedFileType("malware.bat"))
 		assert.False(t, server.isAllowedFileType("document.pdf"))
 	})
-
-	t.Run("Secure filenames should pass validation", func(t *testing.T) {
-		assert.True(t, server.isSecureFilename("normal_file.txt"))
-		assert.True(t, server.isSecureFilename("image-2023.jpg"))
-		assert.True(t, server.isSecureFilename("document_v1.2.pdf"))
-	})
-
-	t.Run("Unsafe filenames should fail validation", func(t *testing.T) {
-		assert.False(t, server.isSecureFilename("../../../etc/passwd"))
-		assert.False(t, server.isSecureFilename("file<script>.txt"))
-		assert.False(t, server.isSecureFilename("file|command.txt"))
-		assert.False(t, server.isSecureFilename("file\x00.txt"))
-		assert.False(t, server.isSecureFilename("malware.exe"))
-	})
 }
 
 func TestFileUploadHandler(t *testing.T) {
@@ -147,7 +133,8 @@ func TestFileUploadHandler(t *testing.T) {
 
 	cfg := &config.Config{
 		EnableAdmin:        true,
-		AdminUploadDir:     tmpDir,
+		StoragePath:        tmpDir,
+		StorageType:        "local",
 		MaxUploadSizeMB:    10,
 		AllowedUploadTypes: []string{"txt"},
 	}
@@ -215,8 +202,14 @@ func TestFileUploadHandler(t *testing.T) {
 		err = json.Unmarshal(w.Body.Bytes(), &response)
 		require.NoError(t, err)
 
-		results := response["results"].([]interface{})
-		result := results[0].(map[string]interface{})
+		results, ok := response["results"].([]interface{})
+		if !ok {
+			t.Fatalf("results field is not []interface{}")
+		}
+		result, ok := results[0].(map[string]interface{})
+		if !ok {
+			t.Fatalf("first result is not map[string]interface{}")
+		}
 		assert.Equal(t, "error", result["status"])
 		assert.Contains(t, result["error"], "file type not allowed")
 	})

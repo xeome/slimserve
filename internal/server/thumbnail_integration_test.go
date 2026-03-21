@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"slimserve/internal/config"
 	"slimserve/internal/security"
+	"slimserve/internal/storage"
 	"strings"
 	"testing"
 
@@ -51,25 +52,18 @@ func TestThumbnailGeneration(t *testing.T) {
 	cfg := &config.Config{
 		Host:               "localhost",
 		Port:               8080,
-		Directories:        []string{tmpDir},
+		StoragePath:        tmpDir,
+		StorageType:        "local",
 		DisableDotFiles:    true,
 		ThumbMaxFileSizeMB: 20,
 	}
 
-	// Create RootFS instances
-	var roots []*security.RootFS
-	for _, dir := range cfg.Directories {
-		root, err := security.NewRootFS(dir)
-		require.NoError(t, err)
-		roots = append(roots, root)
-	}
-	defer func() {
-		for _, root := range roots {
-			root.Close()
-		}
-	}()
+	root, err := security.NewRootFS(tmpDir)
+	require.NoError(t, err)
+	defer root.Close()
 
-	handler := NewHandler(cfg, roots)
+	backend := storage.NewLocalBackend(root, nil)
+	handler := NewHandler(cfg, backend, root)
 	gin.SetMode(gin.TestMode)
 
 	tests := []struct {
@@ -213,25 +207,18 @@ func TestServeThumbnailMethod(t *testing.T) {
 	cfg := &config.Config{
 		Host:               "localhost",
 		Port:               8080,
-		Directories:        []string{tmpDir},
+		StoragePath:        tmpDir,
+		StorageType:        "local",
 		DisableDotFiles:    true,
 		ThumbMaxFileSizeMB: 20,
 	}
 
-	// Create RootFS instances
-	var roots []*security.RootFS
-	for _, dir := range cfg.Directories {
-		root, err := security.NewRootFS(dir)
-		require.NoError(t, err)
-		roots = append(roots, root)
-	}
-	defer func() {
-		for _, root := range roots {
-			root.Close()
-		}
-	}()
+	root, err := security.NewRootFS(tmpDir)
+	require.NoError(t, err)
+	defer root.Close()
 
-	handler := NewHandler(cfg, roots)
+	backend := storage.NewLocalBackend(root, nil)
+	handler := NewHandler(cfg, backend, root)
 	gin.SetMode(gin.TestMode)
 
 	tests := []struct {
@@ -278,9 +265,9 @@ func TestServeThumbnailMethod(t *testing.T) {
 				cleanPath = "/"
 			}
 
-			// Call serveThumbnailFromRoot directly
+			// Call serveThumbnail directly
 			relPath := strings.TrimPrefix(cleanPath, "/")
-			handler.serveThumbnailFromRoot(c, relPath)
+			handler.serveThumbnail(c, relPath)
 
 			if w.Code != tt.expectedStatus {
 				t.Errorf("Expected status %d, got %d", tt.expectedStatus, w.Code)
@@ -297,37 +284,25 @@ func TestServeThumbnailMethod(t *testing.T) {
 }
 
 func TestThumbnailErrorPaths(t *testing.T) {
-	// Test various error conditions
+	// Test various error conditions - use a non-existent path to force 404
 	cfg := &config.Config{
 		Host:            "localhost",
 		Port:            8080,
-		Directories:     []string{}, // Empty directories to force 404
+		StoragePath:     "/nonexistent/path",
+		StorageType:     "local",
 		DisableDotFiles: true,
 	}
 
-	// Create RootFS instances
-	var roots []*security.RootFS
-	for _, dir := range cfg.Directories {
-		root, err := security.NewRootFS(dir)
-		require.NoError(t, err)
-		roots = append(roots, root)
-	}
-	defer func() {
-		for _, root := range roots {
-			root.Close()
-		}
-	}()
-
-	handler := NewHandler(cfg, roots)
+	handler := NewHandler(cfg, nil, nil)
 	gin.SetMode(gin.TestMode)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest("GET", "/any.jpg", nil)
 
-	handler.serveThumbnailFromRoot(c, "any.jpg")
+	handler.serveThumbnail(c, "any.jpg")
 
-	// Should return 404 when no allowed roots are configured
+	// Should return 404 when no storage is configured
 	if w.Code != http.StatusNotFound {
 		t.Errorf("Expected status 404, got %d", w.Code)
 	}
