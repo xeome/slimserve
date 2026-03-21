@@ -42,17 +42,14 @@ func Run(ctx context.Context) error {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
-	if len(cfg.Directories) == 0 {
-		cfg.Directories = []string{"."}
-	}
-
 	if err := logger.Init(cfg); err != nil {
 		return fmt.Errorf("failed to initialize logger: %w", err)
 	}
 
 	srv := server.New(cfg)
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
-	logger.Infof("Starting SlimServe on %s, serving directories: %v", addr, cfg.Directories)
+	storageDir := cfg.GetStorageDir()
+	logger.Log.Info().Msgf("Starting SlimServe on %s, serving storage: %s (%s)", addr, storageDir.Path, storageDir.Type)
 
 	serverErr := make(chan error, 1)
 	go func() {

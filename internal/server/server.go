@@ -10,6 +10,7 @@ import (
 	"slimserve/internal/config"
 	"slimserve/internal/logger"
 	"slimserve/internal/security"
+	"slimserve/internal/storage"
 	"slimserve/internal/version"
 	"slimserve/web"
 
@@ -20,7 +21,8 @@ type Server struct {
 	config         *config.Config
 	engine         *gin.Engine
 	server         *http.Server
-	roots          []*security.RootFS
+	backend        storage.Backend
+	localRoot      *security.RootFS
 	sessionStore   *SessionStore
 	loginTmpl      *template.Template
 	adminLoginTmpl *template.Template
@@ -31,18 +33,30 @@ type Server struct {
 }
 
 func New(cfg *config.Config) *Server {
-	if len(cfg.Directories) == 0 {
-		cfg.Directories = []string{"."}
-	}
+	storageDir := cfg.GetStorageDir()
 
-	var roots []*security.RootFS
-	for _, dir := range cfg.Directories {
-		root, err := security.NewRootFS(dir)
-		if err != nil {
-			logger.Log.Warn().Err(err).Str("directory", dir).Msg("Failed to create RootFS for directory")
-			continue
+	var backend storage.Backend
+	var localRoot *security.RootFS
+
+	if storageDir.IsS3() {
+		cacheBytes := int64(0)
+		if cfg.LRUEnabled && cfg.LRUMaxMB > 0 {
+			cacheBytes = int64(cfg.LRUMaxMB) * 1024 * 1024
 		}
-		roots = append(roots, root)
+		s3Backend, err := storage.NewS3Backend(&storageDir, cacheBytes, cfg.IgnorePatterns)
+		if err != nil {
+			logger.Log.Warn().Err(err).Str("bucket", storageDir.Path).Msg("Failed to create S3 backend")
+		} else {
+			backend = s3Backend
+		}
+	} else {
+		root, err := security.NewRootFS(storageDir.Path)
+		if err != nil {
+			logger.Log.Warn().Err(err).Str("directory", storageDir.Path).Msg("Failed to create RootFS for directory")
+		} else {
+			localRoot = root
+			backend = storage.NewLocalBackend(root, cfg.IgnorePatterns)
+		}
 	}
 
 	gin.SetMode(gin.ReleaseMode)
@@ -65,12 +79,11 @@ func New(cfg *config.Config) *Server {
 			"templates/admin_status.html"))
 	}
 
-	engine.SetHTMLTemplate(template.New(""))
-
 	srv := &Server{
 		config:         cfg,
 		engine:         engine,
-		roots:          roots,
+		backend:        backend,
+		localRoot:      localRoot,
 		sessionStore:   NewSessionStore(),
 		loginTmpl:      loginTmpl,
 		adminLoginTmpl: adminLoginTmpl,
@@ -224,7 +237,7 @@ func (s *Server) createUnifiedHandler(fileHandler *Handler) gin.HandlerFunc {
 }
 
 func (s *Server) setupRoutes() {
-	handler := NewHandler(s.config, s.roots)
+	handler := NewHandler(s.config, s.backend, s.localRoot)
 
 	s.engine.Use(logger.Middleware())
 
@@ -262,27 +275,30 @@ func (s *Server) accessControlMiddleware() gin.HandlerFunc {
 			}
 		}
 
-		for _, root := range s.config.Directories {
-			candidatePath := filepath.Join(root, relPath)
-			absPath, err := filepath.Abs(candidatePath)
-			if err != nil {
-				continue
-			}
+		storageDir := s.config.GetStorageDir()
+		if storageDir.IsS3() {
+			c.Next()
+			return
+		}
 
-			absRoot, err := filepath.Abs(root)
-			if err != nil {
-				continue
-			}
+		candidatePath := filepath.Join(storageDir.Path, relPath)
+		absPath, err := filepath.Abs(candidatePath)
+		if err != nil {
+			c.AbortWithStatus(http.StatusForbidden)
+			return
+		}
 
-			rootPath := filepath.Clean(absRoot)
-			if !strings.HasSuffix(rootPath, string(filepath.Separator)) {
-				rootPath += string(filepath.Separator)
-			}
+		absRoot, err := filepath.Abs(storageDir.Path)
+		if err != nil {
+			c.AbortWithStatus(http.StatusForbidden)
+			return
+		}
 
-			if strings.HasPrefix(absPath+string(filepath.Separator), rootPath) || absPath == filepath.Clean(absRoot) {
-				c.Next()
-				return
-			}
+		rootPath := filepath.Join(absRoot, "")
+
+		if strings.HasPrefix(absPath+string(filepath.Separator), rootPath) || absPath == filepath.Clean(absRoot) {
+			c.Next()
+			return
 		}
 
 		c.AbortWithStatus(http.StatusForbidden)
@@ -302,8 +318,8 @@ func (s *Server) Shutdown(ctx context.Context) error {
 		return nil
 	}
 
-	for _, root := range s.roots {
-		if err := root.Close(); err != nil {
+	if s.localRoot != nil {
+		if err := s.localRoot.Close(); err != nil {
 			logger.Log.Warn().Err(err).Msg("Failed to close RootFS")
 		}
 	}

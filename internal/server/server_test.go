@@ -37,7 +37,8 @@ func TestServerIntegration(t *testing.T) {
 	cfg := &config.Config{
 		Host:            "localhost",
 		Port:            8080,
-		Directories:     []string{tmpDir},
+		StoragePath:     tmpDir,
+		StorageType:     "local",
 		DisableDotFiles: true,
 	}
 	srv := New(cfg)
