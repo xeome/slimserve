@@ -1,8 +1,10 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"html/template"
+	"io/fs"
 	"mime"
 	"net/http"
 	"os"
@@ -14,6 +16,7 @@ import (
 	"slimserve/internal/files"
 	"slimserve/internal/logger"
 	"slimserve/internal/security"
+	"slimserve/internal/storage"
 	"slimserve/internal/version"
 	"slimserve/web"
 
@@ -21,10 +24,10 @@ import (
 )
 
 type Handler struct {
-	config       *config.Config
-	tmpl         *template.Template
-	allowedRoots []string
-	roots        []*security.RootFS
+	config    *config.Config
+	tmpl      *template.Template
+	backend   storage.Backend
+	localRoot *security.RootFS
 }
 
 type FileItem struct {
@@ -53,14 +56,14 @@ type ListingData struct {
 	VersionInfo  version.Info  `json:"version_info,omitempty"`
 }
 
-func NewHandler(cfg *config.Config, roots []*security.RootFS) *Handler {
+func NewHandler(cfg *config.Config, backend storage.Backend, localRoot *security.RootFS) *Handler {
 	tmpl := template.Must(template.ParseFS(web.TemplateFS, "templates/base.html", "templates/listing.html"))
 
 	return &Handler{
-		config:       cfg,
-		tmpl:         tmpl,
-		allowedRoots: cfg.Directories,
-		roots:        roots,
+		config:    cfg,
+		tmpl:      tmpl,
+		backend:   backend,
+		localRoot: localRoot,
 	}
 }
 
@@ -70,8 +73,8 @@ func (h *Handler) ServeFiles(c *gin.Context) {
 		requestPath = "/"
 	}
 
-	if requestPath == "/" && len(h.roots) > 0 {
-		h.serveDirectoryFromRoot(c, h.roots[0], ".", "/")
+	if requestPath == "/" && h.backend != nil {
+		h.serveDirectoryFromBackend(c, h.backend, ".", "/")
 		return
 	}
 
@@ -92,11 +95,11 @@ func (h *Handler) ServeFiles(c *gin.Context) {
 	}
 
 	if c.Query("thumb") == "1" {
-		h.serveThumbnailFromRoot(c, relPath)
+		h.serveThumbnail(c, relPath)
 		return
 	}
 
-	if h.tryServeFromRoots(c, relPath, cleanPath) {
+	if h.tryServeFromBackend(c, relPath, cleanPath) {
 		return
 	}
 
@@ -113,50 +116,56 @@ func (h *Handler) containsDotFile(path string) bool {
 	return false
 }
 
-func (h *Handler) tryServeFromRoots(c *gin.Context, relPath, cleanPath string) bool {
-	for _, root := range h.roots {
-		if ignored, err := isIgnored(relPath, root, h.config); err != nil {
-			logger.Log.Error().Err(err).Str("path", relPath).Msg("Error checking if path is ignored")
-			c.AbortWithStatus(http.StatusInternalServerError)
-			return true
-		} else if ignored {
-			c.AbortWithStatus(http.StatusForbidden)
-			return true
-		}
+func (h *Handler) tryServeFromBackend(c *gin.Context, relPath, cleanPath string) bool {
+	if h.backend == nil {
+		return false
+	}
+	ctx := c.Request.Context()
 
-		info, err := root.Stat(relPath)
-		if err != nil {
-			continue
-		}
-
-		if info.IsDir() {
-			h.serveDirectoryFromRoot(c, root, relPath, cleanPath)
-		} else {
-			h.serveFileFromRoot(c, root, relPath)
-		}
+	if ignored, err := h.backend.IsIgnored(ctx, relPath); err != nil {
+		logger.Log.Error().Err(err).Str("path", relPath).Msg("Error checking if path is ignored")
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return true
+	} else if ignored {
+		c.AbortWithStatus(http.StatusForbidden)
 		return true
 	}
-	return false
+
+	info, err := h.backend.Stat(ctx, relPath)
+	if err != nil {
+		return false
+	}
+
+	if info.IsDir() {
+		h.serveDirectoryFromBackend(c, h.backend, relPath, cleanPath)
+	} else {
+		h.serveFileFromBackend(c, h.backend, relPath)
+	}
+	return true
 }
 
-func (h *Handler) buildListingData(root *security.RootFS, entries []os.DirEntry, requestPath string) ListingData {
+type entryInterface interface {
+	Name() string
+	IsDir() bool
+	Info() (fs.FileInfo, error)
+}
+
+func buildListingData[E entryInterface](
+	ctx context.Context,
+	entries []E,
+	requestPath string,
+	isIgnoredFunc func(context.Context, string) (bool, error),
+	typeFunc func(E) string,
+	iconFunc func(E) string,
+) ListingData {
 	estimatedFiles := len(entries)
-	if h.config.DisableDotFiles {
-		estimatedFiles = int(float64(len(entries)) * 0.9)
-	}
 	files := make([]FileItem, 0, estimatedFiles)
 
 	for _, entry := range entries {
-		if h.config.DisableDotFiles && strings.HasPrefix(entry.Name(), ".") {
-			continue
-		}
-
 		entryRelPath := filepath.Join(strings.TrimPrefix(requestPath, "/"), entry.Name())
-
-		ignored, err := isIgnored(entryRelPath, root, h.config)
+		ignored, err := isIgnoredFunc(ctx, entryRelPath)
 		if err != nil {
-			logger.Log.Error().Err(err).Str("path", entryRelPath).Msg("Error checking if path is ignored")
-			continue
+			logger.Log.Debug().Err(err).Str("path", entryRelPath).Msg("Error checking ignore patterns")
 		}
 		if ignored {
 			continue
@@ -164,6 +173,7 @@ func (h *Handler) buildListingData(root *security.RootFS, entries []os.DirEntry,
 
 		info, err := entry.Info()
 		if err != nil {
+			logger.Log.Debug().Err(err).Str("path", entryRelPath).Msg("Failed to get file info")
 			continue
 		}
 
@@ -176,8 +186,8 @@ func (h *Handler) buildListingData(root *security.RootFS, entries []os.DirEntry,
 			URL:      buildFileURL(requestPath, fileName),
 			Size:     formatSize(info.Size()),
 			ModTime:  info.ModTime().Format("Jan 2, 2006 15:04"),
-			Type:     determineFileType(entry),
-			Icon:     getFileIcon(entry),
+			Type:     typeFunc(entry),
+			Icon:     iconFunc(entry),
 			IsImage:  isImage,
 			IsFolder: isDir,
 		}
@@ -206,6 +216,125 @@ func (h *Handler) buildListingData(root *security.RootFS, entries []os.DirEntry,
 	}
 }
 
+func determineFileType(entry os.DirEntry) string {
+	if entry.IsDir() {
+		return "folder"
+	}
+	ext := strings.ToLower(filepath.Ext(entry.Name()))
+	if info, exists := fileExtMap[ext]; exists {
+		return info.Type
+	}
+	mimeType := mime.TypeByExtension(ext)
+	if mimeType != "" {
+		fileType, _ := getFileTypeFromMime(mimeType)
+		return fileType
+	}
+	return "file"
+}
+
+func getFileIcon(entry os.DirEntry) string {
+	if entry.IsDir() {
+		return "folder"
+	}
+	ext := strings.ToLower(filepath.Ext(entry.Name()))
+	if info, exists := fileExtMap[ext]; exists {
+		return info.Icon
+	}
+	mimeType := mime.TypeByExtension(ext)
+	if mimeType != "" {
+		_, icon := getFileTypeFromMime(mimeType)
+		return icon
+	}
+	return "file"
+}
+
+func determineFileTypeFromEntry(entry *storage.DirEntry) string {
+	if entry.IsDir() {
+		return "folder"
+	}
+	ext := strings.ToLower(filepath.Ext(entry.Name()))
+	if info, exists := fileExtMap[ext]; exists {
+		return info.Type
+	}
+	mimeType := mime.TypeByExtension(ext)
+	if mimeType != "" {
+		fileType, _ := getFileTypeFromMime(mimeType)
+		return fileType
+	}
+	return "file"
+}
+
+func getFileIconFromEntry(entry *storage.DirEntry) string {
+	if entry.IsDir() {
+		return "folder"
+	}
+	ext := strings.ToLower(filepath.Ext(entry.Name()))
+	if info, exists := fileExtMap[ext]; exists {
+		return info.Icon
+	}
+	mimeType := mime.TypeByExtension(ext)
+	if mimeType != "" {
+		_, icon := getFileTypeFromMime(mimeType)
+		return icon
+	}
+	return "file"
+}
+
+func (h *Handler) serveDirectoryFromBackend(c *gin.Context, backend storage.Backend, relPath, requestPath string) {
+	ctx := c.Request.Context()
+	if relPath == "" {
+		relPath = "."
+	}
+
+	entries, err := backend.ReadDir(ctx, relPath)
+	if err != nil {
+		logger.Log.Error().Err(err).Str("path", relPath).Msg("Error reading directory")
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
+
+	isIgnoredFunc := func(ctx context.Context, entryRelPath string) (bool, error) {
+		fullRelPath := filepath.Join(strings.TrimPrefix(requestPath, "/"), entryRelPath)
+		if _, ok := backend.(*storage.LocalBackend); ok {
+			return isIgnored(fullRelPath, h.localRoot, h.config)
+		}
+		return backend.IsIgnored(ctx, fullRelPath)
+	}
+
+	data := buildListingData(ctx, entries, requestPath,
+		isIgnoredFunc,
+		func(e *storage.DirEntry) string { return determineFileTypeFromEntry(e) },
+		func(e *storage.DirEntry) string { return getFileIconFromEntry(e) },
+	)
+
+	c.Header("Content-Type", "text/html")
+	c.Status(http.StatusOK)
+	if c.Request.Method == http.MethodHead {
+		return
+	}
+	if err := h.tmpl.ExecuteTemplate(c.Writer, "listing.html", data); err != nil {
+		logger.Log.Error().Err(err).Str("template", "listing.html").Msg("Error executing template")
+		c.AbortWithStatus(http.StatusInternalServerError)
+	}
+}
+
+func (h *Handler) serveFileFromBackend(c *gin.Context, backend storage.Backend, relPath string) bool {
+	ctx := c.Request.Context()
+	file, err := backend.Open(ctx, relPath)
+	if err != nil {
+		return false
+	}
+	defer file.Close()
+
+	info, err := backend.Stat(ctx, relPath)
+	if err != nil {
+		return false
+	}
+
+	http.ServeContent(c.Writer, c.Request, info.Name(), info.ModTime(), file)
+	return true
+}
+
 func (h *Handler) serveDirectoryFromRoot(c *gin.Context, root *security.RootFS, relPath, requestPath string) {
 	if relPath == "" {
 		relPath = "."
@@ -218,7 +347,11 @@ func (h *Handler) serveDirectoryFromRoot(c *gin.Context, root *security.RootFS, 
 		return
 	}
 
-	data := h.buildListingData(root, entries, requestPath)
+	data := buildListingData(c.Request.Context(), entries, requestPath,
+		func(ctx context.Context, path string) (bool, error) { return isIgnored(path, root, h.config) },
+		determineFileType,
+		getFileIcon,
+	)
 
 	c.Header("Content-Type", "text/html")
 	c.Status(http.StatusOK)
@@ -296,44 +429,6 @@ func getFileTypeFromMime(mimeType string) (string, string) {
 	default:
 		return "file", "file"
 	}
-}
-
-func determineFileType(entry os.DirEntry) string {
-	if entry.IsDir() {
-		return "folder"
-	}
-
-	ext := strings.ToLower(filepath.Ext(entry.Name()))
-	if info, exists := fileExtMap[ext]; exists {
-		return info.Type
-	}
-
-	mimeType := mime.TypeByExtension(ext)
-	if mimeType != "" {
-		fileType, _ := getFileTypeFromMime(mimeType)
-		return fileType
-	}
-
-	return "file"
-}
-
-func getFileIcon(entry os.DirEntry) string {
-	if entry.IsDir() {
-		return "folder"
-	}
-
-	ext := strings.ToLower(filepath.Ext(entry.Name()))
-	if info, exists := fileExtMap[ext]; exists {
-		return info.Icon
-	}
-
-	mimeType := mime.TypeByExtension(ext)
-	if mimeType != "" {
-		_, icon := getFileTypeFromMime(mimeType)
-		return icon
-	}
-
-	return "file"
 }
 
 func isImageFile(fileName string) bool {
@@ -428,41 +523,43 @@ func (h *Handler) serveFileFromRoot(c *gin.Context, root *security.RootFS, relPa
 	return true
 }
 
-func (h *Handler) serveThumbnailFromRoot(c *gin.Context, relPath string) {
-	for _, root := range h.roots {
-		info, err := root.Stat(relPath)
-		if err != nil {
-			continue
-		}
-
-		if info.IsDir() {
-			continue
-		}
-
-		if !isImageFile(filepath.Base(relPath)) {
-			if h.serveFileFromRoot(c, root, relPath) {
-				return
-			}
-			continue
-		}
-
-		fullPath := filepath.Join(root.Path(), relPath)
-
-		thumbPath, err := files.GenerateWithCacheLimit(fullPath, 250, h.config.MaxThumbCacheMB, h.config.ThumbJpegQuality, h.config.ThumbMaxFileSizeMB)
-		if err != nil {
-			if err == files.ErrFileTooLarge {
-				c.AbortWithStatus(http.StatusRequestEntityTooLarge)
-				return
-			}
-			if h.serveFileFromRoot(c, root, relPath) {
-				return
-			}
-			continue
-		}
-
-		c.File(thumbPath)
+func (h *Handler) serveThumbnail(c *gin.Context, relPath string) {
+	if h.localRoot == nil {
+		c.AbortWithStatus(http.StatusNotFound)
 		return
 	}
 
-	c.AbortWithStatus(http.StatusNotFound)
+	info, err := h.localRoot.Stat(relPath)
+	if err != nil {
+		c.AbortWithStatus(http.StatusNotFound)
+		return
+	}
+
+	if info.IsDir() {
+		c.AbortWithStatus(http.StatusNotFound)
+		return
+	}
+
+	if !isImageFile(filepath.Base(relPath)) {
+		if h.serveFileFromRoot(c, h.localRoot, relPath) {
+			return
+		}
+		c.AbortWithStatus(http.StatusNotFound)
+		return
+	}
+
+	thumbPath, err := files.GenerateWithCacheLimit(filepath.Join(h.localRoot.Path(), relPath), 250, h.config.MaxThumbCacheMB, h.config.ThumbJpegQuality, h.config.ThumbMaxFileSizeMB)
+	if err != nil {
+		if err == files.ErrFileTooLarge {
+			c.AbortWithStatus(http.StatusRequestEntityTooLarge)
+			return
+		}
+		if h.serveFileFromRoot(c, h.localRoot, relPath) {
+			return
+		}
+		c.AbortWithStatus(http.StatusNotFound)
+		return
+	}
+
+	c.File(thumbPath)
 }
