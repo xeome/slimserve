@@ -76,11 +76,11 @@ func compareConfigs(t *testing.T, actual, expected Config) {
 	if actual.Port != expected.Port {
 		t.Errorf("Port: expected %d, got %d", expected.Port, actual.Port)
 	}
-	// Handle nil vs empty slice for Directories
-	if !(len(actual.Directories) == 0 && len(expected.Directories) == 0) {
-		if !reflect.DeepEqual(actual.Directories, expected.Directories) {
-			t.Errorf("Directories: expected %v, got %v", expected.Directories, actual.Directories)
-		}
+	if actual.StoragePath != expected.StoragePath {
+		t.Errorf("StoragePath: expected %q, got %q", expected.StoragePath, actual.StoragePath)
+	}
+	if actual.StorageType != expected.StorageType {
+		t.Errorf("StorageType: expected %q, got %q", expected.StorageType, actual.StorageType)
 	}
 	if actual.DisableDotFiles != expected.DisableDotFiles {
 		t.Errorf("DisableDotFiles: expected %t, got %t", expected.DisableDotFiles, actual.DisableDotFiles)
@@ -106,15 +106,53 @@ func compareConfigs(t *testing.T, actual, expected Config) {
 	if actual.ThumbMaxFileSizeMB != expected.ThumbMaxFileSizeMB {
 		t.Errorf("ThumbMaxFileSizeMB: expected %d, got %d", expected.ThumbMaxFileSizeMB, actual.ThumbMaxFileSizeMB)
 	}
+	if actual.S3Region != expected.S3Region {
+		t.Errorf("S3Region: expected %q, got %q", expected.S3Region, actual.S3Region)
+	}
+	if actual.S3Endpoint != expected.S3Endpoint {
+		t.Errorf("S3Endpoint: expected %q, got %q", expected.S3Endpoint, actual.S3Endpoint)
+	}
+	if actual.S3AccessKey != expected.S3AccessKey {
+		t.Errorf("S3AccessKey: expected %q, got %q", expected.S3AccessKey, actual.S3AccessKey)
+	}
+	if actual.S3SecretKey != expected.S3SecretKey {
+		t.Errorf("S3SecretKey: expected %q, got %q", expected.S3SecretKey, actual.S3SecretKey)
+	}
+	if actual.S3Prefix != expected.S3Prefix {
+		t.Errorf("S3Prefix: expected %q, got %q", expected.S3Prefix, actual.S3Prefix)
+	}
+	if actual.LRUEnabled != expected.LRUEnabled {
+		t.Errorf("LRUEnabled: expected %t, got %t", expected.LRUEnabled, actual.LRUEnabled)
+	}
+	if actual.LRUMaxMB != expected.LRUMaxMB {
+		t.Errorf("LRUMaxMB: expected %d, got %d", expected.LRUMaxMB, actual.LRUMaxMB)
+	}
+	if actual.EnableAdmin != expected.EnableAdmin {
+		t.Errorf("EnableAdmin: expected %t, got %t", expected.EnableAdmin, actual.EnableAdmin)
+	}
+	if actual.AdminUsername != expected.AdminUsername {
+		t.Errorf("AdminUsername: expected %q, got %q", expected.AdminUsername, actual.AdminUsername)
+	}
+	if actual.AdminPassword != expected.AdminPassword {
+		t.Errorf("AdminPassword: expected %q, got %q", expected.AdminPassword, actual.AdminPassword)
+	}
+	if actual.MaxUploadSizeMB != expected.MaxUploadSizeMB {
+		t.Errorf("MaxUploadSizeMB: expected %d, got %d", expected.MaxUploadSizeMB, actual.MaxUploadSizeMB)
+	}
+	if actual.MaxConcurrentUploads != expected.MaxConcurrentUploads {
+		t.Errorf("MaxConcurrentUploads: expected %d, got %d", expected.MaxConcurrentUploads, actual.MaxConcurrentUploads)
+	}
 
-	// Sort and compare ignore patterns
 	sort.Strings(actual.IgnorePatterns)
 	sort.Strings(expected.IgnorePatterns)
-	// Handle nil vs empty slice for IgnorePatterns
-	if !(len(actual.IgnorePatterns) == 0 && len(expected.IgnorePatterns) == 0) {
-		if !reflect.DeepEqual(actual.IgnorePatterns, expected.IgnorePatterns) {
-			t.Errorf("IgnorePatterns: expected %v, got %v", expected.IgnorePatterns, actual.IgnorePatterns)
-		}
+	if !reflect.DeepEqual(actual.IgnorePatterns, expected.IgnorePatterns) {
+		t.Errorf("IgnorePatterns: expected %v, got %v", expected.IgnorePatterns, actual.IgnorePatterns)
+	}
+
+	sort.Strings(actual.AllowedUploadTypes)
+	sort.Strings(expected.AllowedUploadTypes)
+	if !reflect.DeepEqual(actual.AllowedUploadTypes, expected.AllowedUploadTypes) {
+		t.Errorf("AllowedUploadTypes: expected %v, got %v", expected.AllowedUploadTypes, actual.AllowedUploadTypes)
 	}
 }
 
@@ -144,7 +182,8 @@ func TestLoadConfigJSON(t *testing.T) {
 			config: Config{
 				Host:            "192.168.1.1",
 				Port:            9090,
-				Directories:     []string{"/var/www", "/opt/data"},
+				StoragePath:     "/var/www",
+				StorageType:     "local",
 				DisableDotFiles: false,
 				LogLevel:        "debug",
 				EnableAuth:      true,
@@ -154,7 +193,8 @@ func TestLoadConfigJSON(t *testing.T) {
 			expected: Config{
 				Host:            "192.168.1.1",
 				Port:            9090,
-				Directories:     []string{"/var/www", "/opt/data"},
+				StoragePath:     "/var/www",
+				StorageType:     "local",
 				DisableDotFiles: false,
 				LogLevel:        "debug",
 				EnableAuth:      true,
@@ -172,15 +212,16 @@ func TestLoadConfigJSON(t *testing.T) {
 			expected: Config{
 				Host:               "127.0.0.1",
 				Port:               3000,
-				Directories:        []string{}, // Empty slice from JSON unmarshaling
-				DisableDotFiles:    false,      // Zero value from JSON unmarshaling
-				LogLevel:           "",         // Empty string from JSON unmarshaling
-				EnableAuth:         false,      // Zero value from JSON unmarshaling
-				Username:           "",         // Empty string from JSON unmarshaling
-				Password:           "",         // Empty string from JSON unmarshaling
-				MaxThumbCacheMB:    0,          // Zero value from JSON unmarshaling
-				ThumbJpegQuality:   0,          // Zero value from JSON unmarshaling
-				ThumbMaxFileSizeMB: 0,          // Zero value from JSON unmarshaling
+				StoragePath:        "",
+				StorageType:        "",
+				DisableDotFiles:    false, // Zero value from JSON unmarshaling
+				LogLevel:           "",    // Empty string from JSON unmarshaling
+				EnableAuth:         false, // Zero value from JSON unmarshaling
+				Username:           "",    // Empty string from JSON unmarshaling
+				Password:           "",    // Empty string from JSON unmarshaling
+				MaxThumbCacheMB:    0,     // Zero value from JSON unmarshaling
+				ThumbJpegQuality:   0,     // Zero value from JSON unmarshaling
+				ThumbMaxFileSizeMB: 0,     // Zero value from JSON unmarshaling
 			},
 		},
 	}
@@ -220,7 +261,7 @@ func TestLoadConfigEnvVars(t *testing.T) {
 			envVars: map[string]string{
 				"SLIMSERVE_HOST":             "env-host",
 				"SLIMSERVE_PORT":             "7777",
-				"SLIMSERVE_DIRS":             "/tmp,/home",
+				"SLIMSERVE_STORAGE_PATH":     "/tmp",
 				"SLIMSERVE_DISABLE_DOTFILES": "false",
 				"SLIMSERVE_LOG_LEVEL":        "warn",
 				"SLIMSERVE_ENABLE_AUTH":      "true",
@@ -228,17 +269,24 @@ func TestLoadConfigEnvVars(t *testing.T) {
 				"SLIMSERVE_PASSWORD":         "envpass",
 			},
 			expected: Config{
-				Host:               "env-host",
-				Port:               7777,
-				Directories:        []string{"/tmp", "/home"},
-				DisableDotFiles:    false, // DOT_FILES=true means disable=false
-				LogLevel:           "warn",
-				EnableAuth:         true,
-				Username:           "envuser",
-				Password:           "envpass",
-				MaxThumbCacheMB:    100, // Default value
-				ThumbJpegQuality:   85,  // Default value
-				ThumbMaxFileSizeMB: 10,  // Default value
+				Host:                 "env-host",
+				Port:                 7777,
+				StoragePath:          "/tmp",
+				StorageType:          "local",
+				DisableDotFiles:      false, // DOT_FILES=true means disable=false
+				LogLevel:             "warn",
+				EnableAuth:           true,
+				Username:             "envuser",
+				Password:             "envpass",
+				MaxThumbCacheMB:      100, // Default value
+				ThumbJpegQuality:     85,  // Default value
+				ThumbMaxFileSizeMB:   10,  // Default value
+				IgnorePatterns:       []string{},
+				LRUEnabled:           true,
+				LRUMaxMB:             0,
+				MaxUploadSizeMB:      100,
+				AllowedUploadTypes:   []string{"*"},
+				MaxConcurrentUploads: 3,
 			},
 		},
 		{
@@ -248,38 +296,50 @@ func TestLoadConfigEnvVars(t *testing.T) {
 				"SLIMSERVE_PORT": "5555",
 			},
 			expected: Config{
-				Host:               "partial-host",
-				Port:               5555,
-				Directories:        []string{"."}, // Default
-				DisableDotFiles:    true,          // Default
-				LogLevel:           "info",        // Default
-				EnableAuth:         false,         // Default
-				Username:           "",            // Default
-				Password:           "",            // Default
-				MaxThumbCacheMB:    100,           // Default
-				ThumbJpegQuality:   85,            // Default
-				ThumbMaxFileSizeMB: 10,            // Default
-				IgnorePatterns:     []string{},    // Default
+				Host:                 "partial-host",
+				Port:                 5555,
+				StoragePath:          ".",
+				StorageType:          "local",
+				DisableDotFiles:      true,       // Default
+				LogLevel:             "info",     // Default
+				EnableAuth:           false,      // Default
+				Username:             "",         // Default
+				Password:             "",         // Default
+				MaxThumbCacheMB:      100,        // Default
+				ThumbJpegQuality:     85,         // Default
+				ThumbMaxFileSizeMB:   10,         // Default
+				IgnorePatterns:       []string{}, // Default
+				LRUEnabled:           true,
+				LRUMaxMB:             0,
+				MaxUploadSizeMB:      100,
+				AllowedUploadTypes:   []string{"*"},
+				MaxConcurrentUploads: 3,
 			},
 		},
 		{
-			name: "dirs_with_whitespace",
+			name: "storage_path_with_whitespace",
 			envVars: map[string]string{
-				"SLIMSERVE_DIRS": " /path1 , /path2 , /path3 ",
+				"SLIMSERVE_STORAGE_PATH": " /var/www ",
 			},
 			expected: Config{
-				Host:               "0.0.0.0",                              // Default
-				Port:               8080,                                   // Default
-				Directories:        []string{"/path1", "/path2", "/path3"}, // Trimmed whitespace
-				DisableDotFiles:    true,                                   // Default
-				LogLevel:           "info",                                 // Default
-				EnableAuth:         false,                                  // Default
-				Username:           "",                                     // Default
-				Password:           "",                                     // Default
-				MaxThumbCacheMB:    100,                                    // Default
-				ThumbJpegQuality:   85,                                     // Default
-				ThumbMaxFileSizeMB: 10,                                     // Default
-				IgnorePatterns:     []string{},                             // Default
+				Host:                 "0.0.0.0",    // Default
+				Port:                 8080,         // Default
+				StoragePath:          " /var/www ", // No trimming for strings
+				StorageType:          "local",      // Default
+				DisableDotFiles:      true,         // Default
+				LogLevel:             "info",       // Default
+				EnableAuth:           false,        // Default
+				Username:             "",           // Default
+				Password:             "",           // Default
+				MaxThumbCacheMB:      100,          // Default
+				ThumbJpegQuality:     85,           // Default
+				ThumbMaxFileSizeMB:   10,           // Default
+				IgnorePatterns:       []string{},   // Default
+				LRUEnabled:           true,
+				LRUMaxMB:             0,
+				MaxUploadSizeMB:      100,
+				AllowedUploadTypes:   []string{"*"},
+				MaxConcurrentUploads: 3,
 			},
 		},
 		{
@@ -288,18 +348,24 @@ func TestLoadConfigEnvVars(t *testing.T) {
 				"SLIMSERVE_PORT": "invalid-port",
 			},
 			expected: Config{
-				Host:               "0.0.0.0", // Default
-				Port:               8080,      // Default (invalid port ignored)
-				Directories:        []string{"."},
-				DisableDotFiles:    true,
-				LogLevel:           "info",
-				EnableAuth:         false,
-				Username:           "",
-				Password:           "",
-				MaxThumbCacheMB:    100,        // Default
-				ThumbJpegQuality:   85,         // Default
-				ThumbMaxFileSizeMB: 10,         // Default
-				IgnorePatterns:     []string{}, // Default
+				Host:                 "0.0.0.0", // Default
+				Port:                 8080,      // Default (invalid port ignored)
+				StoragePath:          ".",
+				StorageType:          "local",
+				DisableDotFiles:      true,
+				LogLevel:             "info",
+				EnableAuth:           false,
+				Username:             "",
+				Password:             "",
+				MaxThumbCacheMB:      100,        // Default
+				ThumbJpegQuality:     85,         // Default
+				ThumbMaxFileSizeMB:   10,         // Default
+				IgnorePatterns:       []string{}, // Default
+				LRUEnabled:           true,
+				LRUMaxMB:             0,
+				MaxUploadSizeMB:      100,
+				AllowedUploadTypes:   []string{"*"},
+				MaxConcurrentUploads: 3,
 			},
 		},
 		{
@@ -309,18 +375,24 @@ func TestLoadConfigEnvVars(t *testing.T) {
 				"SLIMSERVE_ENABLE_AUTH":      "not-a-bool",
 			},
 			expected: Config{
-				Host:               "0.0.0.0", // Default
-				Port:               8080,      // Default
-				Directories:        []string{"."},
-				DisableDotFiles:    true, // Default (invalid bool ignored)
-				LogLevel:           "info",
-				EnableAuth:         false, // Default (invalid bool ignored)
-				Username:           "",
-				Password:           "",
-				MaxThumbCacheMB:    100,        // Default
-				ThumbJpegQuality:   85,         // Default
-				ThumbMaxFileSizeMB: 10,         // Default
-				IgnorePatterns:     []string{}, // Default
+				Host:                 "0.0.0.0", // Default
+				Port:                 8080,      // Default
+				StoragePath:          ".",
+				StorageType:          "local",
+				DisableDotFiles:      true, // Default (invalid bool ignored)
+				LogLevel:             "info",
+				EnableAuth:           false, // Default (invalid bool ignored)
+				Username:             "",
+				Password:             "",
+				MaxThumbCacheMB:      100,        // Default
+				ThumbJpegQuality:     85,         // Default
+				ThumbMaxFileSizeMB:   10,         // Default
+				IgnorePatterns:       []string{}, // Default
+				LRUEnabled:           true,
+				LRUMaxMB:             0,
+				MaxUploadSizeMB:      100,
+				AllowedUploadTypes:   []string{"*"},
+				MaxConcurrentUploads: 3,
 			},
 		},
 	}
@@ -356,23 +428,29 @@ func TestLoadConfigFlags(t *testing.T) {
 				"slimserve",
 				"-host", "flag-host",
 				"-port", "6666",
-				"-dirs", "/flag1,/flag2",
+				"-storage-path", "/flag1",
 				"-disable-dotfiles=true",
 				"-log-level", "error",
 			},
 			expected: Config{
-				Host:               "flag-host",
-				Port:               6666,
-				Directories:        []string{"/flag1", "/flag2"},
-				DisableDotFiles:    true,       // disable-dotfiles flag present means disable=true
-				LogLevel:           "error",    // Set by -log-level flag
-				EnableAuth:         false,      // Default
-				Username:           "",         // Default
-				Password:           "",         // Default
-				MaxThumbCacheMB:    100,        // Default
-				ThumbJpegQuality:   85,         // Default
-				ThumbMaxFileSizeMB: 10,         // Default
-				IgnorePatterns:     []string{}, // Default
+				Host:                 "flag-host",
+				Port:                 6666,
+				StoragePath:          "/flag1",
+				StorageType:          "local",
+				DisableDotFiles:      true,       // disable-dotfiles flag present means disable=true
+				LogLevel:             "error",    // Set by -log-level flag
+				EnableAuth:           false,      // Default
+				Username:             "",         // Default
+				Password:             "",         // Default
+				MaxThumbCacheMB:      100,        // Default
+				ThumbJpegQuality:     85,         // Default
+				ThumbMaxFileSizeMB:   10,         // Default
+				IgnorePatterns:       []string{}, // Default
+				LRUEnabled:           true,
+				LRUMaxMB:             0,
+				MaxUploadSizeMB:      100,
+				AllowedUploadTypes:   []string{"*"},
+				MaxConcurrentUploads: 3,
 			},
 		},
 		{
@@ -383,18 +461,24 @@ func TestLoadConfigFlags(t *testing.T) {
 				"-port", "1234",
 			},
 			expected: Config{
-				Host:               "partial-flag-host",
-				Port:               1234,
-				Directories:        []string{"."}, // Default
-				DisableDotFiles:    true,          // Default
-				LogLevel:           "info",        // Default
-				EnableAuth:         false,         // Default
-				Username:           "",            // Default
-				Password:           "",            // Default
-				MaxThumbCacheMB:    100,           // Default
-				ThumbJpegQuality:   85,            // Default
-				ThumbMaxFileSizeMB: 10,            // Default
-				IgnorePatterns:     []string{},    // Default
+				Host:                 "partial-flag-host",
+				Port:                 1234,
+				StoragePath:          ".",
+				StorageType:          "local",
+				DisableDotFiles:      true,       // Default
+				LogLevel:             "info",     // Default
+				EnableAuth:           false,      // Default
+				Username:             "",         // Default
+				Password:             "",         // Default
+				MaxThumbCacheMB:      100,        // Default
+				ThumbJpegQuality:     85,         // Default
+				ThumbMaxFileSizeMB:   10,         // Default
+				IgnorePatterns:       []string{}, // Default
+				LRUEnabled:           true,
+				LRUMaxMB:             0,
+				MaxUploadSizeMB:      100,
+				AllowedUploadTypes:   []string{"*"},
+				MaxConcurrentUploads: 3,
 			},
 		},
 	}
@@ -552,7 +636,8 @@ func TestLoadConfigPrecedence(t *testing.T) {
 		expected := Config{
 			Host:               "flag-host", // Flag wins
 			Port:               2222,        // Env var wins over file
-			Directories:        []string{},  // Empty from JSON (not set in file)
+			StoragePath:        "",          // Empty from JSON (not set in file)
+			StorageType:        "",          // Empty from JSON (not set in file)
 			DisableDotFiles:    false,       // Zero value from JSON
 			LogLevel:           "debug",     // File value (not overridden)
 			EnableAuth:         false,       // Zero value from JSON

@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"os"
 	"reflect"
 	"strconv"
@@ -23,7 +24,13 @@ type fieldMapping struct {
 var configMappings = []fieldMapping{
 	{"Host", "SLIMSERVE_HOST", "host", "Host to bind to", "string", ""},
 	{"Port", "SLIMSERVE_PORT", "port", "Port to serve on", "int", 0},
-	{"Directories", "SLIMSERVE_DIRS", "dirs", "Comma-separated list of directories to serve", "stringSlice", ""},
+	{"StoragePath", "SLIMSERVE_STORAGE_PATH", "storage-path", "Storage path (local directory or S3 bucket name)", "string", ""},
+	{"StorageType", "SLIMSERVE_STORAGE_TYPE", "storage-type", "Storage type: 'local' or 's3'", "string", ""},
+	{"S3Region", "SLIMSERVE_S3_REGION", "s3-region", "S3 region", "string", ""},
+	{"S3Endpoint", "SLIMSERVE_S3_ENDPOINT", "s3-endpoint", "S3 endpoint (for MinIO, etc.)", "string", ""},
+	{"S3AccessKey", "SLIMSERVE_S3_ACCESS_KEY", "s3-access-key", "S3 access key", "string", ""},
+	{"S3SecretKey", "SLIMSERVE_S3_SECRET_KEY", "s3-secret-key", "S3 secret key", "string", ""},
+	{"S3Prefix", "SLIMSERVE_S3_PREFIX", "s3-prefix", "S3 key prefix", "string", ""},
 	{"DisableDotFiles", "SLIMSERVE_DISABLE_DOTFILES", "disable-dotfiles", "Block access to dot files", "bool", false},
 	{"LogLevel", "SLIMSERVE_LOG_LEVEL", "log-level", "Log level (debug, info, warn, error)", "string", ""},
 	{"EnableAuth", "SLIMSERVE_ENABLE_AUTH", "enable-auth", "Enable basic authentication", "bool", false},
@@ -36,7 +43,6 @@ var configMappings = []fieldMapping{
 	{"EnableAdmin", "SLIMSERVE_ENABLE_ADMIN", "enable-admin", "Enable admin interface", "bool", false},
 	{"AdminUsername", "SLIMSERVE_ADMIN_USERNAME", "admin-username", "Admin username", "string", ""},
 	{"AdminPassword", "SLIMSERVE_ADMIN_PASSWORD", "admin-password", "Admin password", "string", ""},
-	{"AdminUploadDir", "SLIMSERVE_ADMIN_UPLOAD_DIR", "admin-upload-dir", "Directory for admin uploads", "string", ""},
 	{"MaxUploadSizeMB", "SLIMSERVE_MAX_UPLOAD_SIZE_MB", "max-upload-size-mb", "Maximum upload size in MB", "int", 0},
 	{"AllowedUploadTypes", "SLIMSERVE_ALLOWED_UPLOAD_TYPES", "allowed-upload-types", "Comma-separated list of allowed upload file types", "stringSlice", ""},
 	{"MaxConcurrentUploads", "SLIMSERVE_MAX_CONCURRENT_UPLOADS", "max-concurrent-uploads", "Maximum concurrent uploads", "int", 0},
@@ -106,7 +112,6 @@ func parseStringSlice(value string) []string {
 	return parts
 }
 
-// parseInt safely converts a string to int, returning 0 on error
 func parseInt(value string) int {
 	if val, err := strconv.Atoi(value); err == nil {
 		return val
@@ -139,6 +144,8 @@ func loadFromEnvGeneric(cfg *Config) {
 		case "bool":
 			if val, err := strconv.ParseBool(envValue); err == nil {
 				field.SetBool(val)
+			} else {
+				fmt.Printf("config: failed to parse %s=%s as bool: %v\n", mapping.envVar, envValue, err)
 			}
 		case "stringSlice":
 			slice := parseStringSlice(envValue)
@@ -234,6 +241,8 @@ func loadFromFlagsGeneric(cfg *Config) {
 		case "bool":
 			if val, err := strconv.ParseBool(flagValue); err == nil {
 				field.SetBool(val)
+			} else {
+				fmt.Printf("config: failed to parse --%s=%s as bool: %v\n", mapping.flagName, flagValue, err)
 			}
 		case "stringSlice":
 			if flagValue != "" {
