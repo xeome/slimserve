@@ -2,6 +2,7 @@ name: Docker Publish
 
 on:
   workflow_call:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -90,8 +91,12 @@ jobs:
 
       - name: Extract version components
         id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          raw_ref="${{ github.ref_name }}"  # e.g., v1.2.3
+          # A manual run rebuilds the latest release, which Dockerfile.prebuilt downloads, on a fresh base image.
+          raw_ref="${{ github.ref_type == 'tag' && github.ref_name || '' }}"
+          [ -n "$raw_ref" ] || raw_ref=$(gh release view -R "${{ github.repository }}" --json tagName -q .tagName)
           version="${raw_ref#v}"            # strip leading v if present
 
           major=$(echo "$version" | cut -d. -f1)
