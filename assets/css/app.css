@@ -1,0 +1,139 @@
+@import "tailwindcss" source(none);
+@import "phoenix-colocated/slimserve/colocated.css";
+@source "../css";
+@source "../js";
+@source "../../lib/slimserve_web";
+/* Required for Tailwind to automatically pick up changes in colocated CSS files in dev */
+@source "../../_build/dev/phoenix-colocated/slimserve/*/";
+
+/* The heroicons installation itself is managed by your mix.exs */
+@plugin "../vendor/heroicons";
+
+@custom-variant phx-click-loading (.phx-click-loading&, .phx-click-loading &);
+@custom-variant phx-submit-loading (.phx-submit-loading&, .phx-submit-loading &);
+@custom-variant phx-change-loading (.phx-change-loading&, .phx-change-loading &);
+
+[data-phx-session], [data-phx-teleported-src] { display: contents }
+
+:root {
+  --ground: #0A0A0C;
+  --panel:  #0E0E10;
+  --raised: #151618;
+  --rule:   #232427;
+  --grid:   #1A1B1E;
+  --text:   #E6E7EA;   /* 14.6:1 */
+  --bright: #F7F8F8;
+  --dim:    #8A8F98;   /* 5.57:1 on --raised */
+  --cool:   #62A6B0;   /* semantic only, ≥5.8:1 */
+  --warm:   #E5AE52;
+  --hot:    #E2715A;
+  --ok:     #62BB78;   /* cool info, warm warn, hot breach */
+  --s1: #5C96DF; --s2: #D2794F; --s3: #36A996; --s4: #B48E23;   /* series, in this order: ≥5.58:1 */
+  --s5: #CC729E; --s6: #68A65A; --s7: #9A83D8; --s8: #D67271;   /* passes dataviz's validator, adjacent pairs */
+
+  --line:  rgba(255,255,255,.08);
+  --ring:  rgba(0,0,0,.30);
+  --lift:  rgba(255,255,255,.05);
+  --hover: rgba(255,255,255,.05);
+  --sel:   rgba(255,255,255,.07);
+  --card:  rgba(255,255,255,.02);
+  --glow:        rgba(255,255,255,.05);
+  --glow-panel:  rgba(255,255,255,.065);
+  --glow-panel-2: rgba(255,255,255,.03);
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='.33 .33 .33 0 0 .33 .33 .33 0 0 .33 .33 .33 0 0 0 0 0 0 1'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.3'/%3E%3C/svg%3E");
+  --sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --mono: ui-monospace, "JetBrains Mono", Menlo, monospace;
+  color-scheme: dark;
+}
+[data-theme='light'] {
+  --ground: #EDEDEF; --panel: #F8F8F9; --raised: #FFFFFF;
+  --rule: #CFCFD3; --grid: #E2E2E5;
+  --text: #26272B; --bright: #0F1011; --dim: #62666D;   /* 4.93:1 on --ground */
+  --cool: #17606A; --warm: #7B5000; --hot: #A32E11; --ok: #006629;   /* ≥4.5:1 over their own badge tint */
+  --s1: #346DB2; --s2: #A85329; --s3: #107869; --s4: #85670A;   /* ≥4.51:1; s3 fails dataviz's chroma */
+  --s5: #A44E7A; --s6: #3D792F; --s7: #755EAF; --s8: #AD4E4F;   /* floor: no aqua holds both in gamut */
+  --line: rgba(0,0,0,.09); --ring: rgba(0,0,0,.04); --lift: rgba(255,255,255,.8);
+  --hover: rgba(0,0,0,.04); --sel: rgba(0,0,0,.055); --card: rgba(255,255,255,.5);
+  --glow: rgba(255,255,255,.7); --glow-panel: rgba(255,255,255,.9); --glow-panel-2: rgba(255,255,255,.4);
+  color-scheme: light;
+}
+body { background: var(--ground); color: var(--text); font: 13px/1.5 var(--sans);
+       font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
+
+/* No sidebar yet, so the body is the panel and the page scrolls. */
+body.page {
+  min-height: 100dvh; margin: 0;
+  --l: max(20px, env(safe-area-inset-left)); --r: max(20px, env(safe-area-inset-right));
+  background:
+    var(--grain),
+    radial-gradient(480px 250px at 0 0, var(--glow-panel), transparent 75%),
+    radial-gradient(400px 200px at 100% 0, var(--glow-panel-2), transparent 75%),
+    var(--panel);
+  background-blend-mode: overlay, normal, normal;
+}
+.page > header {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px;
+  min-height: 52px; padding: max(8px, env(safe-area-inset-top)) var(--r) 8px var(--l);
+  border-bottom: 1px solid var(--line);
+}
+.page > header .name { font-size: 14px; font-weight: 600; color: var(--bright); text-decoration: none; }
+.page > header .meta { color: var(--dim); font-size: 12px; }
+.page > main { padding: 16px var(--r) max(16px, env(safe-area-inset-bottom)) var(--l); }
+.page h1 { margin: 0; font-size: 15px; font-weight: 600; color: var(--bright); }
+.page .sub { color: var(--dim); }
+
+.card {
+  background: var(--card); border: 1px solid var(--line); border-radius: 8px;
+  box-shadow: 0 0 0 1px var(--ring), inset 0 1px 0 var(--lift); overflow: hidden;
+}
+
+.btn { display: inline-flex; align-items: center; gap: 6px; background: transparent;
+       border: 1px solid var(--line); border-radius: 6px; color: var(--dim);
+       font: inherit; font-size: 12px; padding: 4px 10px; cursor: pointer; text-decoration: none; }
+.btn:hover { color: var(--text); background: var(--hover); }
+.btn.primary { color: var(--bright); background: var(--sel); }
+
+.field { display: block; margin-bottom: 8px; }
+.field > label > .label { display: block; margin-bottom: 4px; font-size: 12px; color: var(--dim); }
+.input {
+  width: 100%; box-sizing: border-box; padding: 5px 9px; border-radius: 6px;
+  background: var(--card); color: var(--text); font: inherit;
+  border: 1px solid var(--line); box-shadow: 0 0 0 1px var(--ring);
+}
+.input.invalid { border-color: color-mix(in srgb, var(--hot) 60%, transparent); }
+.field-error { display: flex; align-items: center; gap: 6px; margin: 4px 0 0; font-size: 12px; color: var(--hot); }
+
+.badge { --x: var(--text); }
+.badge.info   { --x: var(--cool); }
+.badge.breach { --x: var(--hot); }
+.badge {
+  display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 7px; border-radius: 5px;
+  font-size: 11.5px; font-weight: 500; color: var(--x);
+  background: color-mix(in srgb, var(--x) 13%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--x) 26%, transparent);
+}
+
+/* its kind is data, so only the badge carries hue. */
+#flash-group {
+  position: fixed; top: 12px; right: 12px; z-index: 50; width: min(24rem, calc(100vw - 24px));
+  display: flex; flex-direction: column; gap: 8px;
+}
+.flash > div {
+  display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px;
+  background: var(--raised); color: var(--text); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 0 0 1px var(--ring), inset 0 1px 0 var(--lift), 0 16px 48px rgba(0,0,0,.5);
+}
+.flash p { margin: 0; }
+.flash .title { color: var(--bright); font-weight: 500; }
+.flash button { margin-left: auto; border: 0; background: transparent; color: var(--dim); cursor: pointer; }
+
+.table { width: 100%; border-collapse: collapse; }
+.table th { text-align: left; font-size: 11px; font-weight: 500; color: var(--dim); padding: 6px 10px; }
+.table td { padding: 6px 10px; box-shadow: inset 0 1px 0 var(--line); }
+.table tbody tr:hover { background: var(--hover); }
+
+.list { list-style: none; margin: 0; padding: 0; }
+.list > li { display: flex; gap: 14px; padding: 6px 0; box-shadow: inset 0 -1px 0 var(--line); }
+.list .title { min-width: 8em; color: var(--dim); }
+
+:focus-visible { outline: 2px solid var(--warm); outline-offset: -2px; }

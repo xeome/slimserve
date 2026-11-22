@@ -1,0 +1,15 @@
+// Note: This file assumes a basic esbuild setup without node_modules.
+// We include a generic paths alias to deps to mimic how esbuild resolves
+// the Phoenix and LiveView JavaScript assets.
+// If you have a package.json in your project, you should remove the paths configuration.
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "*": ["../deps/*"]
+    },
+    "allowJs": true,
+    "noEmit": true
+  },
+  "include": ["js/**/*"]
+}

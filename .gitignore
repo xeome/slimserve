@@ -1,26 +1,26 @@
-.kilocode
-.vscode
-slimserve
-tools/icons/icons
-*.log
+/_build/
 
-data/*.png
-data/*.jpg
+/cover/
 
-benchmark_results/*
+/deps/
 
-# Generated icon files
-web/static/icons/sprite.svg
-web/templates/icons.html
+/doc/
 
-# Generated CSS files
-web/static/css/tailwind.css
+/.fetch
 
-# Node.js
-node_modules/
-package-lock.json
+erl_crash.dump
 
-# AGENTS.md context files (generated per-workspace)
-AGENTS.md
-**/AGENTS.md
+*.ez
 
+/tmp/
+
+slimserve-*.tar
+
+/priv/static/assets/
+
+/priv/static/cache_manifest.json
+
+npm-debug.log
+/assets/node_modules/
+
+/priv/plts/
