@@ -1,0 +1,11 @@
+<Layouts.app flash={@flash} write?={@write?}>
+  <section id="not-found" class={["card", "message-card"]}>
+    <div class="message-intro">
+      <.icon name="hero-document-magnifying-glass" class="size-6" />
+      <p class="sub">404</p>
+      <h1>Page not found</h1>
+      <p class="sub">This file or folder isn’t available.</p>
+    </div>
+    <a href={~p"/"} class="btn primary">Back to files</a>
+  </section>
+</Layouts.app>

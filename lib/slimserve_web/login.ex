@@ -15,6 +15,8 @@ defmodule SlimServeWeb.Login do
   import Phoenix.Controller, only: [current_path: 1, redirect: 2]
   import Plug.Conn
 
+  alias SlimServeWeb.BrowseHTML
+
   @session_key "login"
   @write_key "write"
 
@@ -91,7 +93,7 @@ defmodule SlimServeWeb.Login do
   @impl Plug
   def call(conn, :write) do
     cond do
-      not write_on?() -> not_found(conn)
+      not write_on?() -> BrowseHTML.send_not_found(conn)
       write?(get_session(conn)) -> conn
       true -> refuse(conn)
     end
@@ -100,7 +102,7 @@ defmodule SlimServeWeb.Login do
   def call(conn, _opts), do: if(on?(), do: gate(conn), else: off(conn))
 
   defp off(%{path_info: [".app", page]} = conn) when page in ~w(login logout),
-    do: if(write_on?(), do: conn, else: not_found(conn))
+    do: if(write_on?(), do: conn, else: BrowseHTML.send_not_found(conn))
 
   defp off(conn), do: conn
 
@@ -110,7 +112,7 @@ defmodule SlimServeWeb.Login do
   defp gate(conn), do: if(logged_in?(get_session(conn)), do: conn, else: refuse(conn))
 
   defp refuse(conn) do
-    if conn.method == "GET" and html?(conn),
+    if conn.method == "GET" and BrowseHTML.accepts_html?(conn),
       do: conn |> redirect(to: ~p"/.app/login?#{[next: current_path(conn)]}") |> halt(),
       else: conn |> send_resp(401, "Unauthorized") |> halt()
   end
@@ -124,8 +126,4 @@ defmodule SlimServeWeb.Login do
   end
 
   defp to_login(socket), do: {:halt, Phoenix.LiveView.redirect(socket, to: ~p"/.app/login")}
-
-  defp html?(conn), do: conn |> get_req_header("accept") |> Enum.any?(&String.contains?(&1, "text/html"))
-
-  defp not_found(conn), do: conn |> send_resp(404, "Not Found") |> halt()
 end

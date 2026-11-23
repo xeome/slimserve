@@ -253,6 +253,47 @@ defmodule SlimServeWeb.BrowseTest do
     end
   end
 
+  test "browser refusals share the same 404 shell without identifying the path", %{conn: conn} do
+    browser = put_req_header(conn, "accept", "text/html,application/xhtml+xml")
+
+    for path <- ["/missing.txt", "/sub/.env", "/a.txt?thumb=1"] do
+      document = browser |> get(path) |> html_response(404) |> LazyHTML.from_document()
+      assert ["/"] == LazyHTML.attribute(LazyHTML.query(document, "#app-shell header a"), "href")
+      assert "Page not found" == LazyHTML.text(LazyHTML.query(document, "#not-found h1"))
+      refute LazyHTML.text(document) =~ path
+    end
+
+    assert conn |> put_req_header("accept", "application/json") |> get("/sub/.env") |> response(404) == "Not Found"
+  end
+
+  test "disabled app routes have the same refusal contract as unavailable files", %{conn: conn} do
+    browser = put_req_header(conn, "accept", "text/html,application/xhtml+xml")
+    plain = put_req_header(conn, "accept", "application/json")
+
+    paths = [
+      "/missing.txt",
+      "/sub/.env",
+      "/a.txt?thumb=1",
+      "/.app/login",
+      "/.app/dashboard"
+    ]
+
+    for {method, path} <- Enum.map(paths, &{:get, &1}) ++ [{:post, "/.app/login"}, {:post, "/.app/logout"}] do
+      refused = dispatch(browser, SlimServeWeb.Endpoint, method, path)
+      document = refused |> html_response(404) |> LazyHTML.from_document()
+
+      assert "Page not found" == LazyHTML.text(LazyHTML.query(document, "#not-found h1"))
+      assert "Guest" == document |> LazyHTML.query(".session-label") |> LazyHTML.text() |> String.trim()
+      assert ["/"] == LazyHTML.attribute(LazyHTML.query(document, "#not-found a"), "href")
+      assert [] == LazyHTML.attribute(LazyHTML.query(document, "#edit-login, #logout-form"), "id")
+
+      assert ["default-src 'self'; img-src 'self' data:; base-uri 'self'; frame-ancestors 'self'"] ==
+               get_resp_header(refused, "content-security-policy")
+
+      assert plain |> dispatch(SlimServeWeb.Endpoint, method, path) |> response(404) == "Not Found"
+    end
+  end
+
   describe "Containment" do
     test "Scenario: A path with .. segments answers 404", %{conn: conn} do
       for path <- ~w(/../etc/passwd /../canary.txt /a/../../canary.txt) do

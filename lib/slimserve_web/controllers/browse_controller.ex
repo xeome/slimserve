@@ -6,6 +6,7 @@ defmodule SlimServeWeb.BrowseController do
   alias SlimServe.Root
   alias SlimServe.ThumbCache
   alias SlimServe.Thumbnail
+  alias SlimServeWeb.BrowseHTML
   alias SlimServeWeb.ListingLive
 
   # A thumbnail goes through the same gate as a download, so a hidden image has none either.
@@ -15,7 +16,7 @@ defmodule SlimServeWeb.BrowseController do
          {:ok, stat} <- File.stat(file, time: :posix) do
       thumbnail(conn, file, stat)
     else
-      _ -> not_found(conn)
+      _ -> BrowseHTML.send_not_found(conn)
     end
   end
 
@@ -28,11 +29,11 @@ defmodule SlimServeWeb.BrowseController do
       {:file, file} ->
         case File.stat(file) do
           {:ok, stat} -> download(conn, file, List.last(segments), stat.size)
-          {:error, _reason} -> not_found(conn)
+          {:error, _reason} -> BrowseHTML.send_not_found(conn)
         end
 
       :error ->
-        not_found(conn)
+        BrowseHTML.send_not_found(conn)
     end
   end
 
@@ -97,9 +98,6 @@ defmodule SlimServeWeb.BrowseController do
 
   defp resolve(segments), do: Root.resolve(Application.fetch_env!(:slimserve, :root), segments)
 
-  # One answer for every refusal, so a 404 never tells a hidden path from a missing one.
-  defp not_found(conn), do: send_resp(conn, 404, "Not Found")
-
   defp thumbnail(conn, file, stat) do
     max_dim = Application.fetch_env!(:slimserve, :thumb_max_dim)
     key = ThumbCache.key(file, stat, max_dim)
@@ -115,7 +113,7 @@ defmodule SlimServeWeb.BrowseController do
     else
       true -> send_resp(conn, 413, "Content Too Large")
       {:ok, webp} -> send_webp(conn, "hit", webp)
-      {:error, _reason} -> not_found(conn)
+      {:error, _reason} -> BrowseHTML.send_not_found(conn)
     end
   end
 

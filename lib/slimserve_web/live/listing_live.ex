@@ -278,12 +278,16 @@ defmodule SlimServeWeb.ListingLive do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} write?={@write?}>
+      <:breadcrumbs>
+        <a href={~p"/"} aria-current={@segments == [] && "page"}>Root</a>
+        <span :for={{name, path} <- @crumbs} class="crumb">
+          <.icon name="hero-chevron-right" class="size-3" />
+          <a href={path} aria-current={path == href(@segments) && "page"}>{name}</a>
+        </span>
+      </:breadcrumbs>
       <div id="listing" data-view={@view}>
-        <div class="listing-bar">
-          <h1 id="crumbs" class="crumbs">
-            <a href={~p"/"}>root</a>
-            <span :for={{name, href} <- @crumbs}>/ <a href={href}>{name}</a></span>
-          </h1>
+        <div class={["listing-bar", @segments != [] && "folder-heading"]}>
+          <h1>{List.last(@segments) || "Files"}</h1>
           <nav class="segmented" aria-label="View">
             <a
               :for={{view, label} <- [{"list", "List"}, {"grid", "Grid"}]}
@@ -291,6 +295,10 @@ defmodule SlimServeWeb.ListingLive do
               href={href(@segments) <> "?view=" <> view}
               aria-current={@view == view && "true"}
             >
+              <.icon
+                name={if(view == "list", do: "hero-list-bullet", else: "hero-squares-2x2")}
+                class="size-4"
+              />
               {label}
             </a>
           </nav>
@@ -332,8 +340,21 @@ defmodule SlimServeWeb.ListingLive do
         >
           <li :for={err <- upload_errors(@uploads.files)} class="field-error">{upload_error(err)}</li>
           <li :for={entry <- @uploads.files.entries} id={"upload-" <> entry.ref}>
-            <span class="label">{entry.client_name}</span>
-            <span class="num">{entry.progress}%</span>
+            <div class="upload-status">
+              <span class="label">{entry.client_name}</span>
+              <progress
+                max="100"
+                value={entry.progress}
+                aria-label={"Upload progress for " <> entry.client_name}
+              />
+            </div>
+            <span :if={entry.valid?} class="sub">
+              {cond do
+                entry.done? -> "Finishing…"
+                entry.preflighted? -> "Uploading #{entry.progress}%"
+                true -> "Ready to upload"
+              end}
+            </span>
             <span :for={err <- upload_errors(@uploads.files, entry)} class="field-error">
               {upload_error(err)}
             </span>
@@ -359,27 +380,35 @@ defmodule SlimServeWeb.ListingLive do
           data-count={@confirm.count}
         >
           <span>
-            Delete <strong>{@confirm.name}</strong>
+            Delete folder <strong>{@confirm.name}</strong>
             and its {@confirm.count} {if(@confirm.count == 1,
               do: "file",
               else: "files"
             )}?
           </span>
-          <button
-            type="button"
-            id="confirm-delete-yes"
-            class="btn primary"
-            phx-click="confirm_delete"
-            phx-value-name={@confirm.name}
-          >
-            Delete
-          </button>
-          <button type="button" id="confirm-delete-cancel" class="btn" phx-click="cancel_delete">
-            Cancel
-          </button>
+          <div class="confirm-actions">
+            <button
+              type="button"
+              id="confirm-delete-yes"
+              class="btn primary"
+              phx-click="confirm_delete"
+              phx-value-name={@confirm.name}
+            >
+              Delete
+            </button>
+            <button
+              type="button"
+              id="confirm-delete-cancel"
+              class="btn"
+              phx-click="cancel_delete"
+              phx-mounted={JS.focus()}
+            >
+              Cancel
+            </button>
+          </div>
         </div>
 
-        <table class="table listing">
+        <table class="table listing" inert={not is_nil(@confirm)}>
           <thead>
             <tr>
               <th>Name</th>
@@ -390,7 +419,10 @@ defmodule SlimServeWeb.ListingLive do
           </thead>
           <tbody id="entries" phx-update="stream">
             <tr id="entries-empty" class="empty">
-              <td colspan={if(@write?, do: 4, else: 3)}>This folder is empty.</td>
+              <td colspan={if(@write?, do: 4, else: 3)}>
+                <.icon name="hero-folder-open" class="size-6" />
+                <strong>This folder is empty.</strong>
+              </td>
             </tr>
             <tr :for={{id, entry} <- @streams.entries} id={id}>
               <td class="name">
@@ -425,10 +457,14 @@ defmodule SlimServeWeb.ListingLive do
                       name="to"
                       id={"move-to-" <> entry.id}
                       value={entry.rel}
-                      aria-label="New path from the root"
+                      label="New path from root"
+                      aria-describedby={"move-example-" <> entry.id}
                       required
                     />
                     <button type="submit" class="btn primary">Move</button>
+                    <p id={"move-example-" <> entry.id} class="sub move-example">
+                      Example: {if(entry.dir?, do: "Projects/Archive", else: "Projects/report.pdf")}
+                    </p>
                   </.form>
                 </details>
                 <button

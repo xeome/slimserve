@@ -57,13 +57,23 @@
   --glow: rgba(255,255,255,.7); --glow-panel: rgba(255,255,255,.9); --glow-panel-2: rgba(255,255,255,.4);
   color-scheme: light;
 }
+@font-face {
+  font-family: Inter;
+  src: url("../../fonts/inter-latin.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+
 body { background: var(--ground); color: var(--text); font: 13px/1.5 var(--sans);
        font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
 
 /* No sidebar yet, so the body is the panel and the page scrolls. */
 body.page {
   min-height: 100dvh; margin: 0;
-  --l: max(20px, env(safe-area-inset-left)); --r: max(20px, env(safe-area-inset-right));
+  --gutter: clamp(16px, 4vw, 32px);
+  --l: max(var(--gutter), env(safe-area-inset-left));
+  --r: max(var(--gutter), env(safe-area-inset-right));
   background:
     var(--grain),
     radial-gradient(480px 250px at 0 0, var(--glow-panel), transparent 75%),
@@ -71,42 +81,59 @@ body.page {
     var(--panel);
   background-blend-mode: overlay, normal, normal;
 }
-.page > header {
-  display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px;
-  min-height: 52px; padding: max(8px, env(safe-area-inset-top)) var(--r) 8px var(--l);
-  border-bottom: 1px solid var(--line);
+.shell-content {
+  --cap-gutter: calc((100% - 1200px) / 2);
+  margin-inline: max(var(--l), var(--cap-gutter)) max(var(--r), var(--cap-gutter));
+  max-width: 1200px;
 }
-.page > header .name { font-size: 14px; font-weight: 600; color: var(--bright); text-decoration: none; }
-.page > header .meta { color: var(--dim); font-size: 12px; }
-.page > header .logout { margin-left: auto; }
-.page > main { padding: 16px var(--r) max(16px, env(safe-area-inset-bottom)) var(--l); }
-.page h1 { margin: 0; font-size: 15px; font-weight: 600; color: var(--bright); }
-.page .sub { color: var(--dim); }
+.app-header { border-bottom: 1px solid var(--line); box-shadow: 0 1px 0 var(--ring); }
+.app-topbar {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px;
+  min-height: 60px; padding-block: max(8px, env(safe-area-inset-top)) 8px;
+}
+.app-brand { display: inline-flex; align-items: center; gap: 9px; color: var(--bright); font-size: 15px; font-weight: 650; }
+.app-mark {
+  display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px;
+  background: var(--sel); border: 1px solid var(--line); box-shadow: 0 0 0 1px var(--ring);
+}
+.app-session { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+.session-label, .page .sub { color: var(--dim); }
+.app-main { padding-block: clamp(20px, 4vw, 40px) max(32px, env(safe-area-inset-bottom)); }
+.page h1 {
+  color: var(--bright); font-size: clamp(24px, 3vw, 32px);
+  font-weight: 650; line-height: 1.2; letter-spacing: -.025em; overflow-wrap: anywhere;
+}
 
 .card {
   background: var(--card); border: 1px solid var(--line); border-radius: 8px;
   box-shadow: 0 0 0 1px var(--ring), inset 0 1px 0 var(--lift); overflow: hidden;
 }
 
-.btn { display: inline-flex; align-items: center; gap: 6px; background: transparent;
-       border: 1px solid var(--line); border-radius: 6px; color: var(--dim);
-       font: inherit; font-size: 12px; padding: 4px 10px; cursor: pointer; text-decoration: none; }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px;
+  background: transparent; border: 1px solid var(--line); border-radius: 6px;
+  box-shadow: 0 0 0 1px var(--ring); color: var(--text); font: inherit;
+  font-size: 12px; font-weight: 550; padding: 5px 10px; cursor: pointer; text-decoration: none;
+}
 .btn:hover { color: var(--text); background: var(--hover); }
 .btn.primary { color: var(--bright); background: var(--sel); }
 
 .field { display: block; margin-bottom: 8px; }
 .field > label > .label { display: block; margin-bottom: 4px; font-size: 12px; color: var(--dim); }
 .input {
-  width: 100%; box-sizing: border-box; padding: 5px 9px; border-radius: 6px;
+  width: 100%; min-height: 36px; padding: 6px 9px; border-radius: 6px;
   background: var(--card); color: var(--text); font: inherit;
   border: 1px solid var(--line); box-shadow: 0 0 0 1px var(--ring);
 }
 .input.invalid { border-color: color-mix(in srgb, var(--hot) 60%, transparent); }
 .field-error { display: flex; align-items: center; gap: 6px; margin: 4px 0 0; font-size: 12px; color: var(--hot); }
 
-.login { max-width: 20rem; margin: 10vh auto 0; padding: 16px; }
-.login h1 { margin-bottom: 12px; }
-.login .field-error { margin: 0 0 8px; }
+.message-card { max-width: 26rem; margin: clamp(24px, 8vh, 88px) auto 0; padding: clamp(20px, 4vw, 32px); }
+.message-intro { display: grid; gap: 8px; margin-bottom: 20px; }
+.message-intro > span { color: var(--dim); }
+.login .field { margin-bottom: 16px; }
+.login .field-error { margin: 0 0 12px; }
+.login button { width: 100%; }
 
 .badge { --x: var(--text); }
 .badge.info   { --x: var(--cool); }
@@ -118,39 +145,41 @@ body.page {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--x) 26%, transparent);
 }
 
-/* its kind is data, so only the badge carries hue. */
 #flash-group {
-  position: fixed; top: 12px; right: 12px; z-index: 50; width: min(24rem, calc(100vw - 24px));
-  display: flex; flex-direction: column; gap: 8px;
+  position: fixed; z-index: 10; inset: auto var(--r) max(var(--gutter), env(safe-area-inset-bottom)) var(--l);
+  max-width: 26rem; margin-left: auto; display: grid; gap: 8px; pointer-events: none;
 }
+#flash-group .flash:not([hidden]) { pointer-events: auto; }
 .flash > div {
   display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px;
   background: var(--raised); color: var(--text); border: 1px solid var(--line); border-radius: 10px;
-  box-shadow: 0 0 0 1px var(--ring), inset 0 1px 0 var(--lift), 0 16px 48px rgba(0,0,0,.5);
+  box-shadow: 0 0 0 1px var(--ring), inset 0 1px 0 var(--lift);
 }
 .flash p { margin: 0; }
 .flash .title { color: var(--bright); font-weight: 500; }
 .flash button { margin-left: auto; border: 0; background: transparent; color: var(--dim); cursor: pointer; }
 
 .table { width: 100%; border-collapse: collapse; }
-.table th { text-align: left; font-size: 11px; font-weight: 500; color: var(--dim); padding: 6px 10px; }
-.table td { padding: 6px 10px; box-shadow: inset 0 1px 0 var(--line); }
+.table th { text-align: left; font-size: 12px; font-weight: 500; color: var(--dim); padding: 8px 10px; }
+.table td { padding: 8px 10px; box-shadow: inset 0 1px 0 var(--line); }
 .table tbody tr:hover { background: var(--hover); }
 
-/* The crumbs and the view toggle share one line; the toggle is links, so a pick is a page load. */
-.listing-bar { display: flex; align-items: center; gap: 12px; margin: 0 0 12px; }
-.listing-bar .crumbs { flex: 1; min-width: 0; margin: 0; }
+.listing-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
 .segmented { display: flex; flex: none; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: 7px; background: var(--hover); }
-.segmented a { border: 1px solid transparent; border-radius: 5px; color: var(--dim); font-size: 12px; padding: 2px 10px; text-decoration: none; }
+.segmented a {
+  display: flex; align-items: center; gap: 5px; min-height: 32px;
+  border: 1px solid transparent; border-radius: 5px; color: var(--dim);
+  font-size: 12px; padding: 2px 8px; text-decoration: none;
+}
 .segmented a:hover { color: var(--text); }
 .segmented a[aria-current='true'] { background: var(--raised); border-color: var(--line);
                                     box-shadow: inset 0 1px 0 var(--lift); color: var(--bright); }
 
-/* The path is the page title: the folder being read is bright, the way back to it dim. */
-.crumbs { display: flex; flex-wrap: wrap; gap: 0 6px; margin: 0 0 12px; color: var(--dim); overflow-wrap: anywhere; }
-.crumbs a { color: var(--dim); text-decoration: none; }
-.crumbs a:hover { color: var(--text); }
-.crumbs > :last-child a, .crumbs > a:last-child { color: var(--bright); }
+.crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-bottom: 8px; color: var(--dim); }
+.crumb { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.crumbs a { color: var(--dim); overflow-wrap: anywhere; }
+.crumbs a:hover { color: var(--text); text-decoration: underline; }
+.crumbs a[aria-current='page'] { color: var(--bright); }
 
 /* The name column takes the slack and truncates; max-width: 0 lets a table cell shrink below its text. */
 .listing .name { width: 100%; max-width: 0; }
@@ -168,17 +197,26 @@ body.page {
   background: var(--card); border: 1px solid var(--line); box-shadow: 0 0 0 1px var(--ring);
 }
 .listing:has(.thumb) .kind { margin: 8px; }
-.listing .empty td { color: var(--dim); }
+.listing .empty td { padding: 40px 10px; text-align: center; color: var(--dim); }
+.listing .empty td > * { display: block; margin: 0 auto; }
+.listing .empty td > strong { margin-top: 8px; color: var(--text); font-weight: 550; }
 .listing .empty:not(:only-child) { display: none; }
-@media (max-width: 600px) { .listing .when { display: none; } }
+@media (max-width: 600px) {
+  .listing-bar.folder-heading { flex-wrap: wrap; }
+  .listing-bar.folder-heading h1 { flex-basis: 100%; }
+  .listing .when { display: none; }
+  .listing .name .label { white-space: normal; overflow-wrap: anywhere; }
+}
 
 /* Grid: the list's rows become cards, each a square thumbnail or kind icon over the name.
    These rules undo the list's: a name cell of max-width 0 would be 0px wide in a card. */
 [data-view='grid'] .listing thead,
 [data-view='grid'] .listing .num { display: none; }
-/* A card is at most 250px, SLIMSERVE_THUMB_MAX_DIM's default, so a thumbnail is never stretched past its pixels. */
-[data-view='grid'] .listing tbody { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 250px)); gap: 10px; }
-[data-view='grid'] .listing .empty { grid-column: 1 / -1; }
+[data-view='grid'] .listing { display: block; }
+[data-view='grid'] .listing tbody { display: grid; grid-template-columns: repeat(auto-fill, minmax(145px, 1fr)); gap: 10px; }
+[data-view='grid'] .listing .empty { display: block; grid-column: 1 / -1; }
+[data-view='grid'] .listing .empty td { display: block; }
+[data-view='grid'] .listing .empty:not(:only-child) { display: none; }
 [data-view='grid'] .listing tr:not(.empty) {
   display: block; background: var(--card); border: 1px solid var(--line); border-radius: 8px;
   box-shadow: 0 0 0 1px var(--ring), inset 0 1px 0 var(--lift);
@@ -186,28 +224,36 @@ body.page {
 [data-view='grid'] .listing tr:not(.empty):hover { background: var(--hover); }
 [data-view='grid'] .listing .name { display: block; width: auto; max-width: none; padding: 8px; box-shadow: none; }
 [data-view='grid'] .listing .name a { flex-direction: column; align-items: stretch; }
-[data-view='grid'] .listing .label { text-align: center; }
-[data-view='grid'] .listing .thumb { width: 100%; height: auto; aspect-ratio: 1; }
-/* The icon takes the thumbnail's square, so every card has one height; its glyph stays small inside it. */
+[data-view='grid'] .listing .label { text-align: center; white-space: normal; overflow-wrap: anywhere; }
+[data-view='grid'] .listing .thumb { width: 100%; height: auto; aspect-ratio: 4 / 3; }
+/* Kind icons and thumbnails occupy the same media area. */
 [data-view='grid'] .listing .kind {
-  width: 100%; height: auto; aspect-ratio: 1; margin: 0;
-  -webkit-mask-size: 40%; mask-size: 40%; -webkit-mask-position: center; mask-position: center;
+  width: 100%; height: auto; aspect-ratio: 4 / 3; margin: 0;
+  -webkit-mask-size: 32px; mask-size: 32px; -webkit-mask-position: center; mask-position: center;
 }
 
 /* Write tools, shown only with write rights: chrome, so grey. The drop zone is the upload form itself. */
-.write-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 0 0 12px; }
+.write-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-bottom: 14px; }
 .write-bar form { display: flex; align-items: center; gap: 8px; margin: 0; }
-.write-bar .field { margin: 0; }
-.dropzone { flex: 1; min-width: 16rem; padding: 6px 8px; border: 1px dashed var(--line); border-radius: 8px; }
-.dropzone.phx-drop-target-active, .dropzone:has(input:focus-visible) { background: var(--hover); }
-.dropzone .btn { cursor: pointer; }
-.mkdir .input { width: 12rem; }
-.upload-entries { list-style: none; margin: 0 0 12px; padding: 0; }
-.upload-entries li { display: flex; align-items: center; gap: 10px; padding: 4px 0; box-shadow: inset 0 -1px 0 var(--line); }
-.upload-entries .label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--bright); }
-.upload-entries .num { color: var(--dim); }
+.write-bar .field { margin: 0; min-width: 0; }
+.dropzone { flex: 1 1 20rem; min-width: 0; flex-wrap: wrap; padding: 8px; border: 1px dashed var(--line); border-radius: 8px; }
+.dropzone.phx-drop-target-active { background: var(--hover); }
+.dropzone label:has(input:focus-visible) { outline: 2px solid var(--warm); outline-offset: -2px; }
+.dropzone button { margin-left: auto; }
+.mkdir { flex: 0 1 19rem; }
+.mkdir .field { flex: 1; }
+.upload-entries { list-style: none; margin: 0 0 14px; padding: 0; }
+.upload-entries li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px; box-shadow: inset 0 -1px 0 var(--line); }
+.upload-status { flex: 1; min-width: 0; }
+.upload-status .label { display: block; overflow-wrap: anywhere; color: var(--bright); }
+.upload-status progress {
+  display: block; width: 100%; height: 6px; margin-top: 5px; border: 0; border-radius: 4px;
+  appearance: none; overflow: hidden; background: var(--rule); color: var(--cool);
+}
+.upload-status progress::-webkit-progress-bar { background: var(--rule); }
+.upload-status progress::-webkit-progress-value { background: var(--cool); }
+.upload-status progress::-moz-progress-bar { background: var(--cool); }
 .upload-entries .field-error { margin: 0; }
-.upload-entries .btn { margin-left: auto; }
 /* A delete that takes a folder's files is a breach-level warning, so the bar wears --hot. */
 .confirm-bar {
   --x: var(--hot);
@@ -215,20 +261,26 @@ body.page {
   background: color-mix(in srgb, var(--x) 10%, transparent);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--x) 30%, transparent);
 }
-.confirm-bar > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.confirm-bar > span { flex: 1 1 220px; min-width: 0; overflow-wrap: anywhere; }
+.confirm-actions { display: flex; gap: 8px; margin-left: auto; }
 .confirm-bar strong { color: var(--bright); font-weight: 600; }
-.listing .actions { white-space: nowrap; text-align: right; }
-.listing .actions .btn { padding: 3px 6px; }
+.listing[inert] .actions { visibility: hidden; }
+.listing .actions { position: relative; white-space: nowrap; text-align: right; }
+.listing .actions .btn { padding-inline: 8px; }
 .listing .move { display: inline-block; vertical-align: top; }
 .listing .move summary { list-style: none; }
 .listing .move summary::-webkit-details-marker { display: none; }
-.listing .move[open] summary { color: var(--text); background: var(--sel); }
-.move-form { display: flex; align-items: flex-start; gap: 6px; margin: 6px 0 0; }
+.listing .move[open] summary { color: var(--bright); background: var(--sel); }
+.move-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 6px; text-align: left; white-space: normal; }
 .move-form .field { margin: 0; }
-.move-form .input { width: 16rem; }
-[data-view='grid'] .listing .actions { display: flex; justify-content: center; gap: 4px; padding: 0 8px 8px; box-shadow: none; }
-[data-view='grid'] .listing .move-form .input { width: 100%; }
-[data-view='grid'] .listing .move[open] { flex: 1; }
+.move-form .move-example { grid-column: 1 / -1; font-size: 12px; overflow-wrap: anywhere; }
+[data-view='list'] tr:has(.move[open]) > td { vertical-align: top; padding-bottom: 96px; }
+[data-view='list'] tr:has(.move[open]) .name a { min-height: 36px; }
+[data-view='list'] .move-form { position: absolute; right: 10px; bottom: 8px; width: min(20rem, calc(100vw - var(--l) - var(--r) - 20px)); }
+[data-view='grid'] .listing .actions { display: flex; justify-content: center; align-items: flex-start; flex-wrap: wrap; gap: 4px; padding: 0 8px 8px; box-shadow: none; }
+[data-view='grid'] .listing .move[open] { width: 100%; }
+[data-view='grid'] .move-form { grid-template-columns: minmax(0, 1fr); margin-top: 6px; }
+[data-view='grid'] .move-form .btn { grid-row: 3; justify-self: end; }
 
 .list { list-style: none; margin: 0; padding: 0; }
 .list > li { display: flex; gap: 14px; padding: 6px 0; box-shadow: inset 0 -1px 0 var(--line); }

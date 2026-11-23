@@ -16,6 +16,7 @@ defmodule SlimServeWeb.Layouts do
   attr :write?, :boolean, default: false, doc: "the session holds write rights"
 
   slot :inner_block, required: true
+  slot :breadcrumbs
 
   # Every page behind the login gate is logged in by construction, so the button shows whenever login is on.
   # With only a write password, viewing needs no login, so the header offers one for editing instead.
@@ -27,26 +28,42 @@ defmodule SlimServeWeb.Layouts do
       )
 
     ~H"""
-    <header>
-      <a href={~p"/"} class="name">SlimServe</a>
-      <span class="meta">Phoenix {Application.spec(:phoenix, :vsn)}</span>
-      <a :if={@edit_login?} href={~p"/.app/login"} id="edit-login" class="btn logout">Log in to edit</a>
-      <.form
-        :if={@logout?}
-        for={to_form(%{})}
-        action={~p"/.app/logout"}
-        id="logout-form"
-        class="logout"
-      >
-        <button type="submit" class="btn">Log out</button>
-      </.form>
-    </header>
+    <div id="app-shell">
+      <header class="app-header">
+        <div class="shell-content app-topbar">
+          <a href={~p"/"} class="app-brand">
+            <span class="app-mark"><.icon name="hero-folder-open" class="size-4" /></span> SlimServe
+          </a>
+          <div class="app-session">
+            <span :if={!@login_page} class="session-label">
+              {cond do
+                @write? -> "Editor"
+                @logout? -> "Viewer"
+                true -> "Guest"
+              end}
+            </span>
+            <a :if={@edit_login?} href={~p"/.app/login"} id="edit-login" class="btn">Log in to edit</a>
+            <.form
+              :if={@logout?}
+              for={to_form(%{})}
+              action={~p"/.app/logout"}
+              id="logout-form"
+            >
+              <button type="submit" class="btn">Log out</button>
+            </.form>
+          </div>
+        </div>
+      </header>
 
-    <main>
-      {render_slot(@inner_block)}
-    </main>
+      <main class="shell-content app-main">
+        <nav :if={@breadcrumbs != []} id="crumbs" class="crumbs" aria-label="Folder path">
+          {render_slot(@breadcrumbs)}
+        </nav>
+        {render_slot(@inner_block)}
+      </main>
 
-    <.flash_group flash={@flash} />
+      <.flash_group flash={@flash} />
+    </div>
     """
   end
 

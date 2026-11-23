@@ -1,6 +1,20 @@
 <Layouts.app flash={@flash} login_page>
-  <.form for={@form} action={~p"/.app/login"} id="login-form" class="card login">
-    <h1>Log in</h1>
+  <.form
+    for={@form}
+    action={~p"/.app/login"}
+    id="login-form"
+    class={["card", "message-card", "login"]}
+  >
+    <div class="message-intro">
+      <.icon name="hero-lock-closed" class="size-6" />
+      <h1>{if(@username?, do: "Log in", else: "Log in to edit")}</h1>
+      <p class="sub">
+        {if(@username?,
+          do: "Enter your credentials to access these files.",
+          else: "Enter the editor password to manage files and folders."
+        )}
+      </p>
+    </div>
     <.input field={@form[:next]} type="hidden" />
     <.input
       :if={@username?}
@@ -16,7 +30,7 @@
       autocomplete="current-password"
       required
     />
-    <p :if={@error} class="field-error">{@error}</p>
+    <p :if={@error} class="field-error" role="alert">{@error}</p>
     <button type="submit" class="btn primary">Log in</button>
   </.form>
 </Layouts.app>
