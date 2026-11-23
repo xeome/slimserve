@@ -75,7 +75,7 @@ defmodule SlimServe.MixProject do
         "deps.unlock --check-unused",
         "format --check-formatted",
         "credo --strict",
-        "sobelow --exit low",
+        "sobelow --exit low --skip",
         "deps.audit",
         "dialyzer",
         "test --cover --warnings-as-errors",

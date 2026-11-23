@@ -1,0 +1,101 @@
+defmodule SlimServe.Ignore do
+  @moduledoc """
+  `.slimserveignore` files: a subset of gitignore.
+
+  A pattern is a glob with `*`, `?` and `**`. A `**` crosses directories only as a whole
+  path segment; inside a name it is a `*`. A leading or inner `/` anchors it to the
+  ignore file's directory; otherwise it matches a name at any depth below. A trailing `/`
+  matches directories only. A leading `!` negates, and the last matching pattern wins.
+  Blank lines and lines starting with `#` are skipped. There are no `[...]` classes and
+  no backslash escapes: both are literal.
+  """
+
+  @file_name ".slimserveignore"
+
+  @doc """
+  Whether the path `segments` under `root`, or any directory above it, is ignored.
+
+  A file under an ignored directory stays ignored whatever a `!` pattern says, as in
+  gitignore. An ignore file that exists but cannot be read hides its directory and
+  everything under it.
+  """
+  @spec ignored?(Path.t(), [String.t()]) :: boolean()
+  def ignored?(root, segments), do: walk(root, segments, [])
+
+  # Walks down from root one name at a time. `layers` holds, for every directory passed,
+  # its rules and the path of the current name relative to it.
+  # The directory itself is hidden when its own ignore file is unreadable; a file path sees :enotdir.
+  defp walk(dir, [], _layers), do: rules(dir) == :unreadable
+
+  defp walk(dir, [name | rest], layers) do
+    case rules(dir) do
+      :unreadable ->
+        true
+
+      rules ->
+        layers = Enum.map(layers, fn {rules, relative} -> {rules, relative <> "/" <> name} end) ++ [{rules, name}]
+        path = Path.join(dir, name)
+
+        matched?(layers, rest != [] or File.dir?(path)) or walk(path, rest, layers)
+    end
+  end
+
+  # The last matching rule wins: files from the root down, lines from the top down.
+  defp matched?(layers, dir?) do
+    for {rules, relative} <- layers,
+        {regex, negated?, dir_only?} <- rules,
+        (dir? or not dir_only?) and Regex.match?(regex, relative),
+        reduce: false do
+      _verdict -> not negated?
+    end
+  end
+
+  # ponytail: read and compiled on every call, no cache. Cache by mtime if requests get slow.
+  # The directory comes from Root.resolve, so it never leaves the root.
+  # sobelow_skip ["Traversal.FileModule"]
+  defp rules(dir) do
+    case File.read(Path.join(dir, @file_name)) do
+      {:ok, body} -> if String.valid?(body), do: parse(body), else: :unreadable
+      # :enotdir: `dir` is a file, the last name of a path.
+      {:error, reason} when reason in [:enoent, :enotdir] -> []
+      {:error, _reason} -> :unreadable
+    end
+  end
+
+  # Patterns come from ignore files only the host owner writes, escaped and fully anchored.
+  # sobelow_skip ["DOS.Regex"]
+  defp parse(body) do
+    # Editors on Windows put a byte-order mark first; left in, it would be part of the first pattern.
+    for line <- body |> String.replace_prefix(<<0xEF, 0xBB, 0xBF>>, "") |> String.split(["\r\n", "\n"]),
+        line = String.trim_trailing(line),
+        line != "" and not String.starts_with?(line, "#") do
+      {negated?, line} =
+        case line do
+          "!" <> rest -> {true, rest}
+          _ -> {false, line}
+        end
+
+      dir_only? = String.ends_with?(line, "/")
+      glob = String.trim_trailing(line, "/")
+      prefix = if String.contains?(glob, "/"), do: "", else: "(?:.*/)?"
+      {Regex.compile!("\\A" <> prefix <> regex(String.trim_leading(glob, "/")) <> "\\z", "su"), negated?, dir_only?}
+    end
+  end
+
+  # Three or more stars are two, as in git.
+  defp regex(glob), do: glob |> String.replace(~r/\*{3,}/, "**") |> String.split("/") |> segments()
+
+  defp segments(["**"]), do: ".*"
+  defp segments(["**" | rest]), do: "(?:.*/)?" <> segments(rest)
+  defp segments([name]), do: name(name)
+  defp segments([name | rest]), do: name(name) <> "/" <> segments(rest)
+
+  # Every character that is not a wildcard is escaped, so "a.txt" does not match "abtxt".
+  defp name(name) do
+    Regex.replace(~r{\*+|\?|[^*?]+}, name, fn
+      "*" <> _stars -> "[^/]*"
+      "?" -> "[^/]"
+      literal -> Regex.escape(literal)
+    end)
+  end
+end

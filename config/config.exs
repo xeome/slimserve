@@ -21,6 +21,10 @@ config :phoenix_live_view,
 
 config :slimserve, SlimServeWeb.Endpoint,
   url: [host: "localhost"],
+  # Matches `Plug.Static` in the endpoint: ~p"/assets/..." renders as /.app/assets/...
+  static_url: [path: "/.app"],
+  # The host a self-hosted server is reached by is not known ahead: accept the request's own.
+  check_origin: :conn,
   adapter: Bandit.PhoenixAdapter,
   render_errors: [
     formats: [html: SlimServeWeb.ErrorHTML, json: SlimServeWeb.ErrorJSON],

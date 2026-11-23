@@ -132,6 +132,25 @@ body.page {
 .table td { padding: 6px 10px; box-shadow: inset 0 1px 0 var(--line); }
 .table tbody tr:hover { background: var(--hover); }
 
+/* The path is the page title: the folder being read is bright, the way back to it dim. */
+.crumbs { display: flex; flex-wrap: wrap; gap: 0 6px; margin: 0 0 12px; color: var(--dim); overflow-wrap: anywhere; }
+.crumbs a { color: var(--dim); text-decoration: none; }
+.crumbs a:hover { color: var(--text); }
+.crumbs > :last-child a, .crumbs > a:last-child { color: var(--bright); }
+
+/* The name column takes the slack and truncates; max-width: 0 lets a table cell shrink below its text. */
+.listing .name { width: 100%; max-width: 0; }
+.listing .name a { display: flex; align-items: center; gap: 8px; color: var(--bright); text-decoration: none; }
+.listing .name a:hover .label { text-decoration: underline; }
+.listing .label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.listing .num { text-align: right; white-space: nowrap; color: var(--dim); }
+/* Kind is data, so it carries a series hue: folders --s1, files --s2. */
+.listing .kind { flex: none; color: var(--s2); }
+.listing .kind.dir { color: var(--s1); }
+.listing .empty td { color: var(--dim); }
+.listing .empty:not(:only-child) { display: none; }
+@media (max-width: 600px) { .listing .when { display: none; } }
+
 .list { list-style: none; margin: 0; padding: 0; }
 .list > li { display: flex; gap: 14px; padding: 6px 0; box-shadow: inset 0 -1px 0 var(--line); }
 .list .title { min-width: 8em; color: var(--dim); }

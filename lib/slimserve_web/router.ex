@@ -1,8 +1,8 @@
 defmodule SlimServeWeb.Router do
   use SlimServeWeb, :router
 
-  pipeline :browser do
-    plug :accepts, ["html"]
+  # The usual :browser pipeline without `plug :accepts`, so a download answers any Accept header.
+  pipeline :serve do
     plug :fetch_session
     plug :fetch_live_flash
     plug :put_root_layout, html: {SlimServeWeb.Layouts, :root}
@@ -15,12 +15,6 @@ defmodule SlimServeWeb.Router do
 
   pipeline :api do
     plug :accepts, ["json"]
-  end
-
-  scope "/", SlimServeWeb do
-    pipe_through :browser
-
-    get "/", PageController, :home
   end
 
   if Application.compile_env(:slimserve, :dev_routes) do
@@ -36,9 +30,13 @@ defmodule SlimServeWeb.Router do
     end
 
     scope "/dev" do
-      pipe_through [:browser, :dashboard_csp]
+      pipe_through [:serve, :dashboard_csp]
 
-      live_dashboard "/dashboard", metrics: SlimServeWeb.Telemetry, csp_nonce_assign_key: :csp_nonce
+      # The app's socket lives under /.app (see the endpoint), not at the dashboard's default /live.
+      live_dashboard "/dashboard",
+        metrics: SlimServeWeb.Telemetry,
+        csp_nonce_assign_key: :csp_nonce,
+        live_socket_path: "/.app/live"
     end
 
     # LiveDashboard renders inline <script> and <style> tags; a per-request nonce
@@ -52,5 +50,12 @@ defmodule SlimServeWeb.Router do
       |> assign(:csp_nonce, nonce)
       |> put_resp_header("content-security-policy", "#{csp}; script-src #{sources}; style-src #{sources}")
     end
+  end
+
+  # Last, because it matches every path: a route declared after it is unreachable.
+  scope "/", SlimServeWeb do
+    pipe_through :serve
+
+    get "/*path", BrowseController, :show
   end
 end

@@ -12,6 +12,14 @@ end
 
 if config_env() != :test do
   config :slimserve, SlimServeWeb.Endpoint, http: [port: String.to_integer(System.get_env("PORT", "4000"))]
+  # The one directory served at /. Tests set their own.
+  config :slimserve, root: Path.expand(System.get_env("SLIMSERVE_ROOT", "."))
+end
+
+# A prod server has no default root: serving the release's own working directory by accident would
+# publish it. Only with PHX_SERVER, as the release image sets it, so a prod mix task runs without a root.
+if config_env() == :prod and System.get_env("PHX_SERVER") != nil and not File.dir?(System.get_env("SLIMSERVE_ROOT", "")) do
+  raise "SLIMSERVE_ROOT must name an existing directory"
 end
 
 if config_env() == :dev do
@@ -27,16 +35,9 @@ if config_env() == :dev do
 end
 
 if config_env() == :prod do
-  # A default value is used in config/dev.exs and config/test.exs but you
-  # want to use a different value for prod and you most likely don't want
-  # to check this value into version control, so we use an environment
-  # variable instead.
-  secret_key_base =
-    System.get_env("SECRET_KEY_BASE") ||
-      raise """
-      environment variable SECRET_KEY_BASE is missing.
-      You can generate one by calling: mix phx.gen.secret
-      """
+  # Without auth the secret only signs the LiveView session and the CSRF token, and nothing
+  # is persisted. So a fresh one per boot is enough: open pages reload after a restart.
+  secret_key_base = System.get_env("SECRET_KEY_BASE") || Base.encode64(:crypto.strong_rand_bytes(48))
 
   host = System.get_env("PHX_HOST") || "example.com"
 
