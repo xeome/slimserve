@@ -253,20 +253,7 @@ defmodule SlimServeWeb.BrowseTest do
     end
   end
 
-  test "browser refusals share the same 404 shell without identifying the path", %{conn: conn} do
-    browser = put_req_header(conn, "accept", "text/html,application/xhtml+xml")
-
-    for path <- ["/missing.txt", "/sub/.env", "/a.txt?thumb=1"] do
-      document = browser |> get(path) |> html_response(404) |> LazyHTML.from_document()
-      assert ["/"] == LazyHTML.attribute(LazyHTML.query(document, "#app-shell header a"), "href")
-      assert "Page not found" == LazyHTML.text(LazyHTML.query(document, "#not-found h1"))
-      refute LazyHTML.text(document) =~ path
-    end
-
-    assert conn |> put_req_header("accept", "application/json") |> get("/sub/.env") |> response(404) == "Not Found"
-  end
-
-  test "disabled app routes have the same refusal contract as unavailable files", %{conn: conn} do
+  test "browser and non-browser refusals do not distinguish unavailable paths", %{conn: conn} do
     browser = put_req_header(conn, "accept", "text/html,application/xhtml+xml")
     plain = put_req_header(conn, "accept", "application/json")
 
@@ -283,9 +270,11 @@ defmodule SlimServeWeb.BrowseTest do
       document = refused |> html_response(404) |> LazyHTML.from_document()
 
       assert "Page not found" == LazyHTML.text(LazyHTML.query(document, "#not-found h1"))
+      assert ["/"] == LazyHTML.attribute(LazyHTML.query(document, "#app-shell header a"), "href")
       assert "Guest" == document |> LazyHTML.query(".session-label") |> LazyHTML.text() |> String.trim()
       assert ["/"] == LazyHTML.attribute(LazyHTML.query(document, "#not-found a"), "href")
       assert [] == LazyHTML.attribute(LazyHTML.query(document, "#edit-login, #logout-form"), "id")
+      refute LazyHTML.text(document) =~ path
 
       assert ["default-src 'self'; img-src 'self' data:; base-uri 'self'; frame-ancestors 'self'"] ==
                get_resp_header(refused, "content-security-policy")
