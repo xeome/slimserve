@@ -5,7 +5,7 @@ image:
     tag: "" # Defaults to the chart appVersion.
 
 port: 8080
-host: example.com
+host: ""
 
 persistence:
   enabled: true

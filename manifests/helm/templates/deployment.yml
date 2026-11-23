@@ -84,7 +84,7 @@ spec:
               containerPort: {{ int .Values.port }}
           env:
             - name: PHX_HOST
-              value: {{ .Values.host | quote }}
+              value: {{ required "host is required; set it to the public hostname" .Values.host | quote }}
             - name: PORT
               value: {{ .Values.port | quote }}
             - name: SLIMSERVE_ROOT

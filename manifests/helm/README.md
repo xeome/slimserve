@@ -4,6 +4,8 @@ The chart runs one Elixir replica and briefly stops service during an upgrade (`
 
 The chart does not inherit the Go chart's 512 MiB memory limit: it can prevent the Elixir VM from starting. Size any `resources.limits.main.memory` override for the Elixir workload on your nodes.
 
+`host` is required; set it to the public hostname for Phoenix-generated URLs.
+
 ## Fresh install
 
 The chart's default image is `ghcr.io/xeome/slimserve:elixir-0.1.0`. That tag is not published yet; build the repository `Dockerfile`, make the image available to the cluster, and set `image.main.repository` and `image.main.tag` in your values file. For an image loaded into a local cluster, use `image.main.pullPolicy: Never`.
@@ -13,7 +15,7 @@ kubectl create namespace slimserve  # if it does not exist
 helm install files ./manifests/helm -n slimserve -f elixir-values.yaml --wait
 ```
 
-The workload normally uses the Helm release namespace. For compatibility, a release in `default` puts its workloads in `slimserve` instead; create `slimserve` before installing or upgrading. `port` controls the Elixir listener and probes; `service.type` and `service.ports` set exposure, with Service targets always pointing to that listener. Set `host` to the public hostname for Phoenix-generated URLs.
+The workload normally uses the Helm release namespace. For compatibility, a release in `default` puts its workloads in `slimserve` instead; create `slimserve` before installing or upgrading. `port` controls the Elixir listener and probes; `service.type` and `service.ports` set exposure, with Service targets always pointing to that listener.
 
 Production Phoenix enforces HTTPS for public hostnames (`force_ssl`). The chart does not create an Ingress or terminate TLS. Configure your own trusted TLS terminator to preserve the public `Host` and set `X-Forwarded-Proto: https` on proxied HTTPS requests. The brief HTTP readiness check sends `Host: localhost` to `/` to bypass the HTTPS redirect; liveness checks only the named `http` TCP port, so a slow directory listing does not cause a restart.
 
