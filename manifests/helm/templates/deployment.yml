@@ -85,6 +85,8 @@ spec:
           env:
             - name: PHX_HOST
               value: {{ required "host is required; set it to the public hostname" .Values.host | quote }}
+            - name: SLIMSERVE_HTTPS
+              value: "true"
             - name: PORT
               value: {{ .Values.port | quote }}
             - name: SLIMSERVE_ROOT

@@ -2,12 +2,10 @@ defmodule SlimServe.RuntimeConfigTest do
   # Not async: the variables are the process-wide environment.
   use ExUnit.Case, async: false
 
+  @variables ~w(SLIMSERVE_ROOT PHX_SERVER SLIMSERVE_USERNAME SLIMSERVE_PASSWORD SECRET_KEY_BASE SLIMSERVE_WRITE_PASSWORD SLIMSERVE_UPLOAD_MAX_MB SLIMSERVE_UPLOAD_TYPES SLIMSERVE_HTTPS PHX_HOST PORT)
+
   setup do
-    saved =
-      Map.new(
-        ~w(SLIMSERVE_ROOT PHX_SERVER SLIMSERVE_USERNAME SLIMSERVE_PASSWORD SECRET_KEY_BASE SLIMSERVE_WRITE_PASSWORD SLIMSERVE_UPLOAD_MAX_MB SLIMSERVE_UPLOAD_TYPES),
-        &{&1, System.get_env(&1)}
-      )
+    saved = Map.new(@variables, &{&1, System.get_env(&1)})
 
     on_exit(fn -> Enum.each(saved, fn {name, value} -> set(name, value) end) end)
   end
@@ -16,24 +14,16 @@ defmodule SlimServe.RuntimeConfigTest do
   defp set(name, value), do: System.put_env(name, value)
 
   defp prod_root(root, server) do
-    set("SLIMSERVE_ROOT", root)
-    set("PHX_SERVER", server)
-    "config/runtime.exs" |> Config.Reader.read!(env: :prod) |> get_in([:slimserve, :root])
+    prod(%{"SLIMSERVE_ROOT" => root, "PHX_SERVER" => server})[:root]
   end
 
   defp prod_login(user, pass, secret) do
-    set("PHX_SERVER", nil)
-    set("SLIMSERVE_USERNAME", user)
-    set("SLIMSERVE_PASSWORD", pass)
-    set("SECRET_KEY_BASE", secret)
-    "config/runtime.exs" |> Config.Reader.read!(env: :prod) |> get_in([:slimserve, :login])
+    prod(%{"SLIMSERVE_USERNAME" => user, "SLIMSERVE_PASSWORD" => pass, "SECRET_KEY_BASE" => secret})[:login]
   end
 
   # Every other variable unset, so only the ones given decide.
   defp prod(vars) do
-    for name <-
-          ~w(PHX_SERVER SLIMSERVE_USERNAME SLIMSERVE_PASSWORD SECRET_KEY_BASE SLIMSERVE_WRITE_PASSWORD SLIMSERVE_UPLOAD_MAX_MB SLIMSERVE_UPLOAD_TYPES),
-        do: set(name, vars[name])
+    for name <- @variables, do: set(name, vars[name])
 
     "config/runtime.exs" |> Config.Reader.read!(env: :prod) |> Keyword.fetch!(:slimserve)
   end
@@ -115,5 +105,33 @@ defmodule SlimServe.RuntimeConfigTest do
 
   test "login in prod without SECRET_KEY_BASE refuses to boot" do
     assert_raise RuntimeError, ~r/SECRET_KEY_BASE/, fn -> prod_login("u", "p", nil) end
+  end
+
+  test "production advertises the URL for each mode without changing the HTTP listener" do
+    https =
+      prod(%{"SLIMSERVE_HTTPS" => "true", "PHX_HOST" => "files.example.test", "PORT" => "4081"})[SlimServeWeb.Endpoint]
+
+    assert https[:url] == [host: "files.example.test", port: 443, scheme: "https"]
+    assert https[:http][:port] == 4081
+
+    endpoint = prod(%{"PORT" => "4081"})[SlimServeWeb.Endpoint]
+
+    assert endpoint[:http][:port] == 4081
+    assert endpoint[:url][:port] == 4081
+    assert endpoint[:url][:scheme] == "http"
+  end
+
+  test "HTTPS requires a nonempty PHX_HOST" do
+    for host <- [nil, ""] do
+      assert_raise RuntimeError, ~r/PHX_HOST/, fn ->
+        prod(%{"SLIMSERVE_HTTPS" => "true", "PHX_HOST" => host})
+      end
+    end
+  end
+
+  test "a nonempty SLIMSERVE_HTTPS value other than true or false refuses to boot" do
+    for value <- ["1", "TRUE", "yes", "on"] do
+      assert_raise RuntimeError, ~r/SLIMSERVE_HTTPS/, fn -> prod(%{"SLIMSERVE_HTTPS" => value}) end
+    end
   end
 end

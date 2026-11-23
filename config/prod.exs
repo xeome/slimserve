@@ -7,17 +7,5 @@ config :logger, level: :info
 # before starting your production server.
 config :slimserve, SlimServeWeb.Endpoint, cache_static_manifest: "priv/static/cache_manifest.json"
 
-# Note `:force_ssl` is required to be set at compile-time.
-config :slimserve, SlimServeWeb.Endpoint,
-  force_ssl: [
-    rewrite_on: [:x_forwarded_proto],
-    exclude: [
-      hosts: ["localhost", "127.0.0.1"]
-    ]
-  ]
-
-# The session cookie carries the login: never send it over plain HTTP. Read at compile time by the endpoint.
-config :slimserve, secure_cookie: true
-
 # Runtime production configuration, including reading
 # of environment variables, is done on config/runtime.exs.

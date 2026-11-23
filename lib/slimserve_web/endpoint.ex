@@ -7,9 +7,22 @@ defmodule SlimServeWeb.Endpoint do
     store: :cookie,
     key: "_slimserve_key",
     signing_salt: "UB11q4eI",
-    same_site: "Lax",
-    secure: Application.compile_env(:slimserve, :secure_cookie, false)
+    same_site: "Lax"
   ]
+  @http_session Plug.Session.init(Keyword.put(@session_options, :secure, false))
+  @https_session Plug.Session.init(Keyword.put(@session_options, :secure, true))
+
+  # Rewrite or redirect before Phoenix dispatches either socket transport.
+  @impl Plug
+  def call(conn, opts) do
+    conn =
+      case Application.get_env(:slimserve, :ssl_redirect) do
+        nil -> conn
+        ssl_redirect -> Plug.SSL.call(conn, ssl_redirect)
+      end
+
+    if conn.halted, do: conn, else: super(conn, opts)
+  end
 
   # Everything of the app's own lives under /.app: a dot path is never a served file,
   # so no file in the root can collide with the socket or an asset.
@@ -49,6 +62,11 @@ defmodule SlimServeWeb.Endpoint do
 
   plug Plug.MethodOverride
   plug Plug.Head
-  plug Plug.Session, @session_options
+  plug :session
   plug SlimServeWeb.Router
+
+  defp session(conn, _opts) do
+    session = if Application.get_env(:slimserve, :ssl_redirect), do: @https_session, else: @http_session
+    Plug.Session.call(conn, session)
+  end
 end

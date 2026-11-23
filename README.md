@@ -12,6 +12,10 @@ mix setup                 # deps, Tailwind and esbuild binaries, first asset bui
 mix phx.server            # http://localhost:4000
 ```
 
+Production releases serve plain HTTP by default. For internet-facing deployments, terminate TLS
+at a trusted proxy and enable HTTPS enforcement. Behind any TLS proxy, even on a LAN, set
+`SLIMSERVE_HTTPS=true` and set `PHX_HOST` to the hostname clients use.
+
 ## Deploy with Helm
 
 Chart 2.0.0 uses the Elixir image. For a fresh install, create the namespace and choose

@@ -10,11 +10,12 @@ if System.get_env("PHX_SERVER") do
   config :slimserve, SlimServeWeb.Endpoint, server: true
 end
 
+port = if config_env() != :test, do: String.to_integer(System.get_env("PORT", "4000"))
+
+set = fn name -> if (value = System.get_env(name)) != "", do: value end
+
 if config_env() != :test do
   megabytes = fn name, default -> String.to_integer(System.get_env(name, default)) * 1024 * 1024 end
-
-  # An empty variable counts as unset.
-  set = fn name -> if System.get_env(name) != "", do: System.get_env(name) end
 
   # Both set puts every route behind a login page; neither leaves the server open. Tests set their own.
   login =
@@ -58,7 +59,7 @@ if config_env() != :test do
         if types == [], do: raise("SLIMSERVE_UPLOAD_TYPES lists no extension"), else: types
     end
 
-  config :slimserve, SlimServeWeb.Endpoint, http: [port: String.to_integer(System.get_env("PORT", "4000"))]
+  config :slimserve, SlimServeWeb.Endpoint, http: [port: port]
   config :slimserve, login: login
 
   config :slimserve,
@@ -98,14 +99,35 @@ end
 if config_env() == :prod do
   secret_key_base = System.get_env("SECRET_KEY_BASE") || Base.encode64(:crypto.strong_rand_bytes(48))
 
-  host = System.get_env("PHX_HOST") || "example.com"
+  host = set.("PHX_HOST")
+
+  https? =
+    case set.("SLIMSERVE_HTTPS") do
+      nil -> false
+      "true" -> true
+      "false" -> false
+      other -> raise "SLIMSERVE_HTTPS must be true or false, got: #{other}"
+    end
+
+  {url, ssl_redirect} =
+    if https? do
+      host = host || raise "PHX_HOST must be set when SLIMSERVE_HTTPS=true"
+
+      ssl_redirect =
+        Plug.SSL.init(host: host, rewrite_on: [:x_forwarded_proto], exclude: [hosts: ["localhost", "127.0.0.1"]])
+
+      {[host: host, port: 443, scheme: "https"], ssl_redirect}
+    else
+      {[host: host || "localhost", port: port, scheme: "http"], nil}
+    end
 
   config :slimserve, SlimServeWeb.Endpoint,
-    url: [host: host, port: 443, scheme: "https"],
+    url: url,
     http: [
       ip: {0, 0, 0, 0, 0, 0, 0, 0}
     ],
     secret_key_base: secret_key_base
 
   config :slimserve, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
+  config :slimserve, :ssl_redirect, ssl_redirect
 end

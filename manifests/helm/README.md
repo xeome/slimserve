@@ -17,7 +17,7 @@ helm install files ./manifests/helm -n slimserve -f elixir-values.yaml --wait
 
 The workload normally uses the Helm release namespace. For compatibility, a release in `default` puts its workloads in `slimserve` instead; create `slimserve` before installing or upgrading. `port` controls the Elixir listener and probes; `service.type` and `service.ports` set exposure, with Service targets always pointing to that listener.
 
-Production Phoenix enforces HTTPS for public hostnames (`force_ssl`). The chart does not create an Ingress or terminate TLS. Configure your own trusted TLS terminator to preserve the public `Host` and set `X-Forwarded-Proto: https` on proxied HTTPS requests. The brief HTTP readiness check sends `Host: localhost` to `/` to bypass the HTTPS redirect; liveness checks only the named `http` TCP port, so a slow directory listing does not cause a restart.
+The chart enables HTTPS enforcement with `SLIMSERVE_HTTPS=true`; it does not create an Ingress or terminate TLS. Keep the HTTP backend private behind a trusted TLS terminator that preserves the public `Host` and replaces any client-supplied `X-Forwarded-Proto` with the original request scheme. The HTTP readiness check sends `Host: localhost` to `/` to bypass the redirect; liveness checks only the named `http` TCP port, so a slow directory listing does not cause a restart.
 
 ## Upgrade an existing Go release
 
