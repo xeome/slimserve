@@ -12,6 +12,7 @@ SlimServe is one OTP application, `:slimserve`, with no database.
 | `DNSCluster` | Joins nodes found by `DNS_CLUSTER_QUERY`; ignored when unset |
 | `Phoenix.PubSub` (`SlimServe.PubSub`) | Message bus for LiveView and channels |
 | `SlimServe.ThumbCache` | The thumbnail disk cache: the only process that writes or deletes in the cache directory |
+| `SlimServe.Watcher` | Watches the root through `inotifywait` and tells open listings their directory changed; `:temporary` |
 | `SlimServeWeb.Endpoint` | The Bandit HTTP server; started last, so it serves only once the rest is up |
 
 ## Request path
@@ -37,7 +38,8 @@ every symlink), has a component starting with ".", or is ignored by a `.slimserv
 and the download cannot disagree. The root is `config :slimserve, :root`, read from
 `SLIMSERVE_ROOT` at boot. The requirements are in `openspec/specs/file-serving/spec.md`.
 
-A thumbnail is asked for as `<path>?thumb=1` and passes the same gate, so a hidden image has no
+A thumbnail is asked for as `<path>?thumb=1`; the listing adds `&v=<mtime>-<size>`, so an image that
+was still being copied when it was first listed re-fetches once it changes. It passes the same gate, so a hidden image has no
 thumbnail either. Only a file whose resolved name ends in jpg, jpeg, png, gif or webp gets one, and
 only when libvips would decode it as one of those formats: libvips picks its decoder from the bytes,
 so an SVG named x.png would otherwise render files it links to. Anything else answers 404. A source file over `SLIMSERVE_THUMB_MAX_FILE_SIZE_MB` (default 10)
@@ -53,6 +55,23 @@ request process, and the cache process alone writes (to a `.tmp` name, then a re
 Past `SLIMSERVE_THUMB_CACHE_MB` (default 100) it deletes the oldest files down to 90% of the cap.
 The answer's `x-cache` header says `hit` or `miss`. The requirements are in
 `openspec/specs/thumbnails/spec.md`.
+
+## Live listing
+
+`SlimServe.Watcher` runs `inotifywait` (the `file_system` package) on the whole root. It drops a bare
+modify, so a long write wakes listings once, when the file closes. For each other event it broadcasts `{:dir_changed, rel_dir}` on `SlimServe.Root.topic(rel_dir)` for the event's
+directory, and for an event on a directory also on that directory's own topic. A connected
+`ListingLive` subscribes to the topic of the directory its path resolves to, so a view through a
+symlink hears its target. Its first message schedules one re-list 100 ms
+later, so a burst of events re-lists once. The re-list goes through `SlimServe.Root` like the first
+render, so a dot-file or an ignored file cannot appear, and it sends nothing when the entries are
+unchanged. When the directory no longer resolves, the view redirects to the nearest ancestor that
+does.
+
+inotify needs one watch per directory. Past `fs.inotify.max_user_watches`, `inotifywait` exits. The
+Watcher then logs an error and stops, and is not restarted: files are still served, but listings no
+longer update until the app restarts. Without `inotifywait` the app does not boot. A view under a
+directory whose `.slimserveignore` changed updates only on its next event.
 
 The app's own URLs live under `/.app`, a path the gate never serves: `/.app/live` is the
 LiveView socket and `/.app/assets` the static files. `/dev/dashboard` (LiveDashboard) exists

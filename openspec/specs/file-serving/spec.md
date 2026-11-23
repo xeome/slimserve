@@ -24,6 +24,41 @@ first and then by name.
 - **WHEN** a directory holds files named `a #1%.txt` and `é.txt`
 - **THEN** following each link of its listing answers 200 with that file's bytes
 
+### Requirement: Live listing
+
+The system SHALL update a connected listing within a second of a file being added to or removed
+from its directory, applying the dot-file and ignore rules.
+
+#### Scenario: A file added to and removed from a viewed directory shows and goes
+
+- **WHEN** a browser shows a directory and a file is written into it, then removed
+- **THEN** the listing links the file within a second, and then no longer links it
+
+#### Scenario: A subdirectory's listing shows a file added to it
+
+- **WHEN** a browser shows `/sub` and a file is written into `sub`
+- **THEN** the listing links the file within a second
+
+#### Scenario: A dot-file and an ignored file never appear
+
+- **WHEN** a browser shows a directory and a dot-file, a file its `.slimserveignore` names and then a visible file are written into it
+- **THEN** the listing links the visible file and neither of the other two
+
+#### Scenario: A viewed directory that is removed sends the browser to its parent
+
+- **WHEN** a browser shows `/sub` and `sub` is removed
+- **THEN** the browser navigates to `/` within a second
+
+#### Scenario: A directory reached through a symlink shows a file added to its target
+
+- **WHEN** `link` is a symlink to `sub`, a browser shows `/link` and a file is written into `sub`
+- **THEN** the listing links the file within a second
+
+#### Scenario: A viewed directory whose parent is removed sends the browser to the nearest directory left
+
+- **WHEN** a browser shows `/a/b` and `a` is removed
+- **THEN** the browser navigates to `/` within a second
+
 ### Requirement: File download
 
 The system SHALL send a visible file's bytes with the MIME type of its name, whatever the request's

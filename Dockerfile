@@ -46,8 +46,9 @@ RUN mix release
 
 FROM ${RUNNER_IMAGE} AS final
 
+# inotify-tools: SlimServe.Watcher runs inotifywait for the live listing.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends libstdc++6 openssl libncurses6 locales ca-certificates \
+  && apt-get install -y --no-install-recommends libstdc++6 openssl libncurses6 locales ca-certificates inotify-tools \
   && rm -rf /var/lib/apt/lists/*
 
 # A UTF-8 locale, or the VM reads file names as latin1 and mangles non-ASCII names in a listing.

@@ -39,6 +39,13 @@ defmodule SlimServe.Root do
     end
   end
 
+  @doc """
+  The PubSub topic for changes in the directory `rel_dir`, relative to the root; `""` and `"."` are the root.
+  """
+  @spec topic(Path.t()) :: String.t()
+  def topic(rel_dir) when rel_dir in ["", "."], do: "dir:"
+  def topic(rel_dir), do: "dir:" <> rel_dir
+
   # One name of one directory entry. Phoenix decodes %2F into a segment, so "sub/.env" can arrive
   # as a single segment; the leading-dot rule also covers "." and "..". A name that is not valid
   # UTF-8 would crash the ignore patterns' match. A NUL byte needs no rule: File.stat/1 refuses

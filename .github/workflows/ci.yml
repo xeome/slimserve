@@ -29,6 +29,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: .tool-versions
+      # inotifywait, for SlimServe.Watcher and its tests.
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends inotify-tools
       - run: mix deps.get
       - run: mix precommit
 

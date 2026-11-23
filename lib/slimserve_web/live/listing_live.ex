@@ -7,10 +7,56 @@ defmodule SlimServeWeb.ListingLive do
 
   @impl true
   def mount(_params, %{"segments" => segments}, socket) do
+    root = Application.fetch_env!(:slimserve, :root)
+
+    # The Watcher names the directory a symlink leads to, not the link.
+    with true <- connected?(socket), {:dir, dir} <- Root.resolve(root, segments) do
+      Phoenix.PubSub.subscribe(SlimServe.PubSub, Root.topic(Path.relative_to(dir, root)))
+    end
+
+    entries = entries(segments)
+
     {:ok,
      socket
-     |> assign(page_title: "/" <> Enum.join(segments, "/"), crumbs: crumbs(segments))
-     |> stream(:entries, entries(segments))}
+     |> assign(segments: segments, relist?: false, page_title: "/" <> Enum.join(segments, "/"), crumbs: crumbs(segments))
+     |> assign(entries_hash: :erlang.phash2(entries))
+     |> stream(:entries, entries)}
+  end
+
+  # SlimServe.Watcher sends one message per file event: a burst re-lists once, 100 ms after its first event.
+  @impl true
+  def handle_info({:dir_changed, _dir}, %{assigns: %{relist?: true}} = socket), do: {:noreply, socket}
+
+  def handle_info({:dir_changed, _dir}, socket) do
+    Process.send_after(self(), :relist, 100)
+    {:noreply, assign(socket, relist?: true)}
+  end
+
+  # A directory removed or newly ignored sends the browser to the nearest directory still served.
+  def handle_info(:relist, socket) do
+    segments = socket.assigns.segments
+    socket = assign(socket, relist?: false)
+
+    case nearest_dir(Application.fetch_env!(:slimserve, :root), segments) do
+      ^segments -> {:noreply, relist(socket, entries(segments))}
+      ancestor -> {:noreply, redirect(socket, to: href(ancestor))}
+    end
+  end
+
+  # An event on a hidden or ignored file lists the same entries: send nothing.
+  defp relist(socket, entries) do
+    hash = :erlang.phash2(entries)
+
+    if hash == socket.assigns.entries_hash,
+      do: socket,
+      else: socket |> assign(entries_hash: hash) |> stream(:entries, entries, reset: true)
+  end
+
+  defp nearest_dir(root, segments) do
+    case Root.resolve(root, segments) do
+      {:dir, _dir} -> segments
+      _ -> nearest_dir(root, Enum.drop(segments, -1))
+    end
   end
 
   @impl true
@@ -78,7 +124,7 @@ defmodule SlimServeWeb.ListingLive do
             # The same rule as the thumbnail route, so the listing asks only for thumbnails it can get.
             thumb:
               if(kind == :file and Thumbnail.image?(abs) and stat.size <= thumb_max_file_bytes,
-                do: href(path) <> "?thumb=1"
+                do: href(path) <> "?thumb=1&v=#{stat.mtime}-#{stat.size}"
               ),
             size: if(kind == :file, do: human(stat.size)),
             modified: stat.mtime |> DateTime.from_unix!() |> Calendar.strftime("%Y-%m-%d %H:%M")

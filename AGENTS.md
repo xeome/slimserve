@@ -4,6 +4,8 @@ SlimServe on Phoenix 1.8: a server-rendered web app, no database.
 
 - Erlang 29.1.2 and Elixir 1.20.5, pinned in `.tool-versions` (`mise install`).
 - Phoenix 1.8 with LiveView, Bandit, Tailwind v4 and esbuild. No Ecto, no mailer, no gettext.
+- `inotifywait` from inotify-tools, installed on the host: `SlimServe.Watcher` runs it, and the app
+  does not boot without it.
 - Gates: Styler (through `mix format`), Credo strict, Sobelow, mix_audit, `hex.audit`, Dialyzer,
   ExUnit with a coverage floor, and OpenSpec's strict spec validation.
 

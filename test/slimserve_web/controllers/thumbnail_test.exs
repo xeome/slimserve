@@ -127,7 +127,9 @@ defmodule SlimServeWeb.ThumbnailTest do
       {:ok, view, _html} = live(conn, "/")
       srcs = view |> render() |> LazyHTML.from_fragment() |> LazyHTML.query("#entries img") |> LazyHTML.attribute("src")
 
-      assert srcs == ["/a.png?thumb=1"]
+      # The URL changes with the file's mtime and size, so an image still being copied re-fetches once it lands.
+      %File.Stat{mtime: mtime, size: size} = File.stat!(Path.join(root, "a.png"), time: :posix)
+      assert srcs == ["/a.png?thumb=1&v=#{mtime}-#{size}"]
       assert conn |> get(hd(srcs)) |> get_resp_header("content-type") == ["image/webp"]
     end
   end
