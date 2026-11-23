@@ -9,6 +9,9 @@ defmodule SlimServe.Application do
       SlimServeWeb.Telemetry,
       {DNSCluster, query: Application.get_env(:slimserve, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: SlimServe.PubSub},
+      {SlimServe.ThumbCache,
+       dir: Application.fetch_env!(:slimserve, :thumb_cache_dir),
+       max_bytes: Application.fetch_env!(:slimserve, :thumb_cache_bytes)},
       SlimServeWeb.Endpoint
     ]
 

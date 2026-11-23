@@ -147,6 +147,13 @@ body.page {
 /* Kind is data, so it carries a series hue: folders --s1, files --s2. */
 .listing .kind { flex: none; color: var(--s2); }
 .listing .kind.dir { color: var(--s1); }
+/* An image's thumbnail stands where its kind icon would. In a folder that has one, every icon
+   takes the same 32px box, so the rows keep one height. */
+.listing .thumb {
+  flex: none; width: 32px; height: 32px; object-fit: cover; border-radius: 4px;
+  background: var(--card); border: 1px solid var(--line); box-shadow: 0 0 0 1px var(--ring);
+}
+.listing:has(.thumb) .kind { margin: 8px; }
 .listing .empty td { color: var(--dim); }
 .listing .empty:not(:only-child) { display: none; }
 @media (max-width: 600px) { .listing .when { display: none; } }

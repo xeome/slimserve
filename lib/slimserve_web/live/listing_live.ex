@@ -3,6 +3,7 @@ defmodule SlimServeWeb.ListingLive do
   use SlimServeWeb, :live_view
 
   alias SlimServe.Root
+  alias SlimServe.Thumbnail
 
   @impl true
   def mount(_params, %{"segments" => segments}, socket) do
@@ -36,7 +37,9 @@ defmodule SlimServeWeb.ListingLive do
           <tr :for={{id, entry} <- @streams.entries} id={id}>
             <td class="name">
               <a href={entry.href}>
+                <img :if={entry.thumb} class="thumb" src={entry.thumb} alt="" loading="lazy" />
                 <.icon
+                  :if={!entry.thumb}
                   name={if(entry.dir?, do: "hero-folder", else: "hero-document")}
                   class={["size-4 kind", entry.dir? && "dir"]}
                 />
@@ -56,6 +59,7 @@ defmodule SlimServeWeb.ListingLive do
   # Exactly the names Root.resolve/2 would serve: the listing has no filter of its own.
   defp entries(segments) do
     root = Application.fetch_env!(:slimserve, :root)
+    thumb_max_file_bytes = Application.fetch_env!(:slimserve, :thumb_max_file_bytes)
 
     # File.ls/1 skips names that are not valid UTF-8 (spec: Directory listing).
     with {:dir, dir} <- Root.resolve(root, segments),
@@ -71,6 +75,11 @@ defmodule SlimServeWeb.ListingLive do
             dir?: kind == :dir,
             name: name,
             href: href(path),
+            # The same rule as the thumbnail route, so the listing asks only for thumbnails it can get.
+            thumb:
+              if(kind == :file and Thumbnail.image?(abs) and stat.size <= thumb_max_file_bytes,
+                do: href(path) <> "?thumb=1"
+              ),
             size: if(kind == :file, do: human(stat.size)),
             modified: stat.mtime |> DateTime.from_unix!() |> Calendar.strftime("%Y-%m-%d %H:%M")
           }

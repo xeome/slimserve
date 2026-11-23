@@ -11,9 +11,18 @@ if System.get_env("PHX_SERVER") do
 end
 
 if config_env() != :test do
+  megabytes = fn name, default -> String.to_integer(System.get_env(name, default)) * 1024 * 1024 end
+
   config :slimserve, SlimServeWeb.Endpoint, http: [port: String.to_integer(System.get_env("PORT", "4000"))]
-  # The one directory served at /. Tests set their own.
-  config :slimserve, root: Path.expand(System.get_env("SLIMSERVE_ROOT", "."))
+
+  config :slimserve,
+    # The one directory served at /. Tests set their own.
+    root: Path.expand(System.get_env("SLIMSERVE_ROOT", ".")),
+    # Thumbnails: the longest side in pixels, the largest source file, and the disk cache. Tests set their own.
+    thumb_max_dim: String.to_integer(System.get_env("SLIMSERVE_THUMB_MAX_DIM", "250")),
+    thumb_max_file_bytes: megabytes.("SLIMSERVE_THUMB_MAX_FILE_SIZE_MB", "10"),
+    thumb_cache_bytes: megabytes.("SLIMSERVE_THUMB_CACHE_MB", "100"),
+    thumb_cache_dir: System.get_env("SLIMSERVE_CACHE_DIR") || Path.join(System.tmp_dir!(), "slimserve-thumbs")
 end
 
 # A prod server has no default root: serving the release's own working directory by accident would

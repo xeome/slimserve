@@ -11,6 +11,7 @@ SlimServe is one OTP application, `:slimserve`, with no database.
 | `SlimServeWeb.Telemetry` | Telemetry metrics and the periodic poller |
 | `DNSCluster` | Joins nodes found by `DNS_CLUSTER_QUERY`; ignored when unset |
 | `Phoenix.PubSub` (`SlimServe.PubSub`) | Message bus for LiveView and channels |
+| `SlimServe.ThumbCache` | The thumbnail disk cache: the only process that writes or deletes in the cache directory |
 | `SlimServeWeb.Endpoint` | The Bandit HTTP server; started last, so it serves only once the rest is up |
 
 ## Request path
@@ -25,6 +26,8 @@ Bandit
   -> GET /*path              BrowseController.show asks SlimServe.Root.resolve/2, the one gate:
        a directory           live_render of ListingLive inside Layouts.app, inside layouts/root
        a file                send_file with its MIME type
+       a file, ?thumb=1      a WebP thumbnail from SlimServe.ThumbCache, or made by
+                             SlimServe.Thumbnail (libvips) and then cached
        anything else         404, the same for a hidden path and a missing one
 ```
 
@@ -33,6 +36,23 @@ every symlink), has a component starting with ".", or is ignored by a `.slimserv
 (`SlimServe.Ignore`). `ListingLive` lists exactly the names `resolve/2` accepts, so the listing
 and the download cannot disagree. The root is `config :slimserve, :root`, read from
 `SLIMSERVE_ROOT` at boot. The requirements are in `openspec/specs/file-serving/spec.md`.
+
+A thumbnail is asked for as `<path>?thumb=1` and passes the same gate, so a hidden image has no
+thumbnail either. Only a file whose resolved name ends in jpg, jpeg, png, gif or webp gets one, and
+only when libvips would decode it as one of those formats: libvips picks its decoder from the bytes,
+so an SVG named x.png would otherwise render files it links to. Anything else answers 404. A source file over `SLIMSERVE_THUMB_MAX_FILE_SIZE_MB` (default 10)
+answers 413 before libvips opens it. The thumbnail fits a square of `SLIMSERVE_THUMB_MAX_DIM` pixels
+(default 250) and is never larger than its source. libvips comes precompiled inside the `vix`
+package, so neither a build nor the release image installs it.
+
+`SlimServe.ThumbCache` keeps one `<key>.webp` file per thumbnail in `SLIMSERVE_CACHE_DIR`
+(default: `slimserve-thumbs` in the system temp directory). The key is a SHA-256 of the source's
+path, inode, ctime, modification time, size and the thumbnail size, so a changed file misses. The directory is
+the index: a hit is the file existing, and the request process reads it. libvips also runs in the
+request process, and the cache process alone writes (to a `.tmp` name, then a rename) and deletes.
+Past `SLIMSERVE_THUMB_CACHE_MB` (default 100) it deletes the oldest files down to 90% of the cap.
+The answer's `x-cache` header says `hit` or `miss`. The requirements are in
+`openspec/specs/thumbnails/spec.md`.
 
 The app's own URLs live under `/.app`, a path the gate never serves: `/.app/live` is the
 LiveView socket and `/.app/assets` the static files. `/dev/dashboard` (LiveDashboard) exists
