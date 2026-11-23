@@ -30,6 +30,9 @@ defmodule SlimServeWeb.BrowseTest do
 
   defp status(conn, path), do: get(conn, path).status
 
+  defp ranged(conn, nil), do: get(conn, "/digits.txt")
+  defp ranged(conn, range), do: conn |> put_req_header("range", range) |> get("/digits.txt")
+
   defp hrefs(conn, path) do
     {:ok, view, _html} = live(conn, path)
     view |> render() |> LazyHTML.from_fragment() |> LazyHTML.query("#entries a") |> LazyHTML.attribute("href")
@@ -130,6 +133,58 @@ defmodule SlimServeWeb.BrowseTest do
       plant(root, "favicon.ico", "mine")
 
       assert conn |> get("/favicon.ico") |> response(200) == "mine"
+    end
+  end
+
+  describe "Range requests" do
+    setup %{root: root} do
+      plant(root, "digits.txt", "0123456789")
+    end
+
+    test "Scenario: A single range answers 206 with exactly its bytes", %{conn: conn} do
+      for {range, body, content_range} <- [
+            {"bytes=2-5", "2345", "bytes 2-5/10"},
+            {"bytes=7-", "789", "bytes 7-9/10"},
+            {"bytes=-3", "789", "bytes 7-9/10"},
+            {"bytes=8-99", "89", "bytes 8-9/10"},
+            {"bytes=-50", "0123456789", "bytes 0-9/10"}
+          ] do
+        conn = ranged(conn, range)
+        assert response(conn, 206) == body, range
+        assert get_resp_header(conn, "content-range") == [content_range], range
+        assert get_resp_header(conn, "accept-ranges") == ["bytes"], range
+      end
+    end
+
+    test "Scenario: A range past the end answers 416 with the size", %{conn: conn} do
+      for range <- ~w(bytes=10- bytes=20-30 bytes=-0) do
+        conn = ranged(conn, range)
+        assert conn.status == 416, range
+        assert get_resp_header(conn, "content-range") == ["bytes */10"], range
+        assert get_resp_header(conn, "accept-ranges") == ["bytes"], range
+      end
+    end
+
+    test "Scenario: No range, several ranges or a malformed one answers the full 200", %{conn: conn} do
+      for range <- [nil, "bytes=0-1,4-5", "bytes=abc", "bytes=5-2", "items=0-1"] do
+        conn = ranged(conn, range)
+        assert response(conn, 200) == "0123456789", inspect(range)
+        assert get_resp_header(conn, "accept-ranges") == ["bytes"], inspect(range)
+        assert get_resp_header(conn, "content-range") == [], inspect(range)
+      end
+    end
+
+    # put_req_header replaces, so the second header goes on the list by hand.
+    test "Scenario: Two Range headers answer the full 200", %{conn: conn} do
+      conn = %{conn | req_headers: [{"range", "bytes=0-1"}, {"range", "bytes=2-3"} | conn.req_headers]}
+
+      assert conn |> get("/digits.txt") |> response(200) == "0123456789"
+    end
+
+    test "Scenario: An empty file answers the full 200 whatever the range", %{conn: conn, root: root} do
+      plant(root, "empty.txt", "")
+
+      assert conn |> put_req_header("range", "bytes=0-") |> get("/empty.txt") |> response(200) == ""
     end
   end
 
