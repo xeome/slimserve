@@ -2,7 +2,13 @@
   <.form for={@form} action={~p"/.app/login"} id="login-form" class="card login">
     <h1>Log in</h1>
     <.input field={@form[:next]} type="hidden" />
-    <.input field={@form[:username]} label="Username" autocomplete="username" required />
+    <.input
+      :if={@username?}
+      field={@form[:username]}
+      label="Username"
+      autocomplete="username"
+      required
+    />
     <.input
       field={@form[:password]}
       type="password"

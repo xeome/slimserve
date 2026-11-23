@@ -1,4 +1,4 @@
-# Reached only with login on, because SlimServeWeb.Login answers 404 otherwise.
+# Reached only with login or a write password on, because SlimServeWeb.Login answers 404 otherwise.
 defmodule SlimServeWeb.LoginController do
   use SlimServeWeb, :controller
 
@@ -11,27 +11,35 @@ defmodule SlimServeWeb.LoginController do
 
   def create(conn, params) do
     with {:ok, attempt} <- LoginLimit.attempt(conn.remote_ip),
-         true <- Login.valid?(params["username"], params["password"]) do
+         grant when grant != false <- Login.grant(params["username"], params["password"]) do
       LoginLimit.forget(attempt)
 
       conn
       |> configure_session(renew: true)
-      |> Login.put_login()
+      |> Login.put_grant(grant)
       |> redirect(to: local(params["next"]))
     else
       :limited -> send_resp(conn, 429, "Too Many Requests")
-      false -> form(conn, 401, params["next"], "Wrong username or password")
+      false -> form(conn, 401, params["next"], if(Login.on?(), do: "Wrong username or password", else: "Wrong password"))
     end
   end
 
+  # Closes this browser's open write pages: they remount through the checks, without the dropped session.
   def delete(conn, _params) do
+    if socket_id = get_session(conn, :live_socket_id), do: SlimServeWeb.Endpoint.broadcast(socket_id, "disconnect", %{})
+
     conn |> configure_session(drop: true) |> redirect(to: ~p"/.app/login")
   end
 
   defp form(conn, status, next, error) do
     conn
     |> put_status(status)
-    |> render(:new, form: Phoenix.Component.to_form(%{"next" => next}), error: error, page_title: "Log in")
+    |> render(:new,
+      form: Phoenix.Component.to_form(%{"next" => next}),
+      error: error,
+      username?: Login.on?(),
+      page_title: "Log in"
+    )
   end
 
   # Phoenix's own rule: a hand-rolled "starts with / and not //" accepts /\\evil.com.

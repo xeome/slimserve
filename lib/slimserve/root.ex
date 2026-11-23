@@ -40,6 +40,30 @@ defmodule SlimServe.Root do
   end
 
   @doc """
+  The path a write to `name` in the directory `parent` acts on: the one gate every write goes through.
+
+  Answers `{:ok, abs}` only when `parent` resolves to a directory, `name` is one plain name, and the
+  name is not ignored at its requested path or the path it resolves to. `abs` is the name itself, so
+  a link there is the link, never its target. `dir?: true` says a name that does not exist yet is to
+  be a folder, so a dir-only pattern applies to it. Whether the name exists is the caller's question.
+  """
+  @spec target(Path.t(), [String.t()], String.t(), dir?: boolean()) :: {:ok, Path.t()} | :error
+  def target(root, parent, name, opts \\ []) do
+    requested = parent ++ [name]
+
+    # safe_relative/2 keeps a missing leaf and follows a parent link. Path.relative_to/2 of the
+    # directory would give "." at the root, which no negation in a catch-all ignore file matches.
+    with {:dir, dir} <- resolve(root, parent),
+         true <- name?(name),
+         {:ok, relative} <- Path.safe_relative(Path.join(requested), root),
+         false <- Enum.any?(Enum.uniq([requested, Path.split(relative)]), &Ignore.ignored?(root, &1, opts)) do
+      {:ok, Path.join(dir, name)}
+    else
+      _ -> :error
+    end
+  end
+
+  @doc """
   The PubSub topic for changes in the directory `rel_dir`, relative to the root; `""` and `"."` are the root.
   """
   @spec topic(Path.t()) :: String.t()
@@ -51,5 +75,7 @@ defmodule SlimServe.Root do
   # UTF-8 would crash the ignore patterns' match. A NUL byte needs no rule: File.stat/1 refuses
   # it with :badarg.
   defp name?(segment),
-    do: String.valid?(segment) and not String.starts_with?(segment, ".") and not String.contains?(segment, "/")
+    do:
+      segment != "" and String.valid?(segment) and not String.starts_with?(segment, ".") and
+        not String.contains?(segment, "/")
 end

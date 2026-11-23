@@ -4,6 +4,8 @@ defmodule SlimServeWeb.LoginTest do
 
   import Phoenix.LiveViewTest
 
+  alias Phoenix.Socket.Broadcast
+
   @moduletag :tmp_dir
 
   # Each test logs in from its own address, so one test's failures never reach another's rate limit.
@@ -17,6 +19,7 @@ defmodule SlimServeWeb.LoginTest do
     on_exit(fn ->
       Application.delete_env(:slimserve, :root)
       Application.delete_env(:slimserve, :login)
+      Application.delete_env(:slimserve, :write_password)
     end)
 
     {:ok, conn: %{conn | remote_ip: ip()}}
@@ -139,6 +142,10 @@ defmodule SlimServeWeb.LoginTest do
       refute conn |> html() |> get("/.app/login") |> logout_button?()
     end
 
+    test "the login page asks for the username once", %{conn: conn} do
+      assert conn |> html() |> get("/.app/login") |> count("#login-form input[name=username]") == 1
+    end
+
     test "the 11th wrong attempt from one address answers 429, even with the right password", %{conn: conn} do
       for _ <- 1..10, do: assert(conn |> post("/.app/login", creds(%{"password" => "wrong"})) |> response(401))
 
@@ -172,6 +179,192 @@ defmodule SlimServeWeb.LoginTest do
 
       assert Enum.count(statuses, &(&1 == 401)) <= 10
       assert Enum.all?(statuses, &(&1 in [401, 429]))
+    end
+  end
+
+  defp write_ui?(conn) do
+    {:ok, view, _html} = live(conn, "/")
+    has_element?(view, "#write-bar")
+  end
+
+  defp count(conn, selector) do
+    conn |> html_response(200) |> LazyHTML.from_document() |> LazyHTML.query(selector) |> Enum.count()
+  end
+
+  describe "with a write password and login unset" do
+    setup do
+      Application.delete_env(:slimserve, :login)
+      Application.put_env(:slimserve, :write_password, "wpass")
+    end
+
+    defp write_in(conn) do
+      posted = post(conn, "/.app/login", %{"password" => "wpass"})
+      assert redirected_to(posted, 302) == "/"
+      recycle(posted)
+    end
+
+    test "the login page asks only for the password", %{conn: conn} do
+      page = conn |> html() |> get("/.app/login")
+      assert count(page, "#login-form input[name=username]") == 0
+      assert count(page, "#login-form input[name=password]") == 1
+    end
+
+    test "the listing links to the login page and shows no write UI until the user logs in", %{conn: conn} do
+      assert conn |> html() |> get("/") |> count("#edit-login") == 1
+      refute write_ui?(conn)
+    end
+
+    test "logging in with the write password shows the write UI and a logout button", %{conn: conn} do
+      logged = write_in(conn)
+
+      assert write_ui?(logged)
+      page = logged |> html() |> get("/")
+      assert count(page, "#logout-form") == 1
+      assert count(page, "#edit-login") == 0
+    end
+
+    test "a wrong password answers 401 and grants no writes", %{conn: conn} do
+      posted = post(conn, "/.app/login", %{"password" => "wrong"})
+      assert html_response(posted, 401)
+      refute posted |> recycle() |> write_ui?()
+    end
+
+    test "the 11th wrong attempt from one address answers 429, even with the right password", %{conn: conn} do
+      for _ <- 1..10, do: assert(conn |> post("/.app/login", %{"password" => "wrong"}) |> response(401))
+
+      assert conn |> post("/.app/login", %{"password" => "wpass"}) |> response(429)
+    end
+
+    test "changing the write password revokes the write session", %{conn: conn, tmp_dir: root} do
+      logged = write_in(conn)
+      Application.put_env(:slimserve, :write_password, "changed")
+
+      {:ok, view, _html} = live(logged, "/")
+      refute has_element?(view, "#write-bar")
+      render_hook(view, "delete", %{"name" => "a.txt"})
+      assert File.exists?(Path.join(root, "a.txt"))
+    end
+
+    test "removing the write password revokes the write session", %{conn: conn} do
+      logged = write_in(conn)
+      Application.delete_env(:slimserve, :write_password)
+
+      refute write_ui?(logged)
+    end
+
+    test "a session whose write digest was not made by this server grants no writes", %{conn: conn, tmp_dir: root} do
+      forged = init_test_session(conn, %{"write" => :crypto.strong_rand_bytes(32)})
+
+      {:ok, view, _html} = live(forged, "/")
+      refute has_element?(view, "#write-bar")
+      render_hook(view, "delete", %{"name" => "a.txt"})
+      assert File.exists?(Path.join(root, "a.txt"))
+    end
+
+    # The socket's id is the session's live_socket_id (Phoenix.LiveView.Socket.id/1), and its
+    # transport closes on a "disconnect" broadcast to it. LiveViewTest has no transport, so the
+    # broadcast is what this sees.
+    test "logging out tells that browser's open write pages to disconnect, and they remount without writes", %{
+      conn: conn
+    } do
+      logged = write_in(conn)
+      socket_id = logged |> get("/") |> get_session("live_socket_id")
+      SlimServeWeb.Endpoint.subscribe(socket_id)
+
+      out = post(logged, "/.app/logout")
+      assert_receive %Broadcast{topic: ^socket_id, event: "disconnect"}
+      refute out |> recycle() |> write_ui?()
+    end
+
+    # The pages opened after the first login carry its socket id, so a second login must keep it.
+    test "after a second write login in the same browser, logging out still reaches the first login's pages", %{
+      conn: conn
+    } do
+      logged = write_in(conn)
+      first = logged |> get("/") |> get_session("live_socket_id")
+      again = logged |> post("/.app/login", %{"password" => "wpass"}) |> recycle()
+      SlimServeWeb.Endpoint.subscribe(first)
+
+      post(again, "/.app/logout")
+      assert_receive %Broadcast{topic: ^first, event: "disconnect"}
+    end
+  end
+
+  describe "with login and a write password" do
+    setup do
+      Application.put_env(:slimserve, :write_password, "wpass")
+    end
+
+    test "the write password with the right username logs in with writes", %{conn: conn} do
+      posted = post(conn, "/.app/login", creds(%{"password" => "wpass"}))
+      assert redirected_to(posted, 302) == "/"
+
+      logged = recycle(posted)
+      assert logged |> html() |> get("/") |> html_response(200)
+      assert write_ui?(logged)
+    end
+
+    test "the write password with a wrong username is refused", %{conn: conn} do
+      posted = post(conn, "/.app/login", %{"username" => "wrong", "password" => "wpass"})
+      assert html_response(posted, 401)
+      assert posted |> recycle() |> html() |> get("/") |> to_login?()
+    end
+
+    # The dashboard's socket meets only the write check, so that check holds the login too.
+    test "changing the viewer password refuses the dashboard's live socket of a write session", %{conn: conn} do
+      page =
+        conn |> post("/.app/login", creds(%{"password" => "wpass"})) |> recycle() |> html() |> get("/.app/dashboard/home")
+
+      assert html_response(page, 200)
+
+      Application.put_env(:slimserve, :login, {"user", "changed"})
+      assert {:error, {:redirect, %{to: "/.app/login" <> _}}} = live(page)
+    end
+
+    test "the viewer password logs in without writes", %{conn: conn} do
+      refute conn |> log_in() |> write_ui?()
+    end
+
+    test "a viewer login after a write login in the same browser drops the writes", %{conn: conn} do
+      writer = conn |> post("/.app/login", creds(%{"password" => "wpass"})) |> recycle()
+      assert write_ui?(writer)
+
+      viewer = writer |> post("/.app/login", creds()) |> recycle()
+      refute write_ui?(viewer)
+    end
+  end
+
+  describe "the dashboard" do
+    setup do
+      Application.delete_env(:slimserve, :login)
+    end
+
+    test "answers 404 with no write password, or an empty one", %{conn: conn} do
+      assert conn |> html() |> get("/.app/dashboard") |> response(404)
+      Application.put_env(:slimserve, :write_password, "")
+      assert conn |> html() |> get("/.app/dashboard") |> response(404)
+    end
+
+    test "sends a browser without write rights to the login page, and answers anything else 401", %{conn: conn} do
+      Application.put_env(:slimserve, :write_password, "wpass")
+
+      assert conn |> html() |> get("/.app/dashboard") |> to_login?()
+      assert conn |> get("/.app/dashboard") |> response(401)
+      # A viewer login is not a write login.
+      Application.put_env(:slimserve, :login, {"user", "pass"})
+      assert conn |> log_in() |> html() |> get("/.app/dashboard") |> to_login?()
+    end
+
+    # The connected mount takes its session from the sent conn, so only the mount check can refuse it.
+    test "answers a write session, and refuses its live socket once the password changed", %{conn: conn} do
+      Application.put_env(:slimserve, :write_password, "wpass")
+      logged = conn |> post("/.app/login", %{"password" => "wpass"}) |> recycle()
+
+      page = logged |> html() |> get("/.app/dashboard/home")
+      assert html_response(page, 200)
+
+      Application.put_env(:slimserve, :write_password, "changed")
+      assert {:error, {:redirect, %{to: "/.app/login" <> _}}} = live(page)
     end
   end
 

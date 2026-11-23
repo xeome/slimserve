@@ -47,6 +47,17 @@ defmodule SlimServe.IgnoreTest do
     end
   end
 
+  # A folder about to be made does not exist yet, so only the hint says it is one.
+  @tag :tmp_dir
+  test "the dir? hint makes a missing leaf match a dir-only pattern", %{tmp_dir: root} do
+    File.write!(Path.join(root, ".slimserveignore"), "build/\n")
+
+    refute Ignore.ignored?(root, ~w(build))
+    assert Ignore.ignored?(root, ~w(build), dir?: true)
+    assert Ignore.ignored?(root, ~w(sub build), dir?: true)
+    refute Ignore.ignored?(root, ~w(other), dir?: true)
+  end
+
   @tag :tmp_dir
   test "Scenario: A double star inside a name matches like a single star", %{tmp_dir: root} do
     File.write!(Path.join(root, ".slimserveignore"), "foo**bar\n")

@@ -24,13 +24,39 @@ if config_env() != :test do
       _one -> raise "set both SLIMSERVE_USERNAME and SLIMSERVE_PASSWORD, or neither"
     end
 
-  # Without login the secret only signs the LiveView session and the CSRF token, and nothing
-  # is persisted. So a fresh one per boot is enough: open pages reload after a restart.
-  # With login it also keys the login digest in the cookie, and a fresh one per boot would log
-  # everyone out on each restart, so login needs a fixed secret.
+  # The secret signs the LiveView session and the CSRF token, and keys the login and write digests
+  # in the cookie. Nothing else is persisted, so without login a fresh one per boot is enough: open
+  # pages reload after a restart, and a write-only deployment just ends write logins on restart.
+  # With login a fresh one would log every viewer out on each restart, so login needs a fixed secret.
   if config_env() == :prod and login != nil and System.get_env("SECRET_KEY_BASE") == nil do
     raise "SECRET_KEY_BASE must be set when SLIMSERVE_USERNAME and SLIMSERVE_PASSWORD are"
   end
+
+  write_password = set.("SLIMSERVE_WRITE_PASSWORD")
+
+  # A viewer would hold write rights.
+  if write_password != nil and match?({_user, ^write_password}, login) do
+    raise "SLIMSERVE_WRITE_PASSWORD must differ from SLIMSERVE_PASSWORD"
+  end
+
+  # allow_upload raises on an extension with no known MIME type, so the boot refuses it first.
+  # Lowercase, because an upload's extension is downcased before it is looked up.
+  upload_types =
+    case set.("SLIMSERVE_UPLOAD_TYPES") do
+      nil ->
+        :any
+
+      list ->
+        types =
+          for ext <- String.split(list, ",", trim: true),
+              ext = ext |> String.trim() |> String.trim_leading(".") |> String.downcase(),
+              ext != "" do
+            if not MIME.has_type?(ext), do: raise("SLIMSERVE_UPLOAD_TYPES: no MIME type is known for .#{ext}")
+            "." <> ext
+          end
+
+        if types == [], do: raise("SLIMSERVE_UPLOAD_TYPES lists no extension"), else: types
+    end
 
   config :slimserve, SlimServeWeb.Endpoint, http: [port: String.to_integer(System.get_env("PORT", "4000"))]
   config :slimserve, login: login
@@ -43,6 +69,12 @@ if config_env() != :test do
     thumb_max_file_bytes: megabytes.("SLIMSERVE_THUMB_MAX_FILE_SIZE_MB", "10"),
     thumb_cache_bytes: megabytes.("SLIMSERVE_THUMB_CACHE_MB", "100"),
     thumb_cache_dir: System.get_env("SLIMSERVE_CACHE_DIR") || Path.join(System.tmp_dir!(), "slimserve-thumbs")
+
+  config :slimserve,
+    # A user who logs in with it can change the served files. Tests set their own.
+    write_password: write_password,
+    upload_max_bytes: megabytes.("SLIMSERVE_UPLOAD_MAX_MB", "100"),
+    upload_types: upload_types
 end
 
 # A prod server has no default root: serving the release's own working directory by accident would

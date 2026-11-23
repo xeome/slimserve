@@ -25,5 +25,3 @@ config :slimserve, SlimServeWeb.Endpoint,
     esbuild: {Esbuild, :install_and_run, [:slimserve, ~w(--sourcemap=inline --watch)]},
     tailwind: {Tailwind, :install_and_run, [:slimserve, ~w(--watch)]}
   ]
-
-config :slimserve, dev_routes: true

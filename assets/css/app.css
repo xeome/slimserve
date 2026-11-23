@@ -194,6 +194,42 @@ body.page {
   -webkit-mask-size: 40%; mask-size: 40%; -webkit-mask-position: center; mask-position: center;
 }
 
+/* Write tools, shown only with write rights: chrome, so grey. The drop zone is the upload form itself. */
+.write-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 0 0 12px; }
+.write-bar form { display: flex; align-items: center; gap: 8px; margin: 0; }
+.write-bar .field { margin: 0; }
+.dropzone { flex: 1; min-width: 16rem; padding: 6px 8px; border: 1px dashed var(--line); border-radius: 8px; }
+.dropzone.phx-drop-target-active, .dropzone:has(input:focus-visible) { background: var(--hover); }
+.dropzone .btn { cursor: pointer; }
+.mkdir .input { width: 12rem; }
+.upload-entries { list-style: none; margin: 0 0 12px; padding: 0; }
+.upload-entries li { display: flex; align-items: center; gap: 10px; padding: 4px 0; box-shadow: inset 0 -1px 0 var(--line); }
+.upload-entries .label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--bright); }
+.upload-entries .num { color: var(--dim); }
+.upload-entries .field-error { margin: 0; }
+.upload-entries .btn { margin-left: auto; }
+/* A delete that takes a folder's files is a breach-level warning, so the bar wears --hot. */
+.confirm-bar {
+  --x: var(--hot);
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 12px; padding: 8px 12px; border-radius: 8px;
+  background: color-mix(in srgb, var(--x) 10%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--x) 30%, transparent);
+}
+.confirm-bar > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.confirm-bar strong { color: var(--bright); font-weight: 600; }
+.listing .actions { white-space: nowrap; text-align: right; }
+.listing .actions .btn { padding: 3px 6px; }
+.listing .move { display: inline-block; vertical-align: top; }
+.listing .move summary { list-style: none; }
+.listing .move summary::-webkit-details-marker { display: none; }
+.listing .move[open] summary { color: var(--text); background: var(--sel); }
+.move-form { display: flex; align-items: flex-start; gap: 6px; margin: 6px 0 0; }
+.move-form .field { margin: 0; }
+.move-form .input { width: 16rem; }
+[data-view='grid'] .listing .actions { display: flex; justify-content: center; gap: 4px; padding: 0 8px 8px; box-shadow: none; }
+[data-view='grid'] .listing .move-form .input { width: 100%; }
+[data-view='grid'] .listing .move[open] { flex: 1; }
+
 .list { list-style: none; margin: 0; padding: 0; }
 .list > li { display: flex; gap: 14px; padding: 6px 0; box-shadow: inset 0 -1px 0 var(--line); }
 .list .title { min-width: 8em; color: var(--dim); }

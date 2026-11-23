@@ -19,6 +19,23 @@ unset to serve without one; setting only one refuses to boot. In prod, login als
 `SECRET_KEY_BASE` (`mix phx.gen.secret`): it keys the login in the session cookie, so the server
 refuses to boot without it. Changing the password logs every session out.
 
+## Edit from the browser
+
+Set `SLIMSERVE_WRITE_PASSWORD` to let a user who logs in with it at `/.app/login` upload, rename,
+move and delete files and create folders from the listing, and open `/.app/dashboard`. With viewer
+login on, a write login takes the same username. An empty value counts as unset: no writes, and the
+dashboard answers 404. Changing the write password ends every write session. In prod, set a fixed
+`SECRET_KEY_BASE` too, or write logins end on each restart.
+
+- `SLIMSERVE_UPLOAD_MAX_MB`: the largest upload, default 100.
+- `SLIMSERVE_UPLOAD_TYPES`: a comma list of extensions, such as `jpg,png,pdf`; unset accepts any.
+  An extension with no known MIME type refuses to boot.
+
+Nothing is ever overwritten, and a deleted folder goes with everything in it, hidden files too:
+there is no trash. Uploads and file moves need a file system with hard links (ext4, xfs, btrfs,
+overlayfs); on exFAT or some SMB mounts they are refused. A crash mid-upload can leave a hidden
+`.upload-*` file in the target folder; it is never served, and is safe to delete.
+
 ## Check it
 
 ```sh

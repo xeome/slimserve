@@ -14,6 +14,10 @@ SlimServe is one OTP application, `:slimserve`, with no database.
 - Ignore files: a path a `.slimserveignore` on its ancestry ignores, or under an ignored directory, by its requested or its resolved path, is neither listed nor served; an unreadable or non-UTF-8 ignore file ignores its whole directory; patterns are the gitignore subset `*`, `?`, `**`, a leading or inner `/` to anchor, a trailing `/` for directories and a leading `!` to negate, and the last match wins.
 - On-demand thumbnail: `GET <path>?thumb=1` answers a WebP with none of the source's metadata and no larger than the configured size for a visible JPEG, PNG, GIF or WebP by both name and content, 404 for any other path, and 413 without decoding for an image over the configured input size.
 - Login: with `SLIMSERVE_USERNAME` and `SLIMSERVE_PASSWORD` both set, every route answers a browser's GET with a 302 to `/.app/login?next=<path>` and anything else with a bare 401 until the user logs in, and a live socket without the login is refused at mount; a login returns to `next` only when it is a local path, else to `/`; 10 failed logins from one IP in a rolling minute make its next attempts answer 429; changing the password logs every session out; with both unset nothing changes and `/.app/login` and `/.app/logout` answer 404.
+- Write login: with `SLIMSERVE_WRITE_PASSWORD` set, `/.app/login` also takes the write password, under the same rate limit; with viewer login on the username must match too, and with it off the form asks only for the password and every listing's header links to it; a write login holds until logout, and changing or removing the write password ends it, on open pages at their next write too; logout closes that browser's open pages, which reconnect without write rights.
+- Writes: with write rights, a listing uploads files (at most `SLIMSERVE_UPLOAD_MAX_MB`, default 100, and only the `SLIMSERVE_UPLOAD_TYPES` extensions when set), creates a folder, renames or moves an entry to a path from the root, and deletes a file, a link (never its target) or a folder with everything in it after a confirm bar that counts its files, which asks again when the folder or its count changed before the confirm; other open pages update through the live listing; without write rights every write event is refused.
+- Write refusals: a write is refused when it names a dot-file, a name with a "/", an empty or non-UTF-8 name, an ignored name by its requested or resolved path, a path outside the root or under a hidden or ignored folder, or an existing name, so nothing is ever overwritten; a folder whose subtree holds an entry an ignore pattern hides at its current path does not move, and a folder does not move into itself.
+- Dashboard: `/.app/dashboard` (LiveDashboard) answers 404 with no write password, a write session's browser only, else a 302 to the login page or a 401, and its live socket is refused at mount without write rights.
 - Thumbnail cache: a repeated thumbnail comes from disk, a changed source gets a new one, and the oldest thumbnails go to keep the cache under its size; the cache deletes only files named like its own, and thumbnails still answer when the cache process is down or its directory cannot be made.
 
 ## Supervision tree
@@ -89,8 +93,30 @@ longer update until the app restarts. Without `inotifywait` the app does not boo
 directory whose `.slimserveignore` changed updates only on its next event.
 
 The app's own URLs live under `/.app`, a path the gate never serves: `/.app/live` is the
-LiveView socket and `/.app/assets` the static files. `/dev/dashboard` (LiveDashboard) exists
-only in dev, and its scope is declared before the catch-all route.
+LiveView socket, `/.app/assets` the static files and `/.app/dashboard` LiveDashboard, whose scope is
+declared before the catch-all route. Routes compile before runtime config is read, so the dashboard
+exists in every env and `plug SlimServeWeb.Login, :write` answers 404 for it with no write password.
+
+## Writes
+
+Every write goes through `SlimServe.Root.target/4`, the write side of the gate: the parent must
+resolve to a directory, the name must be one plain name, and the name must not be ignored at its
+requested or its resolved path (`dir?: true` for a folder to be made, so a dir-only pattern
+applies). It answers the name's own path, so a link is acted on as a link. `ListingLive` adds that
+a new name has nothing at it, not even a dangling link, and that an existing one resolves, so it is
+visible, that a link is renamed only within its own folder, and, with `SLIMSERVE_UPLOAD_TYPES`
+set, that a file's new name has a listed extension, whatever type the browser claimed. Every event
+`ListingLive` handles is a write, so an `attach_hook` on `handle_event` halts every event unless
+the session's `"write"` digest, an HMAC of the write password keyed with the server secret,
+still matches at that event.
+
+An upload is copied to a `.upload-<random>` name in the target folder, hard-linked to its name and
+the temporary name removed: a dot name is never served, and a hard link refuses an existing name,
+so an upload never overwrites. A file moves the same way, by a hard link and a remove; a folder moves
+by `File.rename/2`. So the root must support hard links: on exFAT and some SMB mounts uploads and
+file moves are refused. A folder delete uses `File.rm_rf/1`, which removes links inside the tree
+without following them. No write broadcasts: `SlimServe.Watcher` sees each change and tells the
+open listings, the writer's too.
 
 Assets: `assets/css/app.css` (Tailwind v4 plus the graphite tokens and components) and
 `assets/js/app.js` are built by the `tailwind` and `esbuild` Mix tasks into `priv/static/assets`.

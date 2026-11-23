@@ -17,17 +17,18 @@ defmodule SlimServe.Ignore do
 
   A file under an ignored directory stays ignored whatever a `!` pattern says, as in
   gitignore. An ignore file that exists but cannot be read hides its directory and
-  everything under it.
+  everything under it. `dir?: true` says the last name is a folder even though it does not exist
+  yet, as for a folder about to be made.
   """
-  @spec ignored?(Path.t(), [String.t()]) :: boolean()
-  def ignored?(root, segments), do: walk(root, segments, [])
+  @spec ignored?(Path.t(), [String.t()], dir?: boolean()) :: boolean()
+  def ignored?(root, segments, opts \\ []), do: walk(root, segments, [], Keyword.get(opts, :dir?, false))
 
   # Walks down from root one name at a time. `layers` holds, for every directory passed,
   # its rules and the path of the current name relative to it.
   # The directory itself is hidden when its own ignore file is unreadable; a file path sees :enotdir.
-  defp walk(dir, [], _layers), do: rules(dir) == :unreadable
+  defp walk(dir, [], _layers, _dir?), do: rules(dir) == :unreadable
 
-  defp walk(dir, [name | rest], layers) do
+  defp walk(dir, [name | rest], layers, dir?) do
     case rules(dir) do
       :unreadable ->
         true
@@ -36,7 +37,7 @@ defmodule SlimServe.Ignore do
         layers = Enum.map(layers, fn {rules, relative} -> {rules, relative <> "/" <> name} end) ++ [{rules, name}]
         path = Path.join(dir, name)
 
-        matched?(layers, rest != [] or File.dir?(path)) or walk(path, rest, layers)
+        matched?(layers, rest != [] or dir? or File.dir?(path)) or walk(path, rest, layers, dir?)
     end
   end
 

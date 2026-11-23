@@ -5,7 +5,7 @@ defmodule SlimServe.RuntimeConfigTest do
   setup do
     saved =
       Map.new(
-        ~w(SLIMSERVE_ROOT PHX_SERVER SLIMSERVE_USERNAME SLIMSERVE_PASSWORD SECRET_KEY_BASE),
+        ~w(SLIMSERVE_ROOT PHX_SERVER SLIMSERVE_USERNAME SLIMSERVE_PASSWORD SECRET_KEY_BASE SLIMSERVE_WRITE_PASSWORD SLIMSERVE_UPLOAD_MAX_MB SLIMSERVE_UPLOAD_TYPES),
         &{&1, System.get_env(&1)}
       )
 
@@ -27,6 +27,58 @@ defmodule SlimServe.RuntimeConfigTest do
     set("SLIMSERVE_PASSWORD", pass)
     set("SECRET_KEY_BASE", secret)
     "config/runtime.exs" |> Config.Reader.read!(env: :prod) |> get_in([:slimserve, :login])
+  end
+
+  # Every other variable unset, so only the ones given decide.
+  defp prod(vars) do
+    for name <-
+          ~w(PHX_SERVER SLIMSERVE_USERNAME SLIMSERVE_PASSWORD SECRET_KEY_BASE SLIMSERVE_WRITE_PASSWORD SLIMSERVE_UPLOAD_MAX_MB SLIMSERVE_UPLOAD_TYPES),
+        do: set(name, vars[name])
+
+    "config/runtime.exs" |> Config.Reader.read!(env: :prod) |> Keyword.fetch!(:slimserve)
+  end
+
+  test "SLIMSERVE_WRITE_PASSWORD sets the write password, and an empty one counts as unset" do
+    assert prod(%{"SLIMSERVE_WRITE_PASSWORD" => "w"})[:write_password] == "w"
+    assert prod(%{"SLIMSERVE_WRITE_PASSWORD" => ""})[:write_password] == nil
+    assert prod(%{})[:write_password] == nil
+  end
+
+  test "uploads default to 100 MB of any type" do
+    assert prod(%{})[:upload_max_bytes] == 100 * 1024 * 1024
+    assert prod(%{})[:upload_types] == :any
+    assert prod(%{"SLIMSERVE_UPLOAD_MAX_MB" => "5"})[:upload_max_bytes] == 5 * 1024 * 1024
+  end
+
+  test "SLIMSERVE_UPLOAD_TYPES lists extensions, each with its leading dot" do
+    assert prod(%{"SLIMSERVE_UPLOAD_TYPES" => "txt"})[:upload_types] == [".txt"]
+    assert prod(%{"SLIMSERVE_UPLOAD_TYPES" => "txt, .png"})[:upload_types] == [".txt", ".png"]
+  end
+
+  # An upload's extension is downcased before it is looked up.
+  test "SLIMSERVE_UPLOAD_TYPES entries are downcased" do
+    assert prod(%{"SLIMSERVE_UPLOAD_TYPES" => "JPG"})[:upload_types] == [".jpg"]
+  end
+
+  # An empty list would make allow_upload accept nothing, which no one sets on purpose.
+  test "an SLIMSERVE_UPLOAD_TYPES that lists no extension refuses to boot" do
+    assert_raise RuntimeError, ~r/SLIMSERVE_UPLOAD_TYPES/, fn -> prod(%{"SLIMSERVE_UPLOAD_TYPES" => ","}) end
+  end
+
+  # A viewer would then hold write rights.
+  test "a write password equal to the viewer password refuses to boot" do
+    login = %{"SLIMSERVE_USERNAME" => "u", "SLIMSERVE_PASSWORD" => "p", "SECRET_KEY_BASE" => "s"}
+
+    assert_raise RuntimeError, ~r/SLIMSERVE_WRITE_PASSWORD/, fn ->
+      prod(Map.put(login, "SLIMSERVE_WRITE_PASSWORD", "p"))
+    end
+
+    assert prod(Map.put(login, "SLIMSERVE_WRITE_PASSWORD", "w"))[:write_password] == "w"
+  end
+
+  # allow_upload raises on such an extension, so the boot refuses it first.
+  test "an upload type with no known MIME type refuses to boot" do
+    assert_raise RuntimeError, ~r/SLIMSERVE_UPLOAD_TYPES/, fn -> prod(%{"SLIMSERVE_UPLOAD_TYPES" => "txt,notatype"}) end
   end
 
   @tag :tmp_dir

@@ -2,6 +2,8 @@ defmodule SlimServeWeb.Layouts do
   @moduledoc false
   use SlimServeWeb, :html
 
+  alias SlimServeWeb.Login
+
   embed_templates "layouts/*"
 
   attr :flash, :map, required: true, doc: "the map of flash messages"
@@ -11,17 +13,24 @@ defmodule SlimServeWeb.Layouts do
     doc: "the current [scope](https://phoenix.hexdocs.pm/scopes.html)"
 
   attr :login_page, :boolean, default: false, doc: "hides the logout button"
+  attr :write?, :boolean, default: false, doc: "the session holds write rights"
 
   slot :inner_block, required: true
 
   # Every page behind the login gate is logged in by construction, so the button shows whenever login is on.
+  # With only a write password, viewing needs no login, so the header offers one for editing instead.
   def app(assigns) do
-    assigns = assign(assigns, :logout?, SlimServeWeb.Login.on?() and not assigns.login_page)
+    assigns =
+      assign(assigns,
+        logout?: (Login.on?() or assigns.write?) and not assigns.login_page,
+        edit_login?: Login.write_on?() and not Login.on?() and not assigns.write? and not assigns.login_page
+      )
 
     ~H"""
     <header>
       <a href={~p"/"} class="name">SlimServe</a>
       <span class="meta">Phoenix {Application.spec(:phoenix, :vsn)}</span>
+      <a :if={@edit_login?} href={~p"/.app/login"} id="edit-login" class="btn logout">Log in to edit</a>
       <.form
         :if={@logout?}
         for={to_form(%{})}
