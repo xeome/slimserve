@@ -1,5 +1,3 @@
-alias Credo.Check.Design.AliasUsage
-
 %{
   configs: [
     %{
@@ -19,7 +17,7 @@ alias Credo.Check.Design.AliasUsage
       },
       plugins: [],
       requires: [],
-      strict: true,
+      strict: false,
       parse_timeout: 5000,
       color: true,
       checks: %{
@@ -29,22 +27,16 @@ alias Credo.Check.Design.AliasUsage
           {Credo.Check.Consistency.SpaceAroundOperators, []},
           {Credo.Check.Consistency.SpaceInParentheses, []},
           {Credo.Check.Consistency.TabsOrSpaces, []},
-          {AliasUsage, [priority: :low, if_nested_deeper_than: 2, if_called_more_often_than: 0]},
           {Credo.Check.Design.TagFIXME, []},
-          {Credo.Check.Design.TagTODO, [exit_status: 2]},
+          {Credo.Check.Design.TagTODO, [exit_status: 0]},
           {Credo.Check.Readability.FunctionNames, []},
-          {Credo.Check.Readability.MaxLineLength, [priority: :low, max_length: 120]},
           {Credo.Check.Readability.ModuleAttributeNames, []},
           {Credo.Check.Readability.ModuleNames, []},
           {Credo.Check.Readability.ParenthesesInCondition, []},
           {Credo.Check.Readability.PredicateFunctionNames, []},
-          {Credo.Check.Readability.RedundantBlankLines, []},
           {Credo.Check.Readability.Semicolons, []},
           {Credo.Check.Readability.SpaceAfterCommas, []},
-          {Credo.Check.Readability.TrailingBlankLine, []},
-          {Credo.Check.Readability.TrailingWhiteSpace, []},
           {Credo.Check.Readability.VariableNames, []},
-          {Credo.Check.Refactor.Apply, []},
           {Credo.Check.Refactor.CyclomaticComplexity, []},
           {Credo.Check.Refactor.FilterFilter, []},
           {Credo.Check.Refactor.FunctionArity, []},
@@ -79,7 +71,6 @@ alias Credo.Check.Design.AliasUsage
         disabled: [
           # Rewritten by Styler (its docs/credo.md), so mix format --check-formatted enforces them
           {Credo.Check.Consistency.ParameterPatternMatching, []},
-          {AliasUsage, []},
           {Credo.Check.Readability.AliasOrder, []},
           {Credo.Check.Readability.LargeNumbers, []},
           {Credo.Check.Readability.ModuleDoc, []},

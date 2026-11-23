@@ -2,6 +2,17 @@
 
 SlimServe is one OTP application, `:slimserve`, with no database.
 
+## Behaviour
+
+- Directory listing: a listing shows exactly the entries the server would serve whose names are valid UTF-8, folders first and then by name.
+- Live listing: a connected listing updates within a second of a file being added to or removed from its directory, under the dot-file and ignore rules.
+- File download: a visible file downloads with the MIME type of its requested name, for a symlink too, whatever the Accept header, and with the same CSP and `nosniff` headers as every page; a file the server cannot read is neither listed nor served.
+- Containment: a path that resolves outside the root, through a symlink or an encoded slash too, or that has a component that is not valid UTF-8 or holds a NUL byte, answers 404.
+- Dot-files: a path with a component starting with ".", in the requested path or in the path a symlink resolves it to, is neither listed nor served.
+- Ignore files: a path a `.slimserveignore` on its ancestry ignores, or under an ignored directory, by its requested or its resolved path, is neither listed nor served; an unreadable or non-UTF-8 ignore file ignores its whole directory; patterns are the gitignore subset `*`, `?`, `**`, a leading or inner `/` to anchor, a trailing `/` for directories and a leading `!` to negate, and the last match wins.
+- On-demand thumbnail: `GET <path>?thumb=1` answers a WebP with none of the source's metadata and no larger than the configured size for a visible JPEG, PNG, GIF or WebP by both name and content, 404 for any other path, and 413 without decoding for an image over the configured input size.
+- Thumbnail cache: a repeated thumbnail comes from disk, a changed source gets a new one, and the oldest thumbnails go to keep the cache under its size; the cache deletes only files named like its own, and thumbnails still answer when the cache process is down or its directory cannot be made.
+
 ## Supervision tree
 
 `SlimServe.Application` starts `SlimServe.Supervisor` (`:one_for_one`) with, in order:
@@ -36,7 +47,7 @@ Bandit
 every symlink), has a component starting with ".", or is ignored by a `.slimserveignore` file
 (`SlimServe.Ignore`). `ListingLive` lists exactly the names `resolve/2` accepts, so the listing
 and the download cannot disagree. The root is `config :slimserve, :root`, read from
-`SLIMSERVE_ROOT` at boot. The requirements are in `openspec/specs/file-serving/spec.md`.
+`SLIMSERVE_ROOT` at boot.
 
 A thumbnail is asked for as `<path>?thumb=1`; the listing adds `&v=<mtime>-<size>`, so an image that
 was still being copied when it was first listed re-fetches once it changes. It passes the same gate, so a hidden image has no
@@ -53,8 +64,7 @@ path, inode, ctime, modification time, size and the thumbnail size, so a changed
 the index: a hit is the file existing, and the request process reads it. libvips also runs in the
 request process, and the cache process alone writes (to a `.tmp` name, then a rename) and deletes.
 Past `SLIMSERVE_THUMB_CACHE_MB` (default 100) it deletes the oldest files down to 90% of the cap.
-The answer's `x-cache` header says `hit` or `miss`. The requirements are in
-`openspec/specs/thumbnails/spec.md`.
+The answer's `x-cache` header says `hit` or `miss`.
 
 ## Live listing
 

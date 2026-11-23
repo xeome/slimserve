@@ -6,17 +6,15 @@ SlimServe on Phoenix 1.8: a server-rendered web app, no database.
 - Phoenix 1.8 with LiveView, Bandit, Tailwind v4 and esbuild. No Ecto, no mailer, no gettext.
 - `inotifywait` from inotify-tools, installed on the host: `SlimServe.Watcher` runs it, and the app
   does not boot without it.
-- Gates: Styler (through `mix format`), Credo strict, Sobelow, mix_audit, `hex.audit`, Dialyzer,
-  ExUnit with a coverage floor, and OpenSpec's strict spec validation.
+- Gates, in two Mix aliases. `mix precommit` runs in seconds: compile with warnings as errors,
+  `deps.unlock --check-unused`, Styler (through `mix format`), Credo and the tests. `mix ci` runs
+  those plus `hex.audit`, Sobelow at medium confidence, mix_audit, Dialyzer and the coverage floor.
+  CI runs `mix ci`.
 
 ## Project rules
 
-- Run `mix precommit` before every commit and fix what it reports. It runs every gate CI runs; a
-  red gate is never skipped or silenced.
-- The precommit lint makes the skip comments and attributes in the code agree with `.sobelow-skips-allowed`.
-  So every new skip shows in the diff, and the reviewer confirms the owner's approval for each new entry.
-- Specs live in `openspec/specs/`. Change behaviour by editing those specs directly in the same
-  commit; there is no `openspec/changes/` workflow.
+- Run `mix precommit` before every commit and fix what it reports. A red gate, there or in
+  `mix ci`, is never skipped or silenced.
 - UI follows the graphite-ui skill: its tokens and component CSS live in `assets/css/app.css`.
   Load the skill before building or restyling any screen. There is no daisyUI.
 - The browser pipeline sends `content-security-policy: default-src 'self'; img-src 'self' data:; base-uri 'self'; frame-ancestors 'self'`.

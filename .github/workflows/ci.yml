@@ -8,7 +8,7 @@ permissions:
   contents: read
 
 jobs:
-  precommit:
+  ci:
     runs-on: ubuntu-24.04
     env:
       MIX_ENV: test
@@ -26,13 +26,10 @@ jobs:
             priv/plts
           key: ${{ runner.os }}-mix-${{ hashFiles('mix.lock', '.tool-versions') }}
           restore-keys: ${{ runner.os }}-mix-
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .tool-versions
       # inotifywait, for SlimServe.Watcher and its tests.
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends inotify-tools
       - run: mix deps.get
-      - run: mix precommit
+      - run: mix ci
 
   actionlint:
     runs-on: ubuntu-24.04
