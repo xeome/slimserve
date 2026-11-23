@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "slimserve.main" . | quote }}
+  namespace: {{ include "slimserve.namespace" . | quote }}
+spec:
+  type: {{ .Values.service.type | quote }}
+  selector:
+    app: {{ include "slimserve.main" . | quote }}
+  ports:
+    {{- range .Values.service.ports }}
+    - {{- toYaml (mergeOverwrite (deepCopy .) (dict "targetPort" "http")) | nindent 6 }}
+    {{- end }}

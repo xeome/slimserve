@@ -1,0 +1,143 @@
+{{- $name := include "slimserve.main" . -}}
+{{- $namespace := include "slimserve.namespace" . -}}
+{{- $auth := .Values.auth -}}
+{{- $hasCredentials := or $auth.password $auth.writePassword $auth.secretKeyBase -}}
+{{- $legacy := .Values.main | default dict -}}
+{{- $viewer := dig "auth" "enabled" false $legacy -}}
+{{- $writer := dig "dashboard" "enabled" false $legacy -}}
+{{- $legacyFlags := dict "SLIMSERVE_ENABLE_AUTH" false "SLIMSERVE_ENABLE_ADMIN" false -}}
+{{- $legacyEnv := get $legacy "environments" | default list -}}
+{{- range $key, $value := (get $legacy "options" | default dict) -}}
+  {{- $legacyEnv = append $legacyEnv (dict "name" (upper $key) "value" $value) -}}
+{{- end -}}
+{{- if and .Release.IsUpgrade (ne (toString .Values.persistence.enabled) "true") (lookup "v1" "PersistentVolumeClaim" $namespace (include "slimserve.claim" .)) -}}
+  {{- fail "cannot disable persistence on an upgrade with an existing data claim" -}}
+{{- end -}}
+{{- if .Release.IsUpgrade -}}
+  {{- with lookup "apps/v1" "Deployment" $namespace $name -}}
+    {{- range .spec.template.spec.containers -}}
+      {{- $legacyEnv = concat $legacyEnv (.env | default list) -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- range $legacyEnv -}}
+  {{- $value := toString .value -}}
+  {{- if and (hasKey $legacyFlags .name) (or .valueFrom (contains "$(" $value) (has (lower $value) (list "true" "t" "1"))) -}}
+    {{- $_ := set $legacyFlags .name true -}}
+  {{- end -}}
+{{- end -}}
+{{- if and (or (eq (toString $viewer) "true") $legacyFlags.SLIMSERVE_ENABLE_AUTH) (not (and $auth.username $auth.password $auth.secretKeyBase)) -}}
+  {{- fail "legacy Go viewer login requires auth.username, auth.password and auth.secretKeyBase" -}}
+{{- end -}}
+{{- if and (or (eq (toString $writer) "true") $legacyFlags.SLIMSERVE_ENABLE_ADMIN) (not $auth.writePassword) -}}
+  {{- fail "legacy Go dashboard requires auth.writePassword" -}}
+{{- end -}}
+{{- if or (eq (toString $auth.enabled) "true") $auth.username $auth.password -}}
+  {{- if not (and $auth.username $auth.password $auth.secretKeyBase) -}}
+    {{- fail "viewer login requires auth.username, auth.password and auth.secretKeyBase" -}}
+  {{- end -}}
+{{- end -}}
+{{- if and $auth.password $auth.writePassword (eq (toString $auth.password) (toString $auth.writePassword)) -}}
+  {{- fail "auth.writePassword must differ from auth.password" -}}
+{{- end -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name | quote }}
+  namespace: {{ $namespace | quote }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: {{ $name | quote }}
+  template:
+    metadata:
+      labels:
+        app: {{ $name | quote }}
+      {{- if $hasCredentials }}
+      annotations:
+        slimserve/credentials-revision: {{ .Release.Revision | quote }}
+      {{- end }}
+    spec:
+      securityContext:
+        fsGroup: 1001
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: {{ $name | quote }}
+          image: {{ printf "%s:%s" .Values.image.main.repository (toString (default .Chart.AppVersion .Values.image.main.tag)) | quote }}
+          imagePullPolicy: {{ .Values.image.main.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ int .Values.port }}
+          env:
+            - name: PHX_HOST
+              value: {{ .Values.host | quote }}
+            - name: PORT
+              value: {{ .Values.port | quote }}
+            - name: SLIMSERVE_ROOT
+              value: /data
+            - name: SLIMSERVE_THUMB_MAX_DIM
+              value: {{ .Values.thumbnail.maxDimension | quote }}
+            - name: SLIMSERVE_THUMB_MAX_FILE_SIZE_MB
+              value: {{ .Values.thumbnail.maxFileSizeMB | quote }}
+            - name: SLIMSERVE_THUMB_CACHE_MB
+              value: {{ .Values.thumbnail.cacheMB | quote }}
+            - name: SLIMSERVE_CACHE_DIR
+              value: {{ .Values.thumbnail.cacheDir | quote }}
+            - name: SLIMSERVE_UPLOAD_MAX_MB
+              value: {{ .Values.upload.maxMB | quote }}
+            - name: SLIMSERVE_UPLOAD_TYPES
+              value: {{ .Values.upload.types | quote }}
+            {{- with $auth.username }}
+            - name: SLIMSERVE_USERNAME
+              value: {{ . | quote }}
+            {{- end }}
+          {{- if $hasCredentials }}
+          envFrom:
+            - secretRef:
+                name: {{ include "slimserve.secret" . | quote }}
+          {{- end }}
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+              httpHeaders:
+                - name: Host
+                  value: localhost
+                - name: Accept
+                  value: text/html
+          livenessProbe:
+            tcpSocket:
+              port: http
+          {{- with .Values.resources.limits.main }}
+          resources:
+            limits:
+              {{- toYaml . | nindent 14 }}
+          {{- end }}
+          volumeMounts:
+            - name: {{ printf "%s-data" .Release.Name | quote }}
+              mountPath: /data
+              {{- if eq (toString .Values.persistence.enabled) "true" }}
+              subPath: subpath
+              {{- end }}
+      volumes:
+        - name: {{ printf "%s-data" .Release.Name | quote }}
+          {{- if eq (toString .Values.persistence.enabled) "true" }}
+          persistentVolumeClaim:
+            claimName: {{ include "slimserve.claim" . | quote }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}

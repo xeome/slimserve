@@ -1,0 +1,13 @@
+{{- if eq (toString .Values.persistence.enabled) "true" }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "slimserve.claim" . | quote }}
+  namespace: {{ include "slimserve.namespace" . | quote }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.resources.requests.main.storage | quote }}
+{{- end }}

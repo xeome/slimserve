@@ -12,6 +12,14 @@ mix setup                 # deps, Tailwind and esbuild binaries, first asset bui
 mix phx.server            # http://localhost:4000
 ```
 
+## Deploy with Helm
+
+Chart 2.0.0 uses the Elixir image. For a fresh install, create the namespace and choose
+an available Elixir image. For a Go upgrade, keep the release name, release namespace
+and PVC size, then provide new values explicitly, including credentials for any enabled
+Go viewer or dashboard login. See the [Helm guide](manifests/helm/README.md) for both commands.
+For production, terminate TLS outside the chart; it does not create an Ingress.
+
 ## Log in
 
 Set `SLIMSERVE_USERNAME` and `SLIMSERVE_PASSWORD` to put every route behind a login page. Leave both

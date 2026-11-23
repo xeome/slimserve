@@ -1,0 +1,46 @@
+image:
+  main:
+    repository: ghcr.io/xeome/slimserve
+    pullPolicy: IfNotPresent
+    tag: "" # Defaults to the chart appVersion.
+
+port: 8080
+host: example.com
+
+persistence:
+  enabled: true
+
+service:
+  type: ClusterIP
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8080
+
+resources:
+  limits:
+    main: {}
+  requests:
+    main:
+      storage: 1Gi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+thumbnail:
+  maxDimension: 250
+  maxFileSizeMB: 10
+  cacheMB: 100
+  cacheDir: /tmp/slimserve-thumbs
+
+upload:
+  maxMB: 100
+  types: ""
+
+auth:
+  enabled: false
+  username: ""
+  password: ""
+  writePassword: ""
+  secretKeyBase: ""
