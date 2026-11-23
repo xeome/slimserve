@@ -77,11 +77,54 @@ defmodule SlimServe.MixProject do
         "format --check-formatted",
         "credo --strict",
         "sobelow --exit low --skip",
+        &check_sobelow_skips/1,
         "deps.audit",
         "dialyzer",
         "test --cover --warnings-as-errors",
         "cmd npx --yes @fission-ai/openspec@2.1.1 validate --specs --strict"
       ]
     ]
+  end
+
+  # `sobelow --skip` obeys every skip comment, every skip attribute and both files below, so each needs the
+  # owner's approval. The pattern needs `#` or `@` right before the name, so its own literal here never matches.
+  defp check_sobelow_skips(_args) do
+    {out, status} =
+      System.cmd("git", [
+        "-c",
+        "core.quotePath=false",
+        "grep",
+        "--untracked",
+        "--no-color",
+        "-I",
+        "-E",
+        "(#[[:space:]]*|@)sobelow_skip",
+        "--",
+        ".",
+        ":!.sobelow-skips-allowed"
+      ])
+
+    if status not in [0, 1], do: Mix.raise("git grep failed: #{out}")
+
+    found =
+      for line <- String.split(out, "\n", trim: true) do
+        [path, text] = String.split(line, ":", parts: 2)
+        [_, checks] = String.split(text, "sobelow_skip", parts: 2)
+        path <> ": " <> String.trim(checks)
+      end
+
+    allowed =
+      ".sobelow-skips-allowed"
+      |> File.read!()
+      |> String.split("\n")
+      |> Enum.map(&String.trim/1)
+      |> Enum.reject(&(&1 == "" or String.starts_with?(&1, "#")))
+
+    problems =
+      Enum.map(found -- allowed, &"not in .sobelow-skips-allowed: #{&1}") ++
+        Enum.map(allowed -- found, &"in .sobelow-skips-allowed but not in the code: #{&1}") ++
+        for(file <- [".sobelow-skips", ".sobelow-conf"], File.exists?(file), do: "#{file} exists and silences sobelow")
+
+    if problems != [], do: Mix.raise(Enum.join(["sobelow skips differ from the approved set:" | problems], "\n  "))
   end
 end

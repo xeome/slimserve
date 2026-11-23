@@ -11,6 +11,8 @@ SlimServe on Phoenix 1.8: a server-rendered web app, no database.
 
 - Run `mix precommit` before every commit and fix what it reports. It runs every gate CI runs; a
   red gate is never skipped or silenced.
+- The precommit lint makes the skip comments and attributes in the code agree with `.sobelow-skips-allowed`.
+  So every new skip shows in the diff, and the reviewer confirms the owner's approval for each new entry.
 - Specs live in `openspec/specs/`. Change behaviour by editing those specs directly in the same
   commit; there is no `openspec/changes/` workflow.
 - UI follows the graphite-ui skill: its tokens and component CSS live in `assets/css/app.css`.

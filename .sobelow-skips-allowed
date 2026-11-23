@@ -1,0 +1,8 @@
+# A new line here needs the owner's approval; mix precommit fails on any skip not listed.
+lib/slimserve/ignore.ex: ["Traversal.FileModule"]
+lib/slimserve/ignore.ex: ["DOS.Regex"]
+lib/slimserve/thumb_cache.ex: ["Traversal.FileModule"]
+lib/slimserve/thumb_cache.ex: ["Traversal.FileModule"]
+lib/slimserve/thumb_cache.ex: ["Traversal.FileModule"]
+lib/slimserve/thumb_cache.ex: ["Traversal.FileModule"]
+lib/slimserve_web/controllers/browse_controller.ex: ["Traversal.SendFile", "XSS.ContentType"]
