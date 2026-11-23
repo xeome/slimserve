@@ -33,6 +33,26 @@ defmodule SlimServeWeb.BrowseTest do
   defp ranged(conn, nil), do: get(conn, "/digits.txt")
   defp ranged(conn, range), do: conn |> put_req_header("range", range) |> get("/digits.txt")
 
+  defp toggle(conn, path, id) do
+    assert [href] =
+             conn
+             |> get(path)
+             |> html_response(200)
+             |> LazyHTML.from_document()
+             |> LazyHTML.query("#" <> id)
+             |> LazyHTML.attribute("href")
+
+    get(conn, href)
+  end
+
+  # The listing's view and the ids of the toggle links marked current.
+  defp view(conn) do
+    page = conn |> html_response(200) |> LazyHTML.from_document()
+
+    {page |> LazyHTML.query("#listing") |> LazyHTML.attribute("data-view"),
+     page |> LazyHTML.query("#listing [aria-current]") |> LazyHTML.attribute("id")}
+  end
+
   defp hrefs(conn, path) do
     {:ok, view, _html} = live(conn, path)
     view |> render() |> LazyHTML.from_fragment() |> LazyHTML.query("#entries a") |> LazyHTML.attribute("href")
@@ -89,6 +109,51 @@ defmodule SlimServeWeb.BrowseTest do
       assert csp =~ "base-uri 'self'"
       assert csp =~ "frame-ancestors 'self'"
       refute csp =~ "nonce-"
+    end
+  end
+
+  describe "Listing views" do
+    test "Scenario: The Grid link keeps grid in a cookie for a year and returns to the folder", %{
+      conn: conn,
+      root: root
+    } do
+      File.mkdir_p!(Path.join(root, "a b#"))
+
+      for path <- ["/sub", "/a%20b%23"] do
+        toggled = toggle(conn, path, "view-grid")
+
+        assert redirected_to(toggled, 302) == path
+        assert %{value: "grid", max_age: max_age} = toggled.resp_cookies["slimserve-view"]
+        assert max_age >= 31_536_000
+      end
+    end
+
+    test "Scenario: After the Grid link, a reload renders the grid view", %{conn: conn} do
+      toggled = toggle(conn, "/sub", "view-grid")
+
+      # recycle/1 carries the response's cookies into the next request, as a browser would.
+      assert toggled |> recycle() |> get("/sub") |> view() == {["grid"], ["view-grid"]}
+    end
+
+    test "Scenario: From the grid, the List link keeps list in the cookie and a reload renders the list view", %{
+      conn: conn
+    } do
+      grid = put_req_cookie(conn, "slimserve-view", "grid")
+      assert grid |> get("/sub") |> view() == {["grid"], ["view-grid"]}
+
+      toggled = toggle(grid, "/sub", "view-list")
+
+      assert redirected_to(toggled, 302) == "/sub"
+      assert %{value: "list"} = toggled.resp_cookies["slimserve-view"]
+      assert toggled |> recycle() |> get("/sub") |> view() == {["list"], ["view-list"]}
+    end
+
+    test "Scenario: With no cookie the folder renders the list view, and a bogus view sets none", %{conn: conn} do
+      assert conn |> get("/sub") |> view() == {["list"], ["view-list"]}
+
+      bogus = get(conn, "/sub?view=bogus")
+      assert view(bogus) == {["list"], ["view-list"]}
+      refute Map.has_key?(bogus.resp_cookies, "slimserve-view")
     end
   end
 

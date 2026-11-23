@@ -5,6 +5,7 @@ defmodule SlimServeWeb.ListingLiveTest do
   import Phoenix.LiveViewTest
 
   alias SlimServe.Root
+  alias Vix.Vips.Image
 
   @moduletag :tmp_dir
 
@@ -52,6 +53,54 @@ defmodule SlimServeWeb.ListingLiveTest do
         after
           20 -> assert_listed(view, expected, deadline)
         end
+    end
+  end
+
+  describe "Listing" do
+    # A tab opened before the view toggle shipped reconnects with a session that has no "view".
+    test "a session without a view mounts the list view", %{conn: conn} do
+      {:ok, view, _html} = live_isolated(conn, SlimServeWeb.ListingLive, session: %{"segments" => ["sub"]})
+
+      assert has_element?(view, "#listing[data-view=list]")
+      assert has_element?(view, "#view-list[aria-current]")
+      refute has_element?(view, "#view-grid[aria-current]")
+    end
+
+    # The grid and list views share this markup and differ only in CSS.
+    test "a mixed folder shows each entry's thumbnail or kind icon, its size and its modified time", %{
+      conn: conn,
+      root: root
+    } do
+      File.mkdir_p!(Path.join(root, "sub/dir"))
+      png = Path.join(root, "sub/pic.png")
+      :ok = 4 |> Image.build_image!(4, [200, 80, 40]) |> Image.write_to_file(png)
+      File.write!(Path.join(root, "sub/notes.txt"), "hello")
+
+      {:ok, view, _html} = live(conn, "/sub")
+
+      rows =
+        view
+        |> render()
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query("#entries tr:not(#entries-empty)")
+        |> Enum.map(fn row ->
+          [href] = row |> LazyHTML.query("a") |> LazyHTML.attribute("href")
+          [_name, size, modified] = row |> LazyHTML.query("td") |> Enum.map(&String.trim(LazyHTML.text(&1)))
+
+          icons =
+            for kind <- ~w(img .hero-folder .hero-document), row |> LazyHTML.query(kind) |> Enum.count() > 0, do: kind
+
+          {href, icons, size, modified}
+        end)
+
+      assert [
+               {"/sub/dir", [".hero-folder"], "", dir_time},
+               {"/sub/notes.txt", [".hero-document"], "5 B", notes_time},
+               {"/sub/pic.png", ["img"], pic_size, pic_time}
+             ] = rows
+
+      assert pic_size == "#{File.stat!(png).size} B"
+      for time <- [dir_time, notes_time, pic_time], do: assert(time =~ ~r/\A\d{4}-\d{2}-\d{2} \d{2}:\d{2}\z/)
     end
   end
 

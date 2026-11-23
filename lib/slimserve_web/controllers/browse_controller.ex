@@ -6,6 +6,7 @@ defmodule SlimServeWeb.BrowseController do
   alias SlimServe.Root
   alias SlimServe.ThumbCache
   alias SlimServe.Thumbnail
+  alias SlimServeWeb.ListingLive
 
   # A thumbnail goes through the same gate as a download, so a hidden image has none either.
   def show(conn, %{"path" => segments, "thumb" => "1"}) do
@@ -21,7 +22,7 @@ defmodule SlimServeWeb.BrowseController do
   def show(conn, %{"path" => segments}) do
     case resolve(segments) do
       {:dir, _dir} ->
-        live_render(conn, SlimServeWeb.ListingLive, session: %{"segments" => segments})
+        listing(conn, segments)
 
       # A file removed between resolve and stat is missing like any other.
       {:file, file} ->
@@ -32,6 +33,20 @@ defmodule SlimServeWeb.BrowseController do
 
       :error ->
         not_found(conn)
+    end
+  end
+
+  # ?view=grid or ?view=list keeps the choice in a cookie and returns to the bare path; any other value is ignored.
+  defp listing(conn, segments) do
+    case conn.params do
+      %{"view" => view} when view in ~w(grid list) ->
+        conn
+        |> put_resp_cookie("slimserve-view", view, max_age: 31_536_000, same_site: "Lax", http_only: true)
+        |> redirect(to: ListingLive.href(segments))
+
+      _ ->
+        view = if conn.cookies["slimserve-view"] == "grid", do: "grid", else: "list"
+        live_render(conn, ListingLive, session: %{"segments" => segments, "view" => view})
     end
   end
 

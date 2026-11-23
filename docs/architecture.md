@@ -5,6 +5,7 @@ SlimServe is one OTP application, `:slimserve`, with no database.
 ## Behaviour
 
 - Directory listing: a listing shows exactly the entries the server would serve whose names are valid UTF-8, folders first and then by name.
+- Listing views: a listing shows as a list with sizes and modified times, the default, or as a grid of thumbnails and kind icons; `?view=grid` or `?view=list` on a directory sets the `slimserve-view` cookie for a year and redirects to the bare path, so the choice survives a reload with no JS, and any other value is ignored.
 - Live listing: a connected listing updates within a second of a file being added to or removed from its directory, under the dot-file and ignore rules.
 - File download: a visible file downloads with the MIME type of its requested name, for a symlink too, whatever the Accept header, and with the same CSP and `nosniff` headers as every page; a file the server cannot read is neither listed nor served.
 - Range requests: a file download answers one `bytes=a-b`, `bytes=a-` or `bytes=-n` range with a 206 and its `Content-Range`, an unsatisfiable one with a 416 and `Content-Range: bytes */<size>`, and several ranges, a malformed header or an empty file with the full 200; every download carries `Accept-Ranges: bytes`.

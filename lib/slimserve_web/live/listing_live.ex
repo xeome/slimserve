@@ -5,8 +5,10 @@ defmodule SlimServeWeb.ListingLive do
   alias SlimServe.Root
   alias SlimServe.Thumbnail
 
+  # A tab opened before the view toggle shipped reconnects with a session that has no "view".
   @impl true
-  def mount(_params, %{"segments" => segments}, socket) do
+  def mount(_params, %{"segments" => segments} = session, socket) do
+    view = Map.get(session, "view", "list")
     root = Application.fetch_env!(:slimserve, :root)
 
     # The Watcher names the directory a symlink leads to, not the link.
@@ -18,7 +20,13 @@ defmodule SlimServeWeb.ListingLive do
 
     {:ok,
      socket
-     |> assign(segments: segments, relist?: false, page_title: "/" <> Enum.join(segments, "/"), crumbs: crumbs(segments))
+     |> assign(
+       segments: segments,
+       view: view,
+       relist?: false,
+       page_title: "/" <> Enum.join(segments, "/"),
+       crumbs: crumbs(segments)
+     )
      |> assign(entries_hash: :erlang.phash2(entries))
      |> stream(:entries, entries)}
   end
@@ -63,41 +71,55 @@ defmodule SlimServeWeb.ListingLive do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash}>
-      <h1 id="crumbs" class="crumbs">
-        <a href={~p"/"}>root</a>
-        <span :for={{name, href} <- @crumbs}>/ <a href={href}>{name}</a></span>
-      </h1>
+      <div id="listing" data-view={@view}>
+        <div class="listing-bar">
+          <h1 id="crumbs" class="crumbs">
+            <a href={~p"/"}>root</a>
+            <span :for={{name, href} <- @crumbs}>/ <a href={href}>{name}</a></span>
+          </h1>
+          <nav class="segmented" aria-label="View">
+            <a
+              :for={{view, label} <- [{"list", "List"}, {"grid", "Grid"}]}
+              id={"view-" <> view}
+              href={href(@segments) <> "?view=" <> view}
+              aria-current={@view == view && "true"}
+            >
+              {label}
+            </a>
+          </nav>
+        </div>
 
-      <table class="table listing">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th class="num">Size</th>
-            <th class="num when">Modified (UTC)</th>
-          </tr>
-        </thead>
-        <tbody id="entries" phx-update="stream">
-          <tr id="entries-empty" class="empty">
-            <td colspan="3">This folder is empty.</td>
-          </tr>
-          <tr :for={{id, entry} <- @streams.entries} id={id}>
-            <td class="name">
-              <a href={entry.href}>
-                <img :if={entry.thumb} class="thumb" src={entry.thumb} alt="" loading="lazy" />
-                <.icon
-                  :if={!entry.thumb}
-                  name={if(entry.dir?, do: "hero-folder", else: "hero-document")}
-                  class={["size-4 kind", entry.dir? && "dir"]}
-                />
-                <span class="sr-only">{if(entry.dir?, do: "Folder", else: "File")}</span>
-                <span class="label">{entry.name}</span>
-              </a>
-            </td>
-            <td class="num">{entry.size}</td>
-            <td class="num when">{entry.modified}</td>
-          </tr>
-        </tbody>
-      </table>
+        <table class="table listing">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th class="num">Size</th>
+              <th class="num when">Modified (UTC)</th>
+            </tr>
+          </thead>
+          <tbody id="entries" phx-update="stream">
+            <tr id="entries-empty" class="empty">
+              <td colspan="3">This folder is empty.</td>
+            </tr>
+            <tr :for={{id, entry} <- @streams.entries} id={id}>
+              <td class="name">
+                <a href={entry.href}>
+                  <img :if={entry.thumb} class="thumb" src={entry.thumb} alt="" loading="lazy" />
+                  <.icon
+                    :if={!entry.thumb}
+                    name={if(entry.dir?, do: "hero-folder", else: "hero-document")}
+                    class={["size-4 kind", entry.dir? && "dir"]}
+                  />
+                  <span class="sr-only">{if(entry.dir?, do: "Folder", else: "File")}</span>
+                  <span class="label">{entry.name}</span>
+                </a>
+              </td>
+              <td class="num">{entry.size}</td>
+              <td class="num when">{entry.modified}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </Layouts.app>
     """
   end
@@ -145,7 +167,7 @@ defmodule SlimServeWeb.ListingLive do
     |> Enum.map(&{List.last(&1), href(&1)})
   end
 
-  defp href(segments), do: "/" <> Enum.map_join(segments, "/", &URI.encode(&1, fn char -> URI.char_unreserved?(char) end))
+  def href(segments), do: "/" <> Enum.map_join(segments, "/", &URI.encode(&1, fn char -> URI.char_unreserved?(char) end))
 
   defp human(bytes) when bytes < 1024, do: "#{bytes} B"
   defp human(bytes), do: human(bytes / 1024, ~w(KB MB GB TB))
