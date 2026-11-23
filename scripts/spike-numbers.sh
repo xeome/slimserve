@@ -27,6 +27,17 @@ die() {
 }
 mib() { awk -v n="$1" -v d="$2" 'BEGIN { printf "%.1f", n / d }'; }
 
+# SPIKE_CORES=N pins both containers to cores 0..N-1. A cpuset alone leaves the BEAM with one
+# scheduler and one dirty CPU scheduler per host core, so Elixir also gets ERL_FLAGS capping both at N.
+go_args=()
+ex_args=()
+if [[ -n ${SPIKE_CORES:-} ]]; then
+  n=$SPIKE_CORES
+  if [[ ! $n =~ ^[1-9][0-9]{0,3}$ ]] || ((n > $(nproc))); then die "SPIKE_CORES must be 1..$(nproc), got $n"; fi
+  go_args=(--cpuset-cpus "0-$((n - 1))")
+  ex_args=("${go_args[@]}" -e "ERL_FLAGS=+S $n:$n +SDcpu $n:$n")
+fi
+
 # Sets rss to the sum of VmRSS (KiB) over the given pids. Not docker stats: its cgroup figure
 # counts the page cache the 1 GiB read fills. Builtins only, so a 50 ms loop stays cheap.
 rss_kb() {
@@ -39,17 +50,24 @@ rss_kb() {
   done
 }
 
-# measure LABEL COMM IMAGE [ARGS...]: runs IMAGE alone and fills size_mib, idle_mib and peak_mib for
-# LABEL. COMM must name one of the container's processes, so a wrong pid set fails loudly.
+# measure LABEL COMM IMAGE [RUN_ARGS...] -- [ARGS...]: runs IMAGE alone with the docker run options
+# RUN_ARGS and fills size_mib, idle_mib and peak_mib for LABEL. COMM must name one of the container's
+# processes, so a wrong pid set fails loudly.
 measure() {
   local label=$1 comm=$2 image=$3
   shift 3
+  local run_args=()
+  while [[ $1 != -- ]]; do
+    run_args+=("$1")
+    shift
+  done
+  shift
   local c port url i p ready=0 found=0 pids=() samples=() idle_kb peak_kb=0 cpid got
 
   size_mib[$label]=$(mib "$(docker image inspect -f '{{.Size}}' "$image")" 1048576)
 
   # --no-healthcheck: master's wget probe would add a transient process to Go only.
-  c=$(docker run -d --no-healthcheck -p 127.0.0.1::8080 -v "$data/srv:/data" "$image" "$@")
+  c=$(docker run -d --no-healthcheck "${run_args[@]}" -p 127.0.0.1::8080 -v "$data/srv:/data" "$image" "$@")
   containers+=("$c")
   if ! port=$(docker port "$c" 8080/tcp | head -n 1) || [[ -z $port ]]; then
     docker logs "$c" >&2
@@ -137,12 +155,12 @@ head -c "$file_bytes" /dev/urandom >"$data/srv/1g.bin"
 chmod 644 "$data/srv/1g.bin"
 
 # Explicit args: master's CMD passes -dirs, a flag its loader no longer has.
-measure Go slimserve slimserve-go -port 8080 -storage-path /data
+measure Go slimserve slimserve-go "${go_args[@]}" -- -port 8080 -storage-path /data
 # The image sets SLIMSERVE_ROOT=/data and PHX_SERVER=true.
-measure Elixir beam.smp slimserve-ex
+measure Elixir beam.smp slimserve-ex "${ex_args[@]}" --
 
 cat <<EOF
-$(date -u +%F), master $(git rev-parse --short master), this branch $(git describe --always --dirty), nproc $(nproc), storage driver $(docker info -f '{{.Driver}}')
+$(date -u +%F), master $(git rev-parse --short master), this branch $(git describe --always --dirty), nproc $(nproc)${SPIKE_CORES:+, cores $SPIKE_CORES}, storage driver $(docker info -f '{{.Driver}}')
 
 | MiB | Go | Elixir |
 |---|---|---|
