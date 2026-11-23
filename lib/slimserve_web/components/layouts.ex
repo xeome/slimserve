@@ -10,13 +10,27 @@ defmodule SlimServeWeb.Layouts do
     default: nil,
     doc: "the current [scope](https://phoenix.hexdocs.pm/scopes.html)"
 
+  attr :login_page, :boolean, default: false, doc: "hides the logout button"
+
   slot :inner_block, required: true
 
+  # Every page behind the login gate is logged in by construction, so the button shows whenever login is on.
   def app(assigns) do
+    assigns = assign(assigns, :logout?, SlimServeWeb.Login.on?() and not assigns.login_page)
+
     ~H"""
     <header>
       <a href={~p"/"} class="name">SlimServe</a>
       <span class="meta">Phoenix {Application.spec(:phoenix, :vsn)}</span>
+      <.form
+        :if={@logout?}
+        for={to_form(%{})}
+        action={~p"/.app/logout"}
+        id="logout-form"
+        class="logout"
+      >
+        <button type="submit" class="btn">Log out</button>
+      </.form>
     </header>
 
     <main>

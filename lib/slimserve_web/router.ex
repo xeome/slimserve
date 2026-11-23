@@ -4,13 +4,17 @@ defmodule SlimServeWeb.Router do
   # The usual :browser pipeline without `plug :accepts`, so a download answers any Accept header.
   pipeline :serve do
     plug :fetch_session
-    plug :fetch_live_flash
-    plug :put_root_layout, html: {SlimServeWeb.Layouts, :root}
-    plug :protect_from_forgery
     # data: images: the heroicons masks and the graphite grain are inline SVG data URLs.
+    # Before the login gate, so its refusals carry the headers too.
     plug :put_secure_browser_headers, %{
       "content-security-policy" => "default-src 'self'; img-src 'self' data:; base-uri 'self'; frame-ancestors 'self'"
     }
+
+    # Before CSRF, so with login off a POST to the login paths gets the 404 of an unserved path.
+    plug SlimServeWeb.Login
+    plug :fetch_live_flash
+    plug :put_root_layout, html: {SlimServeWeb.Layouts, :root}
+    plug :protect_from_forgery
   end
 
   pipeline :api do
@@ -55,6 +59,11 @@ defmodule SlimServeWeb.Router do
   # Last, because it matches every path: a route declared after it is unreachable.
   scope "/", SlimServeWeb do
     pipe_through :serve
+
+    # Under /.app, where no served file can collide.
+    get "/.app/login", LoginController, :new
+    post "/.app/login", LoginController, :create
+    post "/.app/logout", LoginController, :delete
 
     get "/*path", BrowseController, :show
   end

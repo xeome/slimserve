@@ -16,5 +16,8 @@ config :slimserve, SlimServeWeb.Endpoint,
     ]
   ]
 
+# The session cookie carries the login: never send it over plain HTTP. Read at compile time by the endpoint.
+config :slimserve, secure_cookie: true
+
 # Runtime production configuration, including reading
 # of environment variables, is done on config/runtime.exs.

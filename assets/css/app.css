@@ -78,6 +78,7 @@ body.page {
 }
 .page > header .name { font-size: 14px; font-weight: 600; color: var(--bright); text-decoration: none; }
 .page > header .meta { color: var(--dim); font-size: 12px; }
+.page > header .logout { margin-left: auto; }
 .page > main { padding: 16px var(--r) max(16px, env(safe-area-inset-bottom)) var(--l); }
 .page h1 { margin: 0; font-size: 15px; font-weight: 600; color: var(--bright); }
 .page .sub { color: var(--dim); }
@@ -102,6 +103,10 @@ body.page {
 }
 .input.invalid { border-color: color-mix(in srgb, var(--hot) 60%, transparent); }
 .field-error { display: flex; align-items: center; gap: 6px; margin: 4px 0 0; font-size: 12px; color: var(--hot); }
+
+.login { max-width: 20rem; margin: 10vh auto 0; padding: 16px; }
+.login h1 { margin-bottom: 12px; }
+.login .field-error { margin: 0 0 8px; }
 
 .badge { --x: var(--text); }
 .badge.info   { --x: var(--cool); }

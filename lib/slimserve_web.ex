@@ -41,6 +41,8 @@ defmodule SlimServeWeb do
     quote do
       use Phoenix.LiveView
 
+      on_mount SlimServeWeb.Login
+
       unquote(html_helpers())
     end
   end

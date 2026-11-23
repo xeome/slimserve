@@ -7,7 +7,8 @@ defmodule SlimServeWeb.Endpoint do
     store: :cookie,
     key: "_slimserve_key",
     signing_salt: "UB11q4eI",
-    same_site: "Lax"
+    same_site: "Lax",
+    secure: Application.compile_env(:slimserve, :secure_cookie, false)
   ]
 
   # Everything of the app's own lives under /.app: a dot path is never a served file,

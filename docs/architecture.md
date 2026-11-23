@@ -13,6 +13,7 @@ SlimServe is one OTP application, `:slimserve`, with no database.
 - Dot-files: a path with a component starting with ".", in the requested path or in the path a symlink resolves it to, is neither listed nor served.
 - Ignore files: a path a `.slimserveignore` on its ancestry ignores, or under an ignored directory, by its requested or its resolved path, is neither listed nor served; an unreadable or non-UTF-8 ignore file ignores its whole directory; patterns are the gitignore subset `*`, `?`, `**`, a leading or inner `/` to anchor, a trailing `/` for directories and a leading `!` to negate, and the last match wins.
 - On-demand thumbnail: `GET <path>?thumb=1` answers a WebP with none of the source's metadata and no larger than the configured size for a visible JPEG, PNG, GIF or WebP by both name and content, 404 for any other path, and 413 without decoding for an image over the configured input size.
+- Login: with `SLIMSERVE_USERNAME` and `SLIMSERVE_PASSWORD` both set, every route answers a browser's GET with a 302 to `/.app/login?next=<path>` and anything else with a bare 401 until the user logs in, and a live socket without the login is refused at mount; a login returns to `next` only when it is a local path, else to `/`; 10 failed logins from one IP in a rolling minute make its next attempts answer 429; changing the password logs every session out; with both unset nothing changes and `/.app/login` and `/.app/logout` answer 404.
 - Thumbnail cache: a repeated thumbnail comes from disk, a changed source gets a new one, and the oldest thumbnails go to keep the cache under its size; the cache deletes only files named like its own, and thumbnails still answer when the cache process is down or its directory cannot be made.
 
 ## Supervision tree
@@ -24,6 +25,7 @@ SlimServe is one OTP application, `:slimserve`, with no database.
 | `SlimServeWeb.Telemetry` | Telemetry metrics and the periodic poller |
 | `DNSCluster` | Joins nodes found by `DNS_CLUSTER_QUERY`; ignored when unset |
 | `Phoenix.PubSub` (`SlimServe.PubSub`) | Message bus for LiveView and channels |
+| `SlimServe.LoginLimit` | Owns the public ETS table of login attempts per client (an IPv6 one by its /64) and sweeps it every minute |
 | `SlimServe.ThumbCache` | The thumbnail disk cache: the only process that writes or deletes in the cache directory |
 | `SlimServe.Watcher` | Watches the root through `inotifywait` and tells open listings their directory changed; `:temporary` |
 | `SlimServeWeb.Endpoint` | The Bandit HTTP server; started last, so it serves only once the rest is up |
@@ -34,9 +36,10 @@ SlimServe is one OTP application, `:slimserve`, with no database.
 Bandit
   -> SlimServeWeb.Endpoint   Plug.Static (priv/static, at /.app), live reload in dev, RequestId,
                              Telemetry, Parsers, MethodOverride, Head, Session (signed cookie)
-  -> SlimServeWeb.Router     :serve pipeline: session, flash, root layout, CSRF protection,
+  -> SlimServeWeb.Router     :serve pipeline: session, the SlimServeWeb.Login gate, flash, root layout, CSRF protection,
                              secure headers with the CSP. No `accepts`: a download answers
                              any Accept header
+  -> /.app/login, /.app/logout  LoginController: the form, the credential check, the logout
   -> GET /*path              BrowseController.show asks SlimServe.Root.resolve/2, the one gate:
        a directory           live_render of ListingLive inside Layouts.app, inside layouts/root
        a file                send_file with its MIME type

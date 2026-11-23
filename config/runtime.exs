@@ -13,7 +13,27 @@ end
 if config_env() != :test do
   megabytes = fn name, default -> String.to_integer(System.get_env(name, default)) * 1024 * 1024 end
 
+  # An empty variable counts as unset.
+  set = fn name -> if System.get_env(name) != "", do: System.get_env(name) end
+
+  # Both set puts every route behind a login page; neither leaves the server open. Tests set their own.
+  login =
+    case {set.("SLIMSERVE_USERNAME"), set.("SLIMSERVE_PASSWORD")} do
+      {nil, nil} -> nil
+      {user, pass} when is_binary(user) and is_binary(pass) -> {user, pass}
+      _one -> raise "set both SLIMSERVE_USERNAME and SLIMSERVE_PASSWORD, or neither"
+    end
+
+  # Without login the secret only signs the LiveView session and the CSRF token, and nothing
+  # is persisted. So a fresh one per boot is enough: open pages reload after a restart.
+  # With login it also keys the login digest in the cookie, and a fresh one per boot would log
+  # everyone out on each restart, so login needs a fixed secret.
+  if config_env() == :prod and login != nil and System.get_env("SECRET_KEY_BASE") == nil do
+    raise "SECRET_KEY_BASE must be set when SLIMSERVE_USERNAME and SLIMSERVE_PASSWORD are"
+  end
+
   config :slimserve, SlimServeWeb.Endpoint, http: [port: String.to_integer(System.get_env("PORT", "4000"))]
+  config :slimserve, login: login
 
   config :slimserve,
     # The one directory served at /. Tests set their own.
@@ -44,8 +64,6 @@ if config_env() == :dev do
 end
 
 if config_env() == :prod do
-  # Without auth the secret only signs the LiveView session and the CSRF token, and nothing
-  # is persisted. So a fresh one per boot is enough: open pages reload after a restart.
   secret_key_base = System.get_env("SECRET_KEY_BASE") || Base.encode64(:crypto.strong_rand_bytes(48))
 
   host = System.get_env("PHX_HOST") || "example.com"

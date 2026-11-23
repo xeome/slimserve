@@ -12,6 +12,13 @@ mix setup                 # deps, Tailwind and esbuild binaries, first asset bui
 mix phx.server            # http://localhost:4000
 ```
 
+## Log in
+
+Set `SLIMSERVE_USERNAME` and `SLIMSERVE_PASSWORD` to put every route behind a login page. Leave both
+unset to serve without one; setting only one refuses to boot. In prod, login also needs a fixed
+`SECRET_KEY_BASE` (`mix phx.gen.secret`): it keys the login in the session cookie, so the server
+refuses to boot without it. Changing the password logs every session out.
+
 ## Check it
 
 ```sh
