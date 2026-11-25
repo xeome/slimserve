@@ -85,7 +85,8 @@ defmodule SlimServe.MixProject do
         "deps.unlock --check-unused",
         "format --check-formatted",
         "credo",
-        "sobelow --exit medium --skip",
+        # HTTPS is the SLIMSERVE_HTTPS runtime toggle, but Sobelow only reads prod.exs; test/slimserve_web/https_test.exs covers it.
+        "sobelow --exit medium --skip -i Config.HTTPS",
         "deps.audit",
         "dialyzer",
         "test --cover --warnings-as-errors"
