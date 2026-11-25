@@ -70,12 +70,14 @@ defmodule SlimServe.Root do
   def topic(rel_dir) when rel_dir in ["", "."], do: "dir:"
   def topic(rel_dir), do: "dir:" <> rel_dir
 
-  # One name of one directory entry. Phoenix decodes %2F into a segment, so "sub/.env" can arrive
-  # as a single segment; the leading-dot rule also covers "." and "..". A name that is not valid
-  # UTF-8 would crash the ignore patterns' match. A NUL byte needs no rule: File.stat/1 refuses
-  # it with :badarg.
-  defp name?(segment),
+  @doc """
+  Phoenix decodes %2F into a segment, so "sub/.env" can arrive as a single segment; the leading-dot
+  rule also covers "." and "..". A name that is not valid UTF-8 would crash the ignore patterns' match.
+  A NUL byte is refused here, before any S3 key is built from it; File.stat/1 would refuse it too.
+  """
+  @spec name?(String.t()) :: boolean()
+  def name?(segment),
     do:
       segment != "" and String.valid?(segment) and not String.starts_with?(segment, ".") and
-        not String.contains?(segment, "/")
+        not String.contains?(segment, ["/", <<0>>])
 end

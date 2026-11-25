@@ -48,6 +48,34 @@ there is no trash. Uploads and file moves need a file system with hard links (ex
 overlayfs); on exFAT or some SMB mounts they are refused. A crash mid-upload can leave a hidden
 `.upload-*` file in the target folder; it is never served, and is safe to delete.
 
+## Serve an S3 bucket
+
+Set `SLIMSERVE_STORAGE=s3` to serve a private bucket of any S3-compatible store, MinIO included,
+instead of `SLIMSERVE_ROOT`:
+
+- `SLIMSERVE_S3_BUCKET`, `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` (required), `AWS_REGION`
+  (default `us-east-1`), `AWS_SESSION_TOKEN`, and `AWS_ENDPOINT_URL_S3` for a store other than AWS.
+  Requests are path-style, so the endpoint names the store, not the bucket.
+- AWS itself is untested. Set `AWS_ENDPOINT_URL_S3` to the bucket region's endpoint there too
+  (`https://s3.<region>.amazonaws.com`): without it, requests go to the global host, and a bucket
+  that redirects to its regional host answers every request with a 502.
+- `SLIMSERVE_DOWNLOAD_CACHE_DIR` and `SLIMSERVE_DOWNLOAD_CACHE_MB` (default 1024): files up to
+  100 MB are kept here once fetched, so a repeat download, ranged or not, reads no bytes from S3.
+  Larger files, and misses the cache has no room for, stream through.
+
+Listings are cached for 10 seconds and an open page re-lists every 30. A change made through
+SlimServe shows at once on every node; one made in the bucket directly shows within 30 seconds.
+`.slimserveignore` files and hidden names work as on disk; a key whose name is not valid UTF-8, or
+holds a NUL, is not listed.
+
+With `SLIMSERVE_WRITE_PASSWORD` set, the server first writes and removes a few objects under the
+bucket's hidden `.slimserve-probe/` prefix, to learn which conditional writes the store enforces.
+Uploads and new folders are refused, with a warning at boot, unless it refuses to overwrite an
+existing key. Where it ignores a stale `If-Match` (MinIO does, on DELETE), move and delete check
+the object themselves just before acting, and a change made in that instant can be lost. A move is
+a copy then a delete: files over 5 GiB copy in 5 GiB parts, and a move or delete that fails
+part-way says so and leaves what it did.
+
 ## Check it
 
 ```sh
@@ -57,8 +85,9 @@ mix ci          # everything CI runs
 
 `mix precommit` compiles with warnings as errors, checks for unused locked deps and formatting
 (Styler), runs Credo and the tests. `mix ci` runs those plus `hex.audit`, Sobelow at medium
-confidence, `deps.audit`, Dialyzer and the tests with a coverage floor. CI runs `mix ci`
-(`.github/workflows/ci.yml`). The first Dialyzer run builds its PLTs in `priv/plts` and takes a few
+confidence, `deps.audit`, Dialyzer and the tests with a coverage floor. CI runs `mix ci`, then the
+S3 suite against a throwaway MinIO (`scripts/test-s3.sh`, needs Docker) and the chart suite
+(`mix test --only helm`, needs `helm`) (`.github/workflows/ci.yml`). The first Dialyzer run builds its PLTs in `priv/plts` and takes a few
 minutes.
 
 See `docs/architecture.md` for how a request flows and `AGENTS.md` for the project rules.

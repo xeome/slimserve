@@ -1,0 +1,16 @@
+{{- if gt (int .Values.replicas) 1 }}
+# Pod discovery for the Erlang cluster only; distribution stays off the HTTP Service.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "slimserve.nodes" . | quote }}
+  namespace: {{ include "slimserve.namespace" . | quote }}
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app: {{ include "slimserve.main" . | quote }}
+  ports:
+    - name: epmd
+      port: 4369
+{{- end }}

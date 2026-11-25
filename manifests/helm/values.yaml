@@ -10,6 +10,22 @@ host: ""
 persistence:
   enabled: true
 
+replicas: 1
+
+storage:
+  backend: local
+
+s3:
+  bucket: ""
+  endpoint: "" # AWS_ENDPOINT_URL_S3; AWS is untested, set it to https://s3.<region>.amazonaws.com there too.
+  region: us-east-1
+  accessKeyId: ""
+  secretAccessKey: ""
+  downloadCacheMB: 1024 # Per pod, in an emptyDir.
+
+cluster:
+  cookie: ""
+
 service:
   type: ClusterIP
   ports:

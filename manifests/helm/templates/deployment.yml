@@ -1,7 +1,18 @@
 {{- $name := include "slimserve.main" . -}}
 {{- $namespace := include "slimserve.namespace" . -}}
 {{- $auth := .Values.auth -}}
-{{- $hasCredentials := or $auth.password $auth.writePassword $auth.secretKeyBase -}}
+{{- $hasCredentials := include "slimserve.credentials" . | fromYaml -}}
+{{- $s3 := eq (toString .Values.storage.backend) "s3" -}}
+{{- $replicas := int .Values.replicas -}}
+{{- if not (has (toString .Values.storage.backend) (list "local" "s3")) -}}
+  {{- fail "storage.backend must be local or s3" -}}
+{{- end -}}
+{{- if and (gt $replicas 1) (not $s3) -}}
+  {{- fail "replicas above 1 need storage.backend: s3; the /data claim is ReadWriteOnce" -}}
+{{- end -}}
+{{- if and (gt $replicas 1) (not (and .Values.cluster.cookie $auth.secretKeyBase)) -}}
+  {{- fail "replicas above 1 need cluster.cookie and auth.secretKeyBase" -}}
+{{- end -}}
 {{- $legacy := .Values.main | default dict -}}
 {{- $viewer := dig "auth" "enabled" false $legacy -}}
 {{- $writer := dig "dashboard" "enabled" false $legacy -}}
@@ -46,7 +57,7 @@ metadata:
   name: {{ $name | quote }}
   namespace: {{ $namespace | quote }}
 spec:
-  replicas: 1
+  replicas: {{ $replicas }}
   strategy:
     type: Recreate
   selector:
@@ -89,8 +100,40 @@ spec:
               value: "true"
             - name: PORT
               value: {{ .Values.port | quote }}
+            {{- if $s3 }}
+            - name: SLIMSERVE_STORAGE
+              value: s3
+            - name: SLIMSERVE_S3_BUCKET
+              value: {{ required "s3.bucket is required with storage.backend: s3" .Values.s3.bucket | quote }}
+            {{- with .Values.s3.endpoint }}
+            - name: AWS_ENDPOINT_URL_S3
+              value: {{ . | quote }}
+            {{- end }}
+            - name: AWS_REGION
+              value: {{ .Values.s3.region | quote }}
+            - name: SLIMSERVE_DOWNLOAD_CACHE_MB
+              value: {{ .Values.s3.downloadCacheMB | quote }}
+            - name: SLIMSERVE_DOWNLOAD_CACHE_DIR
+              value: /cache
+            {{- $_ := required "s3.accessKeyId is required with storage.backend: s3" .Values.s3.accessKeyId }}
+            {{- $_ := required "s3.secretAccessKey is required with storage.backend: s3" .Values.s3.secretAccessKey }}
+            {{- else }}
             - name: SLIMSERVE_ROOT
               value: /data
+            {{- end }}
+            {{- if gt $replicas 1 }}
+            # Each pod is slimserve@<its IP>; DNSCluster finds the others through the headless Service.
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: RELEASE_DISTRIBUTION
+              value: name
+            - name: RELEASE_NODE
+              value: slimserve@$(POD_IP)
+            - name: DNS_CLUSTER_QUERY
+              value: {{ printf "%s.%s.svc.cluster.local" (include "slimserve.nodes" .) $namespace | quote }}
+            {{- end }}
             - name: SLIMSERVE_THUMB_MAX_DIM
               value: {{ .Values.thumbnail.maxDimension | quote }}
             - name: SLIMSERVE_THUMB_MAX_FILE_SIZE_MB
@@ -130,12 +173,24 @@ spec:
               {{- toYaml . | nindent 14 }}
           {{- end }}
           volumeMounts:
+            {{- if $s3 }}
+            - name: download-cache
+              mountPath: /cache
+            {{- else }}
             - name: {{ printf "%s-data" .Release.Name | quote }}
               mountPath: /data
               {{- if eq (toString .Values.persistence.enabled) "true" }}
               subPath: subpath
               {{- end }}
+            {{- end }}
       volumes:
+        {{- if $s3 }}
+        # The claim, if any, stays in place but unmounted, so switching back finds the files.
+        # The kubelet counts blocks, not bytes: headroom over the cache's byte cap keeps a full cache from evicting the pod.
+        - name: download-cache
+          emptyDir:
+            sizeLimit: {{ printf "%dMi" (add (div (mul (int .Values.s3.downloadCacheMB) 11) 10) 16) | quote }}
+        {{- else }}
         - name: {{ printf "%s-data" .Release.Name | quote }}
           {{- if eq (toString .Values.persistence.enabled) "true" }}
           persistentVolumeClaim:
@@ -143,3 +198,4 @@ spec:
           {{- else }}
           emptyDir: {}
           {{- end }}
+        {{- end }}

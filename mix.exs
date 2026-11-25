@@ -53,6 +53,7 @@ defmodule SlimServe.MixProject do
       {:bandit, "~> 1.5"},
       {:vix, "~> 0.44.0"},
       {:file_system, "~> 1.1"},
+      {:req_s3, "~> 0.2.5"},
       {:styler, "~> 1.12", only: [:dev, :test], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},

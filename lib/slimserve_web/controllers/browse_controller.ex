@@ -3,39 +3,64 @@ defmodule SlimServeWeb.BrowseController do
 
   import Phoenix.LiveView.Controller, only: [live_render: 3]
 
-  alias SlimServe.Root
+  alias SlimServe.Storage
+  alias SlimServe.Storage.S3.Download
   alias SlimServe.ThumbCache
   alias SlimServe.Thumbnail
   alias SlimServeWeb.BrowseHTML
   alias SlimServeWeb.ListingLive
 
   # A thumbnail goes through the same gate as a download, so a hidden image has none either.
+  # A local file's is keyed by its stat; an S3 object's by its key and ETag, the listing's ?v=.
   def show(conn, %{"path" => segments, "thumb" => "1"}) do
-    with {:file, file} <- resolve(segments),
-         true <- Thumbnail.image?(file),
-         {:ok, stat} <- File.stat(file, time: :posix) do
-      thumbnail(conn, file, stat)
-    else
-      _ -> BrowseHTML.send_not_found(conn)
-    end
+    thumb(conn, Storage.resolve(segments), Application.fetch_env!(:slimserve, :thumb_max_dim))
   end
 
   def show(conn, %{"path" => segments}) do
-    case resolve(segments) do
+    case Storage.resolve(segments) do
       {:dir, _dir} ->
         listing(conn, segments)
 
       # A file removed between resolve and stat is missing like any other.
-      {:file, file} ->
+      {:file, file} when is_binary(file) ->
         case File.stat(file) do
           {:ok, stat} -> download(conn, file, List.last(segments), stat.size)
           {:error, _reason} -> BrowseHTML.send_not_found(conn)
         end
 
+      {:file, object} ->
+        download(conn, object, List.last(segments), object.size)
+
+      # The store could not be asked: not a missing path.
+      {:error, _reason} ->
+        send_resp(conn, 502, "Bad Gateway")
+
       :error ->
         BrowseHTML.send_not_found(conn)
     end
   end
+
+  defp thumb(conn, {:file, file}, max_dim) when is_binary(file) do
+    with true <- Thumbnail.image?(file),
+         {:ok, stat} <- File.stat(file, time: :posix) do
+      thumbnail(conn, stat.size, ThumbCache.key(file, stat, max_dim), fn -> Thumbnail.generate(file, max_dim) end)
+    else
+      _ -> BrowseHTML.send_not_found(conn)
+    end
+  end
+
+  defp thumb(conn, {:file, %{key: key, etag: etag} = object}, max_dim) do
+    if Thumbnail.image?(key) do
+      thumbnail(conn, object.size, ThumbCache.key(key, etag, max_dim), fn ->
+        Download.with_file(object, &Thumbnail.generate(&1, max_dim))
+      end)
+    else
+      BrowseHTML.send_not_found(conn)
+    end
+  end
+
+  defp thumb(conn, {:error, _reason}, _max_dim), do: send_resp(conn, 502, "Bad Gateway")
+  defp thumb(conn, _missing, _max_dim), do: BrowseHTML.send_not_found(conn)
 
   # ?view=grid or ?view=list keeps the choice in a cookie and returns to the bare path; any other value is ignored.
   defp listing(conn, segments) do
@@ -51,7 +76,7 @@ defmodule SlimServeWeb.BrowseController do
     end
   end
 
-  # The path comes only from Root.resolve; the type is served with nosniff and the default-src 'self' CSP.
+  # The path comes only from Storage.resolve; the type is served with nosniff and the default-src 'self' CSP.
   # The type comes from the requested name: a link named x.txt is text, whatever it points to.
   # sobelow_skip ["Traversal.SendFile", "XSS.ContentType"]
   defp download(conn, file, name, size) do
@@ -64,15 +89,21 @@ defmodule SlimServeWeb.BrowseController do
       {first, last} ->
         conn
         |> put_resp_header("content-range", "bytes #{first}-#{last}/#{size}")
-        |> send_file(206, file, first, last - first + 1)
+        |> send_bytes(206, file, first, last - first + 1)
 
       :unsatisfiable ->
         conn |> put_resp_header("content-range", "bytes */#{size}") |> send_resp(416, "")
 
       :full ->
-        send_file(conn, 200, file)
+        send_bytes(conn, 200, file, 0, :all)
     end
   end
+
+  # sobelow_skip ["Traversal.SendFile"]
+  defp send_bytes(conn, status, file, offset, length) when is_binary(file),
+    do: send_file(conn, status, file, offset, length)
+
+  defp send_bytes(conn, status, object, offset, length), do: Download.send(conn, status, object, offset, length)
 
   # One range of bytes=a-b, a- or -n; several ranges, a malformed header or an empty file get the whole file.
   defp byte_range(_headers, 0), do: :full
@@ -96,23 +127,19 @@ defmodule SlimServeWeb.BrowseController do
   defp span(first, _last, size) when first >= size, do: :unsatisfiable
   defp span(first, last, size), do: {first, min(last || size - 1, size - 1)}
 
-  defp resolve(segments), do: Root.resolve(Application.fetch_env!(:slimserve, :root), segments)
-
-  defp thumbnail(conn, file, stat) do
-    max_dim = Application.fetch_env!(:slimserve, :thumb_max_dim)
-    key = ThumbCache.key(file, stat, max_dim)
-
+  defp thumbnail(conn, size, key, generate) do
     # The size is checked before libvips opens the file. A file libvips cannot decode is not an image.
-    with false <- stat.size > Application.fetch_env!(:slimserve, :thumb_max_file_bytes),
+    with false <- size > Application.fetch_env!(:slimserve, :thumb_max_file_bytes),
          :miss <- ThumbCache.lookup(key),
          # ponytail: no concurrency limit; add a bounded pool if many viewers hit a cold cache.
-         {:ok, webp} <- Thumbnail.generate(file, max_dim) do
+         {:ok, webp} <- generate.() do
       # A cast: the cache logs a failed write, and it only costs the next request a miss.
       ThumbCache.put(key, webp)
       send_webp(conn, "miss", webp)
     else
       true -> send_resp(conn, 413, "Content Too Large")
       {:ok, webp} -> send_webp(conn, "hit", webp)
+      {:error, :unavailable} -> send_resp(conn, 503, "Service Unavailable")
       {:error, _reason} -> BrowseHTML.send_not_found(conn)
     end
   end

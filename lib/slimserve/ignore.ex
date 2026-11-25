@@ -21,23 +21,32 @@ defmodule SlimServe.Ignore do
   yet, as for a folder about to be made.
   """
   @spec ignored?(Path.t(), [String.t()], dir?: boolean()) :: boolean()
-  def ignored?(root, segments, opts \\ []), do: walk(root, segments, [], Keyword.get(opts, :dir?, false))
+  def ignored?(root, segments, opts \\ []) do
+    dir? = Keyword.get(opts, :dir?, false) or File.dir?(Path.join([root | segments]))
+    ignored_by?(&rules(Path.join([root | &1])), segments, dir?)
+  end
 
-  # Walks down from root one name at a time. `layers` holds, for every directory passed,
+  @doc """
+  `rules_at` answers, for the segments of a folder, its parsed rules
+  (`parse/1`), `[]` when it has no ignore file, or `:unreadable`. S3 reads its ignore objects through
+  this, so both backends share one walker.
+  """
+  @spec ignored_by?(([String.t()] -> list() | :unreadable), [String.t()], boolean()) :: boolean()
+  def ignored_by?(rules_at, segments, dir?), do: walk(rules_at, [], segments, [], dir?)
+
+  # Walks down from the top one name at a time. `layers` holds, for every directory passed,
   # its rules and the path of the current name relative to it.
-  # The directory itself is hidden when its own ignore file is unreadable; a file path sees :enotdir.
-  defp walk(dir, [], _layers, _dir?), do: rules(dir) == :unreadable
+  defp walk(rules_at, here, [], _layers, dir?), do: dir? and rules_at.(here) == :unreadable
 
-  defp walk(dir, [name | rest], layers, dir?) do
-    case rules(dir) do
+  defp walk(rules_at, here, [name | rest], layers, dir?) do
+    case rules_at.(here) do
       :unreadable ->
         true
 
       rules ->
         layers = Enum.map(layers, fn {rules, relative} -> {rules, relative <> "/" <> name} end) ++ [{rules, name}]
-        path = Path.join(dir, name)
 
-        matched?(layers, rest != [] or dir? or File.dir?(path)) or walk(path, rest, layers, dir?)
+        matched?(layers, rest != [] or dir?) or walk(rules_at, here ++ [name], rest, layers, dir?)
     end
   end
 
@@ -56,16 +65,19 @@ defmodule SlimServe.Ignore do
   # sobelow_skip ["Traversal.FileModule"]
   defp rules(dir) do
     case File.read(Path.join(dir, @file_name)) do
-      {:ok, body} -> if String.valid?(body), do: parse(body), else: :unreadable
+      {:ok, body} -> parse(body)
       # :enotdir: `dir` is a file, the last name of a path.
       {:error, reason} when reason in [:enoent, :enotdir] -> []
       {:error, _reason} -> :unreadable
     end
   end
 
+  @spec parse(binary()) :: list() | :unreadable
+  def parse(body), do: if(String.valid?(body), do: compile(body), else: :unreadable)
+
   # Patterns come from ignore files only the host owner writes, escaped and fully anchored.
   # sobelow_skip ["DOS.Regex"]
-  defp parse(body) do
+  defp compile(body) do
     # Editors on Windows put a byte-order mark first; left in, it would be part of the first pattern.
     for line <- body |> String.replace_prefix(<<0xEF, 0xBB, 0xBF>>, "") |> String.split(["\r\n", "\n"]),
         line = String.trim_trailing(line),

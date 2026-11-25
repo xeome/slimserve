@@ -2,21 +2,21 @@ defmodule SlimServeWeb.ListingLive do
   @moduledoc false
   use SlimServeWeb, :live_view
 
-  alias SlimServe.Ignore
-  alias SlimServe.Root
-  alias SlimServe.Thumbnail
+  alias SlimServe.Storage
   alias SlimServeWeb.Login
+
+  # S3 has no watcher, so an open S3 listing re-lists on this timer to show changes made outside the app.
+  @poll_ms 30_000
 
   # A tab opened before the view toggle shipped reconnects with a session that has no "view".
   @impl true
   def mount(_params, %{"segments" => segments} = session, socket) do
     view = Map.get(session, "view", "list")
-    root = Application.fetch_env!(:slimserve, :root)
     write? = Login.write?(session)
 
-    # The Watcher names the directory a symlink leads to, not the link.
-    with true <- connected?(socket), {:dir, dir} <- Root.resolve(root, segments) do
-      Phoenix.PubSub.subscribe(SlimServe.PubSub, Root.topic(Path.relative_to(dir, root)))
+    if connected?(socket) do
+      Storage.subscribe(segments)
+      if Storage.s3?(), do: poll()
     end
 
     entries = entries(segments)
@@ -55,8 +55,8 @@ defmodule SlimServeWeb.ListingLive do
     )
   end
 
-  # Each write names an entry of this folder and is resolved again here. Its change reaches every
-  # open page, this one too, through SlimServe.Watcher: no broadcast of its own.
+  # Each write names an entry of this folder and is resolved again by SlimServe.Storage. Its change
+  # reaches every open page, this one too, through the backend's own messages.
   @impl true
   def handle_event("validate", _params, socket), do: {:noreply, socket}
 
@@ -69,65 +69,30 @@ defmodule SlimServeWeb.ListingLive do
     results =
       for entry <- done do
         consume_uploaded_entry(socket, entry, fn %{path: tmp} ->
-          {:ok, put_upload(socket.assigns.segments, entry.client_name, tmp)}
+          {:ok, Storage.upload(socket.assigns.segments, entry.client_name, tmp)}
         end)
       end
 
     {:noreply, if(Enum.all?(results, &(&1 == :ok)), do: socket, else: refused(socket))}
   end
 
-  def handle_event("mkdir", %{"name" => name}, socket) do
-    done(socket, with({:ok, abs} <- fresh(socket.assigns.segments, name, dir?: true), do: File.mkdir(abs)))
-  end
+  def handle_event("mkdir", %{"name" => name}, socket), do: done(socket, Storage.mkdir(socket.assigns.segments, name))
 
   # The destination is a path from the root, so a rename and a move are one event.
-  def handle_event("rename", %{"from" => from, "to" => to}, socket) do
-    segments = socket.assigns.segments
+  def handle_event("rename", %{"from" => from, "to" => to}, socket),
+    do: done(socket, Storage.move(socket.assigns.segments, from, to))
 
-    result =
-      with {:ok, src, followed_kind, lstat_type} <- source(segments, from),
-           {parent, [name]} <- to |> String.split("/", trim: true) |> Enum.split(-1),
-           true <- followed_kind == :dir or upload_type?(name),
-           {:ok, dest} <- fresh(parent, name, dir?: followed_kind == :dir),
-           # A relative link's target would mean another path in another folder.
-           true <- lstat_type != :symlink or Path.dirname(dest) == Path.dirname(src) do
-        move(src, dest, lstat_type, segments ++ [from])
-      end
-
-    done(socket, result)
-  end
-
-  # A folder with anything in it waits for confirm_delete; File.lstat, not resolve, picks the call,
-  # so a link is removed as a link, a link to a folder included.
   def handle_event("delete", %{"name" => name}, socket) do
-    case source(socket.assigns.segments, name) do
-      {:ok, abs, _followed_kind, :directory} ->
-        case {File.ls(abs), confirm(name, abs)} do
-          {{:ok, []}, _confirm} -> done(socket, File.rmdir(abs))
-          {{:ok, _names}, %{} = confirm} -> {:noreply, assign(socket, confirm: confirm)}
-          _error -> done(socket, :error)
-        end
-
-      {:ok, abs, _followed_kind, _lstat_type} ->
-        done(socket, File.rm(abs))
-
-      :error ->
-        done(socket, :error)
+    case Storage.delete(socket.assigns.segments, name) do
+      {:confirm, confirm} -> {:noreply, assign(socket, confirm: confirm)}
+      result -> done(socket, result)
     end
   end
 
-  # The bar named a folder and a count, so a folder that is another one now, or holds more or fewer
-  # files, is not removed: the bar asks again. File.rm_rf/1 removes a link inside the tree without
-  # following it.
   def handle_event("confirm_delete", %{"name" => name}, %{assigns: %{confirm: %{name: name} = asked}} = socket) do
-    with {:ok, abs, _followed_kind, :directory} <- source(socket.assigns.segments, name),
-         now = confirm(name, abs),
-         ^asked <- now,
-         {:ok, _removed} <- File.rm_rf(abs) do
-      done(assign(socket, confirm: nil), :ok)
-    else
-      %{} = now -> {:noreply, assign(socket, confirm: now)}
-      _error -> done(assign(socket, confirm: nil), :error)
+    case Storage.confirm_delete(socket.assigns.segments, name, asked) do
+      {:confirm, now} -> {:noreply, assign(socket, confirm: now)}
+      result -> done(assign(socket, confirm: nil), result)
     end
   end
 
@@ -135,111 +100,25 @@ defmodule SlimServeWeb.ListingLive do
 
   def handle_event("cancel_delete", _params, socket), do: {:noreply, assign(socket, confirm: nil)}
 
-  defp confirm(name, abs) do
-    with {:ok, %File.Stat{type: :directory, inode: inode}} <- File.lstat(abs),
-         do: %{name: name, count: count_files(abs), inode: inode}
-  end
-
   defp done(socket, :ok), do: {:noreply, socket}
+  # S3 has no atomic folder write: some keys changed and others did not, and nothing is rolled back.
+  defp done(socket, :partial), do: {:noreply, put_flash(socket, :error, "Part of that change was refused.")}
   defp done(socket, _refused), do: {:noreply, refused(socket)}
 
   # One answer for every refusal, as for a 404: it never says which rule refused.
   defp refused(socket), do: put_flash(socket, :error, "That change was refused.")
 
-  # Written under a dot name first, so a half-written file is never served. A hard link refuses an
-  # existing name, so an upload never overwrites one, with no gap between a check and the write.
-  defp put_upload(segments, name, tmp) do
-    with true <- upload_type?(name), {:ok, dest} <- fresh(segments, name) do
-      temp = Path.join(Path.dirname(dest), ".upload-" <> Base.url_encode64(:crypto.strong_rand_bytes(12)))
-
-      try do
-        with :ok <- File.cp(tmp, temp), do: File.ln(temp, dest)
-      after
-        File.rm(temp)
-      end
-    end
-  end
-
-  # allow_upload's accept also passes a file by the type the browser claims, so the name is checked here.
-  defp upload_type?(name) do
-    case Application.get_env(:slimserve, :upload_types, :any) do
-      :any -> true
-      types -> String.downcase(Path.extname(name)) in types
-    end
-  end
-
-  # A file moves by a hard link, which refuses an existing name; File.rename/2 has no such flag.
-  defp move(src, dest, :directory, requested) do
-    if hidden_inside?(src, requested), do: :error, else: File.rename(src, dest)
-  end
-
-  defp move(src, dest, _type, _requested) do
-    with :ok <- File.ln(src, dest), do: File.rm(src)
-  end
-
-  # Ignore patterns are relative to their ignore file, so a moved folder could reveal an entry one
-  # hides at its current path. Dot-names stay hidden anywhere, so they are not looked at.
-  # src is never the root itself, whose relative path would be ".": source/2 takes one plain name.
-  defp hidden_inside?(src, requested) do
-    root = root()
-    resolved = Path.split(Path.relative_to(src, root))
-
-    Enum.any?(visible_names(src), fn rel ->
-      Enum.any?(Enum.uniq([requested ++ rel, resolved ++ rel]), &Ignore.ignored?(root, &1))
-    end)
-  end
-
-  # Every non-dot path under dir, relative to it; links are not followed.
-  defp visible_names(dir) do
-    for name <- ls(dir), not String.starts_with?(name, "."), path = Path.join(dir, name), rest <- [[] | below(path)] do
-      [name | rest]
-    end
-  end
-
-  defp below(path), do: if(directory?(path), do: visible_names(path), else: [])
-
-  # Every entry under dir that is not a folder, dot-files and links included, because the delete takes them all.
-  defp count_files(dir) do
-    for name <- ls(dir), path = Path.join(dir, name), reduce: 0 do
-      n -> if directory?(path), do: n + count_files(path), else: n + 1
-    end
-  end
-
-  defp directory?(path), do: match?({:ok, %File.Stat{type: :directory}}, File.lstat(path))
-
-  defp ls(dir) do
-    case File.ls(dir) do
-      {:ok, names} -> names
-      {:error, _reason} -> []
-    end
-  end
-
-  # A new name: it passes the gate and nothing, not even a dangling link, is there yet.
-  defp fresh(segments, name, opts \\ []) do
-    with {:ok, abs} <- Root.target(root(), segments, name, opts),
-         {:error, :enoent} <- File.lstat(abs) do
-      {:ok, abs}
-    else
-      _ -> :error
-    end
-  end
-
-  # An existing name: it passes the gate and is visible, as the listing shows it. followed_kind is
-  # what resolve/2 sees through a link (:dir or :file); lstat_type is the entry's own type, :symlink for a link.
-  defp source(segments, name) do
-    with {:ok, abs} <- Root.target(root(), segments, name),
-         {followed_kind, _path} when followed_kind in [:dir, :file] <- Root.resolve(root(), segments ++ [name]),
-         {:ok, %File.Stat{type: lstat_type}} <- File.lstat(abs) do
-      {:ok, abs, followed_kind, lstat_type}
-    else
-      _ -> :error
-    end
-  end
-
-  defp root, do: Application.fetch_env!(:slimserve, :root)
-
-  # SlimServe.Watcher sends one message per file event: a burst re-lists once, 100 ms after its first event.
+  # SlimServe.Watcher sends one message per file event.
+  # S3 sends one per changed folder, and {:tree_changed, rel} for a moved or deleted folder and all below it.
   @impl true
+  def handle_info({:tree_changed, rel}, socket) do
+    own = Enum.join(socket.assigns.segments, "/")
+
+    if own == rel or String.starts_with?(own, rel <> "/"),
+      do: handle_info({:dir_changed, own}, socket),
+      else: {:noreply, socket}
+  end
+
   def handle_info({:dir_changed, _dir}, %{assigns: %{relist?: true}} = socket), do: {:noreply, socket}
 
   def handle_info({:dir_changed, _dir}, socket) do
@@ -247,19 +126,38 @@ defmodule SlimServeWeb.ListingLive do
     {:noreply, assign(socket, relist?: true)}
   end
 
-  # A directory removed or newly ignored sends the browser to the nearest directory still served.
-  def handle_info(:relist, socket) do
-    segments = socket.assigns.segments
-    socket = assign(socket, relist?: false)
+  def handle_info(:relist, socket), do: {:noreply, socket |> assign(relist?: false) |> relist([])}
 
-    case nearest_dir(Application.fetch_env!(:slimserve, :root), segments) do
-      ^segments -> {:noreply, relist(socket, entries(segments))}
-      ancestor -> {:noreply, redirect(socket, to: href(ancestor))}
+  # The poll skips the metadata cache, so a change made outside the app shows within one period.
+  def handle_info(:poll, socket) do
+    poll()
+    {:noreply, relist(socket, fresh: true)}
+  end
+
+  defp poll, do: Process.send_after(self(), :poll, Application.get_env(:slimserve, :s3_poll_ms, @poll_ms))
+
+  # An outage is not an empty folder.
+  defp relist(socket, opts) do
+    segments = socket.assigns.segments
+
+    case Storage.list(segments, opts) do
+      {:ok, entries} ->
+        put_entries(socket, Enum.map(entries, &entry(segments, &1)))
+
+      {:error, _reason} ->
+        socket
+
+      :error ->
+        case nearest_dir(segments) do
+          ^segments -> put_entries(socket, [])
+          {:error, _reason} -> socket
+          ancestor -> redirect(socket, to: href(ancestor))
+        end
     end
   end
 
   # An event on a hidden or ignored file lists the same entries: send nothing.
-  defp relist(socket, entries) do
+  defp put_entries(socket, entries) do
     hash = :erlang.phash2(entries)
 
     if hash == socket.assigns.entries_hash,
@@ -267,10 +165,11 @@ defmodule SlimServeWeb.ListingLive do
       else: socket |> assign(entries_hash: hash) |> stream(:entries, entries, reset: true)
   end
 
-  defp nearest_dir(root, segments) do
-    case Root.resolve(root, segments) do
+  defp nearest_dir(segments) do
+    case Storage.resolve(segments) do
       {:dir, _dir} -> segments
-      _ -> nearest_dir(root, Enum.drop(segments, -1))
+      {:error, _reason} = error -> error
+      _ -> nearest_dir(Enum.drop(segments, -1))
     end
   end
 
@@ -487,42 +386,28 @@ defmodule SlimServeWeb.ListingLive do
     """
   end
 
-  # Exactly the names Root.resolve/2 would serve: the listing has no filter of its own.
   defp entries(segments) do
-    root = Application.fetch_env!(:slimserve, :root)
-    thumb_max_file_bytes = Application.fetch_env!(:slimserve, :thumb_max_file_bytes)
-
-    # File.ls/1 skips names that are not valid UTF-8 (spec: Directory listing).
-    with {:dir, dir} <- Root.resolve(root, segments),
-         {:ok, names} <- File.ls(dir) do
-      # ponytail: resolve/2 re-reads the ancestors' ignore files for every name.
-      # Load them once per listing if big folders get slow.
-      entries =
-        for name <- names,
-            path = segments ++ [name],
-            {kind, abs} <- [Root.resolve(root, path)],
-            {:ok, stat} <- [File.stat(abs, time: :posix)] do
-          %{
-            dir?: kind == :dir,
-            # The row's DOM id: from the name, so a relist never patches a row with another entry.
-            id: Base.url_encode64(name, padding: false),
-            name: name,
-            href: href(path),
-            rel: Enum.join(path, "/"),
-            # The same rule as the thumbnail route, so the listing asks only for thumbnails it can get.
-            thumb:
-              if(kind == :file and Thumbnail.image?(abs) and stat.size <= thumb_max_file_bytes,
-                do: href(path) <> "?thumb=1&v=#{stat.mtime}-#{stat.size}"
-              ),
-            size: if(kind == :file, do: human(stat.size)),
-            modified: stat.mtime |> DateTime.from_unix!() |> Calendar.strftime("%Y-%m-%d %H:%M")
-          }
-        end
-
-      Enum.sort_by(entries, &{not &1.dir?, &1.name})
-    else
+    case Storage.list(segments) do
+      {:ok, entries} -> Enum.map(entries, &entry(segments, &1))
       _ -> []
     end
+  end
+
+  defp entry(segments, entry) do
+    path = segments ++ [entry.name]
+
+    %{
+      dir?: entry.dir?,
+      # The row's DOM id: from the name, so a relist never patches a row with another entry.
+      id: Base.url_encode64(entry.name, padding: false),
+      name: entry.name,
+      href: href(path),
+      rel: Enum.join(path, "/"),
+      thumb: entry.thumb && href(path) <> "?thumb=1&v=" <> URI.encode_www_form(entry.thumb),
+      size: if(not entry.dir?, do: human(entry.size)),
+      # An S3 folder is a key prefix, which has no time of its own.
+      modified: entry.mtime && entry.mtime |> DateTime.from_unix!() |> Calendar.strftime("%Y-%m-%d %H:%M")
+    }
   end
 
   defp upload_error(:too_large), do: "Larger than the upload limit"

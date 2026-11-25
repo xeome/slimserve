@@ -6,6 +6,24 @@ The chart does not inherit the Go chart's 512 MiB memory limit: it can prevent t
 
 `host` is required; set it to the public hostname for Phoenix-generated URLs.
 
+## Serve an S3 bucket
+
+Set `storage.backend: s3`, `s3.bucket`, `s3.accessKeyId` and `s3.secretAccessKey`, plus
+`s3.endpoint` (the store's URL, path-style) for anything but AWS and `s3.region` if not
+`us-east-1`. AWS itself is untested: set `s3.endpoint` to the bucket region's endpoint
+(`https://s3.<region>.amazonaws.com`) there too, since a bucket that redirects to its regional
+host answers every request with a 502. The pod then mounts no `/data`. An existing data claim stays, unmounted, so a switch
+back to local finds its files, and the chart still refuses to drop it. Each pod keeps fetched files
+up to 100 MB in an `emptyDir` capped at `s3.downloadCacheMB` (default 1024), whose size limit
+adds 10% and 16 MiB of headroom for filesystem blocks. The root README lists what
+the store must support.
+
+Over S3, `replicas` can be more than 1. That needs `cluster.cookie`, a shared secret the pods join
+their Erlang cluster with, and a fixed `auth.secretKeyBase`, so a page served by one pod connects to
+any other. The pods find each other through the headless `<release>-nodes` Service, which carries
+no HTTP; the HTTP Service is unchanged. The cookie and the S3 keys go into `<release>-runtime`
+with the other credentials.
+
 ## Fresh install
 
 The chart's default image is `ghcr.io/xeome/slimserve:elixir-0.1.0`. That tag is not published yet; build the repository `Dockerfile`, make the image available to the cluster, and set `image.main.repository` and `image.main.tag` in your values file. For an image loaded into a local cluster, use `image.main.pullPolicy: Never`.

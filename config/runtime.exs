@@ -59,12 +59,39 @@ if config_env() != :test do
         if types == [], do: raise("SLIMSERVE_UPLOAD_TYPES lists no extension"), else: types
     end
 
+  storage =
+    case set.("SLIMSERVE_STORAGE") do
+      nil -> :local
+      "local" -> :local
+      "s3" -> :s3
+      other -> raise "SLIMSERVE_STORAGE must be local or s3, got: #{other}"
+    end
+
   config :slimserve, SlimServeWeb.Endpoint, http: [port: port]
   config :slimserve, login: login
 
-  config :slimserve,
+  if storage == :s3 do
+    # AWS_ENDPOINT_URL_S3 names an S3-compatible service; unset, it is AWS.
+    config :slimserve,
+      storage: :s3,
+      s3: [
+        bucket: set.("SLIMSERVE_S3_BUCKET") || raise("SLIMSERVE_S3_BUCKET must be set when SLIMSERVE_STORAGE=s3"),
+        endpoint: set.("AWS_ENDPOINT_URL_S3"),
+        region: set.("AWS_REGION") || "us-east-1",
+        access_key_id: set.("AWS_ACCESS_KEY_ID") || raise("AWS_ACCESS_KEY_ID must be set when SLIMSERVE_STORAGE=s3"),
+        secret_access_key:
+          set.("AWS_SECRET_ACCESS_KEY") || raise("AWS_SECRET_ACCESS_KEY must be set when SLIMSERVE_STORAGE=s3"),
+        token: set.("AWS_SESSION_TOKEN")
+      ],
+      # Objects up to 100 MB are kept here whole, so a second download does not ask the bucket.
+      download_cache_bytes: megabytes.("SLIMSERVE_DOWNLOAD_CACHE_MB", "1024"),
+      download_cache_dir: set.("SLIMSERVE_DOWNLOAD_CACHE_DIR") || Path.join(System.tmp_dir!(), "slimserve-downloads")
+  else
     # The one directory served at /. Tests set their own.
-    root: Path.expand(System.get_env("SLIMSERVE_ROOT", ".")),
+    config :slimserve, root: Path.expand(System.get_env("SLIMSERVE_ROOT", "."))
+  end
+
+  config :slimserve,
     # Thumbnails: the longest side in pixels, the largest source file, and the disk cache. Tests set their own.
     thumb_max_dim: String.to_integer(System.get_env("SLIMSERVE_THUMB_MAX_DIM", "250")),
     thumb_max_file_bytes: megabytes.("SLIMSERVE_THUMB_MAX_FILE_SIZE_MB", "10"),
@@ -80,7 +107,8 @@ end
 
 # A prod server has no default root: serving the release's own working directory by accident would
 # publish it. Only with PHX_SERVER, as the release image sets it, so a prod mix task runs without a root.
-if config_env() == :prod and System.get_env("PHX_SERVER") != nil and not File.dir?(System.get_env("SLIMSERVE_ROOT", "")) do
+if config_env() == :prod and System.get_env("PHX_SERVER") != nil and System.get_env("SLIMSERVE_STORAGE") != "s3" and
+     not File.dir?(System.get_env("SLIMSERVE_ROOT", "")) do
   raise "SLIMSERVE_ROOT must name an existing directory"
 end
 
