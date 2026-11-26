@@ -24,7 +24,7 @@ defmodule SlimServeWeb.LoginController do
     end
   end
 
-  # Closes this browser's open write pages: they remount through the checks, without the dropped session.
+  # Closes this browser's open pages: they remount through the checks, without the dropped session.
   def delete(conn, _params) do
     if socket_id = get_session(conn, :live_socket_id), do: SlimServeWeb.Endpoint.broadcast(socket_id, "disconnect", %{})
 

@@ -40,8 +40,17 @@ defmodule SlimServe.Storage do
   @spec list([String.t()], fresh: boolean()) :: {:ok, [entry()]} | :error | {:error, term()}
   def list(segments, opts \\ []), do: backend().list(segments, opts)
 
-  def subscribe(segments) do
-    for topic <- backend().topics(segments), do: :ok = Phoenix.PubSub.subscribe(SlimServe.PubSub, topic)
+  @doc "The topics that carry this folder's `{:dir_changed, dir}` and `{:tree_changed, rel}` messages."
+  @spec topics([String.t()]) :: [String.t()]
+  def topics(segments), do: backend().topics(segments)
+
+  @doc """
+  A topic in both stays subscribed once, since folders can share one.
+  """
+  @spec resubscribe([String.t()], [String.t()]) :: :ok
+  def resubscribe(from, to) do
+    for topic <- to -- from, do: :ok = Phoenix.PubSub.subscribe(SlimServe.PubSub, topic)
+    for topic <- from -- to, do: :ok = Phoenix.PubSub.unsubscribe(SlimServe.PubSub, topic)
     :ok
   end
 

@@ -80,7 +80,9 @@ defmodule SlimServeWeb.BrowseController do
 
       _ ->
         view = if conn.cookies["slimserve-view"] == "grid", do: "grid", else: "list"
-        live_render(conn, ListingLive, session: %{"segments" => segments, "view" => view})
+        # Written by the sidebar's hook; read here so the first paint already has the rail right.
+        rail = if conn.cookies["slimserve-rail"] in ~w(rail open), do: conn.cookies["slimserve-rail"]
+        live_render(conn, ListingLive, session: %{"segments" => segments, "view" => view, "rail" => rail})
     end
   end
 
@@ -138,15 +140,15 @@ defmodule SlimServeWeb.BrowseController do
   defp thumbnail(conn, size, key, generate) do
     # The size is checked before libvips opens the file. A file libvips cannot decode is not an image.
     with false <- size > Application.fetch_env!(:slimserve, :thumb_max_file_bytes),
-         :miss <- ThumbCache.lookup(key),
+         :miss <- ThumbCache.lookup_thumb(key),
          # ponytail: no concurrency limit; add a bounded pool if many viewers hit a cold cache.
-         {:ok, webp} <- generate.() do
+         {:ok, webp, dims} <- generate.() do
       # A cast: the cache logs a failed write, and it only costs the next request a miss.
-      ThumbCache.put(key, webp)
+      ThumbCache.put_thumb(key, webp, dims)
       send_webp(conn, "miss", webp)
     else
       true -> send_resp(conn, 413, "Content Too Large")
-      {:ok, webp} -> send_webp(conn, "hit", webp)
+      {:ok, webp, _dims} -> send_webp(conn, "hit", webp)
       # Bandit adds no content-length to an empty HEAD answer, so the client is told no length, not 0.
       :head -> send_webp(conn, "miss", "")
       {:error, :unavailable} -> send_resp(conn, 503, "Service Unavailable")

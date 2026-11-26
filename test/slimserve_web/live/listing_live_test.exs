@@ -36,7 +36,7 @@ defmodule SlimServeWeb.ListingLiveTest do
   end
 
   defp hrefs(view) do
-    view |> render() |> LazyHTML.from_fragment() |> LazyHTML.query("#entries a") |> LazyHTML.attribute("href")
+    view |> render() |> LazyHTML.from_fragment() |> LazyHTML.query("#entries .name a") |> LazyHTML.attribute("href")
   end
 
   defp assert_listed(view, expected, deadline \\ System.monotonic_time(:millisecond) + @within) do
@@ -72,9 +72,14 @@ defmodule SlimServeWeb.ListingLiveTest do
       root: root
     } do
       File.mkdir_p!(Path.join(root, "sub/dir"))
+      for name <- ~w(a.txt b.txt .dot ignored.txt), do: File.write!(Path.join(root, "sub/dir/" <> name), "x")
+      File.write!(Path.join(root, "sub/dir/.slimserveignore"), "ignored.txt\n")
       png = Path.join(root, "sub/pic.png")
       :ok = 4 |> Image.build_image!(4, [200, 80, 40]) |> Image.write_to_file(png)
       File.write!(Path.join(root, "sub/notes.txt"), "hello")
+
+      for path <- [png, Path.join(root, "sub/notes.txt"), Path.join(root, "sub/dir")],
+          do: File.touch!(path, 1_767_323_045)
 
       {:ok, view, _html} = live(conn, "/sub")
 
@@ -84,23 +89,25 @@ defmodule SlimServeWeb.ListingLiveTest do
         |> LazyHTML.from_fragment()
         |> LazyHTML.query("#entries tr:not(#entries-empty)")
         |> Enum.map(fn row ->
-          [href] = row |> LazyHTML.query("a") |> LazyHTML.attribute("href")
-          [_name, size, modified] = row |> LazyHTML.query("td") |> Enum.map(&String.trim(LazyHTML.text(&1)))
+          [href] = row |> LazyHTML.query(".name a") |> LazyHTML.attribute("href")
+          [_name, _kind, size, _modified] = row |> LazyHTML.query("td") |> Enum.map(&String.trim(LazyHTML.text(&1)))
+          time = LazyHTML.query(row, "time")
 
           icons =
             for kind <- ~w(img .hero-folder .hero-document), row |> LazyHTML.query(kind) |> Enum.count() > 0, do: kind
 
-          {href, icons, size, modified}
+          {href, icons, size, {LazyHTML.attribute(time, "datetime"), LazyHTML.attribute(time, "title")}}
         end)
 
+      stamp = {["2026-01-02T03:04:05Z"], ["2026-01-02 03:04 UTC"]}
+
       assert [
-               {"/sub/dir", [".hero-folder"], "", dir_time},
-               {"/sub/notes.txt", [".hero-document"], "5 B", notes_time},
-               {"/sub/pic.png", ["img"], pic_size, pic_time}
+               {"/sub/dir", [".hero-folder"], "2 items", ^stamp},
+               {"/sub/notes.txt", [".hero-document"], "5 B", ^stamp},
+               {"/sub/pic.png", ["img"], pic_size, ^stamp}
              ] = rows
 
       assert pic_size == "#{File.stat!(png).size} B"
-      for time <- [dir_time, notes_time, pic_time], do: assert(time =~ ~r/\A\d{4}-\d{2}-\d{2} \d{2}:\d{2}\z/)
     end
   end
 

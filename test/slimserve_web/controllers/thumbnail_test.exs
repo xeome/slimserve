@@ -149,6 +149,20 @@ defmodule SlimServeWeb.ThumbnailTest do
       assert response(again, 200) == response(first, 200)
     end
 
+    # One entry, so the cache never evicts the size and keeps the thumbnail.
+    test "Scenario: A thumbnail and its source's pixel size are one cache entry", %{
+      conn: conn,
+      root: root,
+      tmp_dir: tmp_dir
+    } do
+      image(root, "a.png", 1000, 600)
+
+      thumb(conn, "a.png")
+      stored()
+
+      assert [_entry] = File.ls!(Path.join(tmp_dir, "cache"))
+    end
+
     test "Scenario: A HEAD on a cold cache renders and caches nothing", %{conn: conn, root: root} do
       image(root, "a.png", 1000, 600)
 

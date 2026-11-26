@@ -180,6 +180,17 @@ defmodule SlimServeWeb.LoginTest do
       assert Enum.count(statuses, &(&1 == 401)) <= 10
       assert Enum.all?(statuses, &(&1 in [401, 429]))
     end
+
+    # A viewer page reads by events too.
+    test "logging out tells that browser's open viewer pages to disconnect", %{conn: conn} do
+      logged = log_in(conn)
+      socket_id = logged |> get("/") |> get_session("live_socket_id")
+      assert is_binary(socket_id), "a viewer session names no socket, so logout can close none of its pages"
+      SlimServeWeb.Endpoint.subscribe(socket_id)
+
+      post(logged, "/.app/logout")
+      assert_receive %Broadcast{topic: ^socket_id, event: "disconnect"}
+    end
   end
 
   defp write_ui?(conn) do
@@ -241,7 +252,7 @@ defmodule SlimServeWeb.LoginTest do
 
       {:ok, view, _html} = live(logged, "/")
       refute has_element?(view, "#write-bar")
-      render_hook(view, "delete", %{"name" => "a.txt"})
+      render_hook(view, "delete", %{"path" => "/a.txt"})
       assert File.exists?(Path.join(root, "a.txt"))
     end
 
@@ -257,7 +268,7 @@ defmodule SlimServeWeb.LoginTest do
 
       {:ok, view, _html} = live(forged, "/")
       refute has_element?(view, "#write-bar")
-      render_hook(view, "delete", %{"name" => "a.txt"})
+      render_hook(view, "delete", %{"path" => "/a.txt"})
       assert File.exists?(Path.join(root, "a.txt"))
     end
 

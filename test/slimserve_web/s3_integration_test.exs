@@ -129,7 +129,7 @@ defmodule SlimServeWeb.S3IntegrationTest do
       assert_listed(other, ["/new"])
 
       {:ok, in_new, _html} = live(writer, "/new")
-      rename(in_new, "b.txt", "a.txt")
+      rename(in_new, "new/b.txt", "a.txt")
       assert S3.objects(bucket) == %{"new/" => "", "a.txt" => "hello"}
       assert_listed(other, ["/new", "/a.txt"])
 
@@ -323,8 +323,8 @@ defmodule SlimServeWeb.S3IntegrationTest do
     view |> element("#upload-form") |> render_submit()
   end
 
-  defp rename(view, from, to), do: render_hook(view, "rename", %{"from" => from, "to" => to})
-  defp remove(view, name), do: render_hook(view, "delete", %{"name" => name})
+  defp rename(view, from, to), do: render_hook(view, "rename", %{"path" => "/" <> from, "to" => to})
+  defp remove(view, path), do: render_hook(view, "delete", %{"path" => "/" <> path})
 
   defp assert_listed(view, expected), do: eventually(fn -> hrefs(render(view)) end, &(&1 == expected))
 

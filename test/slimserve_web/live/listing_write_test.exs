@@ -96,8 +96,8 @@ defmodule SlimServeWeb.ListingWriteTest do
     end)
   end
 
-  defp rename(view, from, to), do: render_hook(view, "rename", %{"from" => from, "to" => to})
-  defp remove(view, name), do: render_hook(view, "delete", %{"name" => name})
+  defp rename(view, from, to), do: render_hook(view, "rename", %{"path" => "/" <> from, "to" => to})
+  defp remove(view, path), do: render_hook(view, "delete", %{"path" => "/" <> path})
 
   describe "with write rights" do
     test "a writer uploads, makes a folder, moves a file there and back and deletes it, and another page follows",
@@ -113,20 +113,105 @@ defmodule SlimServeWeb.ListingWriteTest do
       assert File.dir?(Path.join(root, "new"))
       assert_listed(other, ["/new", "/sub", "/a.txt"])
 
+      view |> element("#entries tr[data-name='a.txt']") |> render_click()
+      view |> element("#move-open") |> render_click()
       view |> element("form[data-name='a.txt']") |> render_submit(%{"to" => "sub/b.txt"})
       refute File.exists?(Path.join(root, "a.txt"))
       assert File.read!(Path.join(root, "sub/b.txt")) == "hello"
       assert_listed(other, ["/new", "/sub"])
 
       {:ok, in_sub, _html} = live(writer, "/sub")
-      rename(in_sub, "b.txt", "a.txt")
+      rename(in_sub, "sub/b.txt", "a.txt")
       refute File.exists?(Path.join(root, "sub/b.txt"))
       assert File.read!(Path.join(root, "a.txt")) == "hello"
       assert_listed(other, ["/new", "/sub", "/a.txt"])
 
-      view |> element("button[phx-click=delete][phx-value-name='a.txt']") |> render_click()
+      view |> element("button[phx-click=delete][phx-value-path='/a.txt']") |> render_click()
       refute File.exists?(Path.join(root, "a.txt"))
       assert_listed(other, ["/new", "/sub"])
+    end
+
+    test "after opening a subfolder in the page, a new folder and an upload land in it", %{writer: writer, root: root} do
+      {:ok, view, _html} = live(writer, "/")
+      render_hook(view, "open", %{"path" => "/sub"})
+
+      view |> element("#mkdir-form") |> render_submit(%{"name" => "new"})
+      upload(view, "u.txt", "u")
+
+      assert File.dir?(Path.join(root, "sub/new"))
+      assert File.read!(Path.join(root, "sub/u.txt")) == "u"
+      refute File.exists?(Path.join(root, "new"))
+      refute File.exists?(Path.join(root, "u.txt"))
+    end
+
+    test "an upload queued in one folder is dropped when the page opens another, so it lands in neither", %{
+      writer: writer,
+      root: root
+    } do
+      {:ok, view, _html} = live(writer, "/")
+      input = file_input(view, "#upload-form", :files, [%{name: "u.txt", content: "u", type: "text/plain"}])
+      render_upload(input, "u.txt")
+
+      render_hook(view, "open", %{"path" => "/sub"})
+      view |> element("#upload-form") |> render_submit()
+
+      refute File.exists?(Path.join(root, "u.txt"))
+      refute File.exists?(Path.join(root, "sub/u.txt"))
+    end
+
+    # A Del or a drop sent in the root can reach the server after an open it queued behind.
+    test "a delete sent for the root's file after the page opened /sub deletes the root's file, not sub's", %{
+      writer: writer,
+      root: root
+    } do
+      File.write!(Path.join(root, "x.txt"), "root")
+      File.write!(Path.join(root, "sub/x.txt"), "sub")
+      {:ok, view, _html} = live(writer, "/")
+      render_hook(view, "open", %{"path" => "/sub"})
+
+      remove(view, "x.txt")
+      refute File.exists?(Path.join(root, "x.txt"))
+      assert File.read!(Path.join(root, "sub/x.txt")) == "sub"
+    end
+
+    test "a move sent for the root's file after the page opened /sub moves the root's file, not sub's", %{
+      writer: writer,
+      root: root
+    } do
+      File.write!(Path.join(root, "x.txt"), "root")
+      File.write!(Path.join(root, "sub/x.txt"), "sub")
+      {:ok, view, _html} = live(writer, "/")
+      render_hook(view, "open", %{"path" => "/sub"})
+
+      rename(view, "x.txt", "moved.txt")
+      assert File.read!(Path.join(root, "moved.txt")) == "root"
+      assert File.read!(Path.join(root, "sub/x.txt")) == "sub"
+    end
+
+    test "a write path that climbs out, hides a slash, or names a hidden or ignored entry is refused", %{
+      writer: writer,
+      root: root,
+      outside: outside
+    } do
+      File.write!(Path.join(outside, "o.txt"), "o")
+      File.write!(Path.join(root, ".slimserveignore"), "ign\n")
+      File.mkdir_p!(Path.join(root, "ign"))
+      File.write!(Path.join(root, "ign/i.txt"), "i")
+      File.mkdir_p!(Path.join(root, ".hid"))
+      File.write!(Path.join(root, ".env"), "e")
+      File.write!(Path.join(root, "sub/s.txt"), "s")
+      {:ok, view, _html} = live(writer, "/sub")
+      before = {tree(root), tree(outside)}
+
+      for path <-
+            ~w(/.. /../outside /../outside/o.txt /sub/../.env /sub/%2E%2E /sub%2Fs.txt %2Fsub%2Fs.txt /.env /.hid /ign /ign/i.txt) do
+        render_hook(view, "delete", %{"path" => path})
+        render_hook(view, "rename", %{"path" => path, "to" => "moved"})
+        render_hook(view, "rename", %{"path" => path, "name" => "moved"})
+        render_hook(view, "mkdir", %{"path" => path, "name" => "new"})
+      end
+
+      assert {tree(root), tree(outside)} == before
     end
 
     test "a successful upload leaves no temporary file", %{writer: writer, root: root} do
@@ -289,7 +374,7 @@ defmodule SlimServeWeb.ListingWriteTest do
       File.write!(Path.join(root, "sub/deep/.y"), "y")
       {:ok, view, _html} = live(writer, "/")
 
-      view |> element("button[phx-click=delete][phx-value-name='sub']") |> render_click()
+      view |> element("button[phx-click=delete][phx-value-path='/sub']") |> render_click()
       assert File.dir?(Path.join(root, "sub"))
       assert has_element?(view, "#confirm-delete[data-count='2']")
 
@@ -297,7 +382,7 @@ defmodule SlimServeWeb.ListingWriteTest do
       refute has_element?(view, "#confirm-delete")
       assert File.dir?(Path.join(root, "sub"))
 
-      view |> element("button[phx-click=delete][phx-value-name='sub']") |> render_click()
+      view |> element("button[phx-click=delete][phx-value-path='/sub']") |> render_click()
       view |> element("#confirm-delete-yes") |> render_click()
       refute File.exists?(Path.join(root, "sub"))
     end
@@ -344,7 +429,7 @@ defmodule SlimServeWeb.ListingWriteTest do
       {:ok, view, _html} = live(writer, "/")
 
       remove(view, "sub")
-      render_hook(view, "confirm_delete", %{"name" => "sub"})
+      render_hook(view, "confirm_delete", %{"path" => "/sub"})
       refute File.exists?(Path.join(root, "sub"))
       assert File.read!(Path.join(outside, "keep.txt")) == "k"
     end
@@ -397,9 +482,10 @@ defmodule SlimServeWeb.ListingWriteTest do
   end
 
   describe "without write rights" do
-    # Every event the page handles. The gate halts all of them without write rights, so this list
-    # only has to reach the gate, not to be complete.
-    @events ~w(validate cancel_upload upload mkdir rename delete confirm_delete cancel_delete)
+    # The gate halts all but the reads without write rights, so this list only has to reach the
+    # gate, not to be complete.
+    @events ~w(select deselect filter open tree_expand validate cancel_upload upload mkdir rename delete confirm_delete cancel_delete
+               move_open move_expand move_pick)
 
     # Each event on a page of its own, so an event that crashes its page cannot keep the next one
     # from reaching the gate.
@@ -410,7 +496,12 @@ defmodule SlimServeWeb.ListingWriteTest do
         view = open.()
 
         try do
-          render_hook(view, event, %{"name" => name, "from" => name, "to" => "moved-" <> name, "ref" => "0"})
+          render_hook(view, event, %{
+            "name" => name,
+            "to" => "moved-" <> name,
+            "ref" => "0",
+            "path" => name
+          })
         catch
           :exit, _reason -> :crashed
         end

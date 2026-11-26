@@ -21,16 +21,28 @@ defmodule SlimServe.Thumbnail do
   def image?(path), do: String.downcase(Path.extname(path)) in @extensions
 
   @doc """
-  The image at `path` as a WebP that fits a square of `max_dim` pixels. A smaller image keeps
-  its size. WebP keeps transparency. The WebP carries none of the source's metadata.
+  The source's own width and height as shown, after its EXIF orientation.
 
   A file whose content is not a JPEG, PNG, GIF or WebP is an error, whatever its name.
   """
-  @spec generate(Path.t(), pos_integer()) :: {:ok, binary()} | {:error, term()}
+  @spec generate(Path.t(), pos_integer()) ::
+          {:ok, binary(), {pos_integer(), pos_integer()}} | {:error, term()}
   def generate(path, max_dim) do
     with :ok <- check_loader(path),
-         {:ok, image} <- Operation.thumbnail(path, max_dim, size: :VIPS_SIZE_DOWN) do
-      Image.write_to_buffer(image, ".webp", keep: [:VIPS_FOREIGN_KEEP_ICC])
+         {:ok, source} <- Image.new_from_file(path),
+         {:ok, image} <- Operation.thumbnail(path, max_dim, size: :VIPS_SIZE_DOWN),
+         {:ok, webp} <- Image.write_to_buffer(image, ".webp", keep: [:VIPS_FOREIGN_KEEP_ICC]) do
+      {:ok, webp, shown_size(source)}
+    end
+  end
+
+  # Orientations 5 to 8 turn the image a quarter.
+  defp shown_size(source) do
+    {w, h} = {Image.width(source), Image.height(source)}
+
+    case Image.header_value(source, "orientation") do
+      {:ok, turn} when turn in 5..8 -> {h, w}
+      _ -> {w, h}
     end
   end
 

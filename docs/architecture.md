@@ -6,6 +6,8 @@ SlimServe is one OTP application, `:slimserve`, with no database.
 
 - Directory listing: a listing shows exactly the entries the server would serve whose names are valid UTF-8, folders first and then by name.
 - Listing views: a listing shows as a list with sizes and modified times, the default, or as a grid of thumbnails and kind icons; `?view=grid` or `?view=list` on a directory sets the `slimserve-view` cookie for a year and redirects to the bare path, so the choice survives a reload with no JS, and any other value is ignored.
+- Listing page: a sidebar holds the folder tree (the root's folders and each open ancestor's, each with its entry count), an "In this folder" card that counts and sizes the files by kind, and the session label with log in or log out; it folds to an icon rail by its button or `[`, and the `slimserve-rail` cookie keeps that across reloads (folded by default at phone width, where the open sidebar is a drawer). The panel's header holds the crumbs, the count and total size, a name filter (`/` focuses it), and the List/Grid switch. The list has Name, Kind, Size and Modified columns, the time relative with the UTC time on hover, and a ⋯ menu per row.
+- Inspector: clicking a row selects it and opens an inspector with a preview (the thumbnail, an SVG, a video or audio player, or the kind's icon), the kind with the pixel size once the thumbnail has been made, size, UTC modified time and folder, and Download (Open for a folder) and Copy link. Selecting, deselecting and filtering are read events any viewer may send; they survive a re-list, and a selected entry that disappears closes the inspector.
 - Live listing: a connected listing updates within a second of a file being added to or removed from its directory, under the dot-file and ignore rules.
 - File download: a visible file downloads with the MIME type of its requested name, for a symlink too, whatever the Accept header, and with the same CSP and `nosniff` headers as every page; a file the server cannot read is neither listed nor served.
 - Range requests: a file download answers one `bytes=a-b`, `bytes=a-` or `bytes=-n` range with a 206 and its `Content-Range`, an unsatisfiable one with a 416 and `Content-Range: bytes */<size>`, and several ranges, a malformed header or an empty file with the full 200; every download carries `Accept-Ranges: bytes`.
@@ -15,10 +17,10 @@ SlimServe is one OTP application, `:slimserve`, with no database.
 - On-demand thumbnail: `GET <path>?thumb=1` answers a WebP with none of the source's metadata and no larger than the configured size for a visible JPEG, PNG, GIF or WebP by both name and content, 404 for any other path, and 413 without decoding for an image over the configured input size.
 - Login: with `SLIMSERVE_USERNAME` and `SLIMSERVE_PASSWORD` both set, every route answers a browser's GET with a 302 to `/.app/login?next=<path>` and anything else with a bare 401 until the user logs in, and a live socket without the login is refused at mount; a login returns to `next` only when it is a local path, else to `/`; 10 failed logins from one IP in a rolling minute make its next attempts answer 429; changing the password logs every session out; with both unset nothing changes and `/.app/login` and `/.app/logout` answer 404.
 - Write login: with `SLIMSERVE_WRITE_PASSWORD` set, `/.app/login` also takes the write password, under the same rate limit; with viewer login on the username must match too, and with it off the form asks only for the password and every listing's header links to it; a write login holds until logout, and changing or removing the write password ends it, on open pages at their next write too; logout closes that browser's open pages, which reconnect without write rights.
-- Writes: with write rights, a listing uploads files (at most `SLIMSERVE_UPLOAD_MAX_MB`, default 100, and only the `SLIMSERVE_UPLOAD_TYPES` extensions when set), creates a folder, renames or moves an entry to a path from the root, and deletes a file, a link (never its target) or a folder with everything in it after a confirm bar that counts its files, which asks again when the folder or its count changed before the confirm; other open pages update through the live listing; without write rights every write event is refused.
+- Writes: with write rights, a listing uploads files (at most `SLIMSERVE_UPLOAD_MAX_MB`, default 100, and only the `SLIMSERVE_UPLOAD_TYPES` extensions when set), creates a folder, renames or moves an entry to a path from the root (the inspector's name field renames within the folder, F2 focuses it; Move to… or M opens a folder picker; a row dropped on a sidebar folder moves there; Delete asks to delete the selection), and deletes a file, a link (never its target) or a folder with everything in it after a confirm bar that counts its files, which asks again when the folder or its count changed before the confirm; other open pages update through the live listing; without write rights every write event is refused.
 - Write refusals: a write is refused when it names a dot-file, a name with a "/", an empty or non-UTF-8 name, an ignored name by its requested or resolved path, a path outside the root or under a hidden or ignored folder, or an existing name, so nothing is ever overwritten; a folder whose subtree holds an entry an ignore pattern hides at its current path does not move, and a folder does not move into itself.
 - Dashboard: `/.app/dashboard` (LiveDashboard) answers 404 with no write password, a write session's browser only, else a 302 to the login page or a 401, and its live socket is refused at mount without write rights.
-- Thumbnail cache: a repeated thumbnail comes from disk, a changed source gets a new one, and the oldest thumbnails go to keep the cache under its size; the cache deletes only files named like its own, and thumbnails still answer when the cache process is down or its directory cannot be made.
+- Thumbnail cache: a repeated thumbnail comes from disk, with the source's pixel size beside it for the inspector, a changed source gets a new one, and the oldest thumbnails go to keep the cache under its size; the cache deletes only files named like its own, and thumbnails still answer when the cache process is down or its directory cannot be made.
 
 ## Supervision tree
 
@@ -73,7 +75,12 @@ path, inode, ctime, modification time, size and the thumbnail size, so a changed
 the index: a hit is the file existing, and the request process reads it. libvips also runs in the
 request process, and the cache process alone writes (to a `.tmp` name, then a rename) and deletes.
 Past `SLIMSERVE_THUMB_CACHE_MB` (default 100) it deletes the oldest files down to 90% of the cap.
-The answer's `x-cache` header says `hit` or `miss`.
+The answer's `x-cache` header says `hit` or `miss`. Beside each thumbnail it stores the source's
+shown pixel size (EXIF rotation applied) as a `WxH` file under a key derived from the thumbnail's,
+which the inspector reads; a source that never had a thumbnail made shows no size.
+
+`SlimServe.Kind` sorts a name into image, video, audio, document, archive, code or other by its
+extension, for the Kind column, the card and the inspector; it gates nothing.
 
 ## Live listing
 
@@ -84,7 +91,8 @@ directory, and for an event on a directory also on that directory's own topic. A
 symlink hears its target. Its first message schedules one re-list 100 ms
 later, so a burst of events re-lists once. The re-list goes through `SlimServe.Root` like the first
 render, so a dot-file or an ignored file cannot appear, and it sends nothing when the entries are
-unchanged. When the directory no longer resolves, the view redirects to the nearest ancestor that
+unchanged: the sidebar tree, which lists each ancestor and counts each folder shown, is rebuilt
+only when they changed, so an unchanged S3 poll lists no other folder. When the directory no longer resolves, the view redirects to the nearest ancestor that
 does.
 
 inotify needs one watch per directory. Past `fs.inotify.max_user_watches`, `inotifywait` exits. The
@@ -106,7 +114,8 @@ applies). It answers the name's own path, so a link is acted on as a link. `List
 a new name has nothing at it, not even a dangling link, and that an existing one resolves, so it is
 visible, that a link is renamed only within its own folder, and, with `SLIMSERVE_UPLOAD_TYPES`
 set, that a file's new name has a listed extension, whatever type the browser claimed. Every event
-`ListingLive` handles is a write, so an `attach_hook` on `handle_event` halts every event unless
+`ListingLive` handles but `select`, `deselect` and `filter` is a write, so an `attach_hook` on
+`handle_event` halts every other event, an unknown one too, unless
 the session's `"write"` digest, an HMAC of the write password keyed with the server secret,
 still matches at that event.
 

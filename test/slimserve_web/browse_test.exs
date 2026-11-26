@@ -50,12 +50,12 @@ defmodule SlimServeWeb.BrowseTest do
     page = conn |> html_response(200) |> LazyHTML.from_document()
 
     {page |> LazyHTML.query("#listing") |> LazyHTML.attribute("data-view"),
-     page |> LazyHTML.query("#listing [aria-current]") |> LazyHTML.attribute("id")}
+     page |> LazyHTML.query("#listing .segmented [aria-current]") |> LazyHTML.attribute("id")}
   end
 
   defp hrefs(conn, path) do
     {:ok, view, _html} = live(conn, path)
-    view |> render() |> LazyHTML.from_fragment() |> LazyHTML.query("#entries a") |> LazyHTML.attribute("href")
+    view |> render() |> LazyHTML.from_fragment() |> LazyHTML.query("#entries .name a") |> LazyHTML.attribute("href")
   end
 
   describe "Directory listing" do

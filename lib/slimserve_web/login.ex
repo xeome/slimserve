@@ -51,21 +51,24 @@ defmodule SlimServeWeb.Login do
   defp sha256(text), do: :crypto.hash(:sha256, text)
 
   @doc """
-  Puts a grant in the session. A write grant with viewer login on carries the login too, and names
-  the browser's sockets, so a logout can close the open pages that hold write rights. A second
-  write login keeps the name, because the pages opened after the first one carry it.
+  Each grant names the browser's sockets, so a logout can close its open pages, which read by events too.
+  A second login keeps the name, because the pages opened after the first one carry it.
   """
   # A viewer login replaces a write grant from an earlier login in the same browser.
-  def put_grant(conn, :login), do: conn |> delete_session(@write_key) |> put_session(@session_key, digest())
+  def put_grant(conn, :login),
+    do: conn |> delete_session(@write_key) |> put_session(@session_key, digest()) |> name_sockets()
 
   def put_grant(conn, :write) do
     conn = if on?(), do: put_grant(conn, :login), else: conn
+    conn |> put_session(@write_key, write_digest()) |> name_sockets()
+  end
 
+  defp name_sockets(conn) do
     socket_id =
       get_session(conn, :live_socket_id) ||
-        "write_socket:" <> Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)
+        "browser_socket:" <> Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)
 
-    conn |> put_session(@write_key, write_digest()) |> put_session(:live_socket_id, socket_id)
+    put_session(conn, :live_socket_id, socket_id)
   end
 
   # The cookie is signed but readable, so the digest is keyed with the server secret: an unkeyed
