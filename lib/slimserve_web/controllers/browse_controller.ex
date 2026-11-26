@@ -41,9 +41,17 @@ defmodule SlimServeWeb.BrowseController do
   end
 
   defp thumb(conn, {:file, file}, max_dim) when is_binary(file) do
+    generate = fn ->
+      cond do
+        conn.private[:head?] != true -> Thumbnail.generate(file, max_dim)
+        Thumbnail.loadable?(file) -> :head
+        true -> {:error, :not_loadable}
+      end
+    end
+
     with true <- Thumbnail.image?(file),
          {:ok, stat} <- File.stat(file, time: :posix) do
-      thumbnail(conn, stat.size, ThumbCache.key(file, stat, max_dim), fn -> Thumbnail.generate(file, max_dim) end)
+      thumbnail(conn, stat.size, ThumbCache.key(file, stat, max_dim), generate)
     else
       _ -> BrowseHTML.send_not_found(conn)
     end

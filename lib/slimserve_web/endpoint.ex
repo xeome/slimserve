@@ -61,7 +61,7 @@ defmodule SlimServeWeb.Endpoint do
     json_decoder: Phoenix.json_library()
 
   plug Plug.MethodOverride
-  # Plug.Head turns HEAD into GET, so a streamed S3 download reads this to skip fetching the body.
+  # Plug.Head turns HEAD into GET, so controllers read this to skip an S3 fetch or a thumbnail render.
   plug :mark_head
   plug Plug.Head
   plug :session

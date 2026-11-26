@@ -78,6 +78,7 @@ defmodule SlimServeWeb.ThumbnailTest do
 
       for name <- ~w(a.txt fake.png dir.png missing.png) do
         assert thumb(conn, name).status == 404, name
+        assert head(conn, "/#{name}?thumb=1").status == 404, "HEAD #{name}"
       end
     end
 
@@ -91,6 +92,7 @@ defmodule SlimServeWeb.ThumbnailTest do
       )
 
       assert thumb(conn, "evil.png").status == 404
+      assert head(conn, "/evil.png?thumb=1").status == 404
     end
 
     test "Scenario: A thumbnail carries none of the source's metadata", %{conn: conn, root: root} do
@@ -145,6 +147,19 @@ defmodule SlimServeWeb.ThumbnailTest do
       assert get_resp_header(first, "x-cache") == ["miss"]
       assert get_resp_header(again, "x-cache") == ["hit"]
       assert response(again, 200) == response(first, 200)
+    end
+
+    test "Scenario: A HEAD on a cold cache renders and caches nothing", %{conn: conn, root: root} do
+      image(root, "a.png", 1000, 600)
+
+      head = head(conn, "/a.png?thumb=1")
+      stored()
+      get = thumb(conn, "a.png")
+
+      assert get_resp_header(get, "x-cache") == ["miss"]
+      assert head.status == get.status
+      assert get_resp_header(head, "content-type") == get_resp_header(get, "content-type")
+      assert get_resp_header(head, "x-cache") == ["miss"]
     end
 
     test "Scenario: A changed source file misses the cache", %{conn: conn, root: root} do

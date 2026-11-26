@@ -28,10 +28,21 @@ defmodule SlimServe.Thumbnail do
   """
   @spec generate(Path.t(), pos_integer()) :: {:ok, binary()} | {:error, term()}
   def generate(path, max_dim) do
-    with {:ok, loader} when loader in @loaders <- Foreign.find_load(path),
+    with :ok <- check_loader(path),
          {:ok, image} <- Operation.thumbnail(path, max_dim, size: :VIPS_SIZE_DOWN) do
       Image.write_to_buffer(image, ".webp", keep: [:VIPS_FOREIGN_KEEP_ICC])
-    else
+    end
+  end
+
+  @doc """
+  From its header alone. A truncated file passes this and still fails to render.
+  """
+  @spec loadable?(Path.t()) :: boolean()
+  def loadable?(path), do: check_loader(path) == :ok
+
+  defp check_loader(path) do
+    case Foreign.find_load(path) do
+      {:ok, loader} when loader in @loaders -> :ok
       {:ok, loader} -> {:error, {:loader, loader}}
       {:error, reason} -> {:error, reason}
     end
