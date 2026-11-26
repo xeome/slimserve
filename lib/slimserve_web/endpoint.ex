@@ -61,9 +61,13 @@ defmodule SlimServeWeb.Endpoint do
     json_decoder: Phoenix.json_library()
 
   plug Plug.MethodOverride
+  # Plug.Head turns HEAD into GET, so a streamed S3 download reads this to skip fetching the body.
+  plug :mark_head
   plug Plug.Head
   plug :session
   plug SlimServeWeb.Router
+
+  defp mark_head(conn, _opts), do: put_private(conn, :head?, conn.method == "HEAD")
 
   defp session(conn, _opts) do
     session = if Application.get_env(:slimserve, :ssl_redirect), do: @https_session, else: @http_session

@@ -83,6 +83,23 @@ defmodule SlimServe.S3DownloadTest do
     assert {whole.status, whole.resp_body, header(whole, "x-cache")} == {200, @digits, "stream"}
   end
 
+  test "a HEAD that would stream answers with GET's status and headers but fetches no body", %{conn: conn, bucket: bucket} do
+    path = "/#{bucket}/digits.txt"
+    fill_cache()
+
+    for range <- [nil, "bytes=2-5"] do
+      got = ranged(conn, range)
+      assert_received {:proxied, %{method: "GET", path: ^path}}
+
+      head = if range, do: conn |> put_req_header("range", range) |> head("/digits.txt"), else: head(conn, "/digits.txt")
+      refute_received {:proxied, %{method: "GET", path: ^path}}, inspect(range)
+      assert {head.status, head.resp_body} == {got.status, ""}
+      assert resp_headers(head) == resp_headers(got)
+    end
+  end
+
+  defp resp_headers(conn), do: conn.resp_headers |> List.keydelete("x-request-id", 0) |> Enum.sort()
+
   test "a streamed answer with the wrong length, range or ETag is refused before any header", %{conn: conn, rules: rules} do
     fill_cache()
 
@@ -92,6 +109,8 @@ defmodule SlimServe.S3DownloadTest do
 
       assert {conn.status, header(conn, "content-range")} == {502, nil},
              "#{name}: #{conn.status} #{inspect(conn.resp_body)}"
+
+      assert {header(conn, "x-cache"), header(conn, "content-length")} == {nil, nil}, name
     end
   end
 
@@ -99,8 +118,7 @@ defmodule SlimServe.S3DownloadTest do
   test "a streamed body cut short closes an HTTP/1 connection and resets an HTTP/2 stream", %{rules: rules} do
     fill_cache()
     on_get(rules, {:truncate, 4})
-    server = start_supervised!({Bandit, plug: SlimServeWeb.Endpoint, ip: :loopback, port: 0, startup_log: false})
-    {:ok, {_ip, port}} = ThousandIsland.listener_info(server)
+    port = start_bandit()
 
     # HTTP/1 has no stream to reset: the connection closes.
     {:ok, http1} = Mint.HTTP1.connect(:http, "127.0.0.1", port)
@@ -115,15 +133,46 @@ defmodule SlimServe.S3DownloadTest do
     assert byte_size(body(responses)) < byte_size(@digits)
   end
 
+  # On the wire, where Bandit, not the ConnTest adapter, decides what a HEAD's headers say.
+  test "a streamed HEAD sends GET's status and length over HTTP/1 and HTTP/2 but fetches no body", %{bucket: bucket} do
+    path = "/#{bucket}/digits.txt"
+    fill_cache()
+    port = start_bandit()
+
+    for http <- [Mint.HTTP1, Mint.HTTP2],
+        {range, status, length} <- [{[], 200, "10"}, {[{"range", "bytes=2-5"}], 206, "4"}] do
+      label = inspect({http, range})
+      {:ok, mint} = http.connect(:http, "127.0.0.1", port)
+      assert {:done, get} = fetch(mint, "GET", range)
+      assert_received {:proxied, %{method: "GET", path: ^path}}
+      assert {wire_status(get), wire_header(get, "content-length")} == {[status], [length]}, label
+
+      {:ok, mint} = http.connect(:http, "127.0.0.1", port)
+      assert {:done, head} = fetch(mint, "HEAD", range)
+      refute_received {:proxied, %{method: "GET", path: ^path}}, label
+      assert {wire_status(head), wire_header(head, "content-length"), body(head)} == {[status], [length], ""}, label
+    end
+  end
+
+  defp start_bandit do
+    server = start_supervised!({Bandit, plug: SlimServeWeb.Endpoint, ip: :loopback, port: 0, startup_log: false})
+    {:ok, {_ip, port}} = ThousandIsland.listener_info(server)
+    port
+  end
+
+  defp wire_status(responses), do: for({:status, _ref, status} <- responses, do: status)
+  defp wire_header(responses, name), do: for({:headers, _ref, headers} <- responses, {^name, value} <- headers, do: value)
+
   # Within two seconds, so a hang that would end only at a timeout fails.
-  defp fetch(conn) do
-    {:ok, conn, _ref} = Mint.HTTP.request(conn, "GET", "/digits.txt", [], nil)
+  defp fetch(conn, method \\ "GET", headers \\ []) do
+    {:ok, conn, _ref} = Mint.HTTP.request(conn, method, "/digits.txt", headers, nil)
     collect(conn, [], System.monotonic_time(:millisecond) + 2_000)
   end
 
+  # The `{:proxied, _}` ones stay in the mailbox for the test to check.
   defp collect(conn, acc, deadline) do
     receive do
-      message ->
+      message when elem(message, 0) in [:tcp, :tcp_closed, :tcp_error] ->
         case Mint.HTTP.stream(conn, message) do
           {:ok, conn, responses} ->
             acc = acc ++ responses

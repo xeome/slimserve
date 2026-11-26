@@ -80,20 +80,26 @@ defmodule SlimServe.Storage.S3.Download do
   end
 
   defp stream(conn, status, object, offset, length) do
+    # The server sends no body to a HEAD, so fetching one from S3 is pure egress.
+    if conn.private[:head?],
+      do: conn |> stream_headers(length) |> send_resp(status, ""),
+      else: stream_get(conn, status, object, offset, length)
+  end
+
+  defp stream_get(conn, status, object, offset, length) do
     last = offset + length - 1
     range = if status == 206, do: [{"range", "bytes=#{offset}-#{last}"}], else: []
 
     with {:ok, resp} <- Client.request(:get, object.key, headers: [{"if-match", object.etag} | range], into: :self),
          true <- valid?(resp, status, object, "bytes #{offset}-#{last}/#{object.size}", length) || cancel(resp) do
-      conn
-      |> put_resp_header("x-cache", "stream")
-      |> put_resp_header("content-length", Integer.to_string(length))
-      |> send_chunked(status)
-      |> relay(resp, length)
+      conn |> stream_headers(length) |> send_chunked(status) |> relay(resp, length)
     else
       _ -> bad_gateway(conn)
     end
   end
+
+  defp stream_headers(conn, length),
+    do: conn |> put_resp_header("x-cache", "stream") |> put_resp_header("content-length", Integer.to_string(length))
 
   # The range the controller put on the headers is not this answer's.
   defp bad_gateway(conn), do: conn |> delete_resp_header("content-range") |> send_resp(502, "Bad Gateway")
