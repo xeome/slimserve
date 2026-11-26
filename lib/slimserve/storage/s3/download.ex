@@ -20,7 +20,7 @@ defmodule SlimServe.Storage.S3.Download do
   @max_cached 100 * 1024 * 1024
 
   def send(conn, status, object, offset, length) do
-    case cached(object) do
+    case cached(object, conn.private[:head?]) do
       {:ok, path, how} ->
         try do
           conn |> put_resp_header("x-cache", how) |> send_file(status, path, offset, length)
@@ -36,8 +36,14 @@ defmodule SlimServe.Storage.S3.Download do
     end
   end
 
-  def with_file(object, fun) do
-    case cached(object) do
+  def with_file(object, fun, head? \\ false)
+
+  # A GET's other failures (bytes libvips cannot decode, a full cache, S3 down) need the bytes.
+  def with_file(%{size: size}, _fun, true) when size > @max_cached, do: {:error, :unavailable}
+  def with_file(_object, _fun, true), do: :head
+
+  def with_file(object, fun, false) do
+    case cached(object, false) do
       {:ok, path, _how} ->
         try do
           fun.(path)
@@ -50,19 +56,21 @@ defmodule SlimServe.Storage.S3.Download do
     end
   end
 
-  defp cached(%{size: size} = object) when size <= @max_cached do
+  defp cached(%{size: size} = object, head?) when size <= @max_cached do
     key = :sha256 |> :crypto.hash(:erlang.term_to_binary({object.key, object.etag})) |> Base.encode16(case: :lower)
 
     with :miss <- DiskCache.claim(@cache, key),
+         :get <- if(head?, do: :head, else: :get),
          {:ok, tmp} <- DiskCache.reserve(@cache, size) do
       fetch(object, tmp, key)
     else
       {:ok, path} -> {:ok, path, "hit"}
+      :head -> :stream
       :full -> :stream
     end
   end
 
-  defp cached(_object), do: :stream
+  defp cached(_object, _head?), do: :stream
 
   defp fetch(object, tmp, key) do
     result = Client.request(:get, object.key, headers: [{"if-match", object.etag}], into: File.stream!(tmp))

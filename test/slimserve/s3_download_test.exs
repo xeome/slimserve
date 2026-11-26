@@ -4,6 +4,8 @@ defmodule SlimServe.S3DownloadTest do
 
   alias SlimServe.DiskCache
   alias SlimServe.S3Fixture, as: S3
+  alias SlimServe.ThumbCache
+  alias Vix.Vips.Image
 
   @moduletag :s3
 
@@ -100,6 +102,112 @@ defmodule SlimServe.S3DownloadTest do
 
   defp resp_headers(conn), do: conn.resp_headers |> List.keydelete("x-request-id", 0) |> Enum.sort()
 
+  test "a HEAD on a cacheable file fetches and caches nothing on a miss, and answers a hit from the cache", %{
+    conn: conn,
+    bucket: bucket
+  } do
+    path = "/#{bucket}/digits.txt"
+
+    head_ranged = fn range ->
+      if range, do: conn |> put_req_header("range", range) |> head("/digits.txt"), else: head(conn, "/digits.txt")
+    end
+
+    ranges = [nil, "bytes=2-5"]
+
+    heads = Enum.map(ranges, head_ranged)
+    refute_received {:proxied, %{method: "GET", path: ^path}}
+
+    [full, part] = gets = Enum.map(ranges, &ranged(conn, &1))
+    assert {header(full, "x-cache"), header(part, "x-cache")} == {"miss", "hit"}
+    assert_received {:proxied, %{method: "GET", path: ^path}}
+
+    # The test adapter puts no content-length on a sent file.
+    for {head, got} <- Enum.zip(heads, gets) do
+      assert {head.status, head.resp_body, header(head, "content-length")} ==
+               {got.status, "", Integer.to_string(byte_size(got.resp_body))}
+
+      assert without(head, ~w(content-length x-cache)) == without(got, ~w(x-cache))
+    end
+
+    for {range, got} <- Enum.zip(ranges, gets) do
+      hit = head_ranged.(range)
+      assert {hit.status, hit.resp_body, header(hit, "x-cache")} == {got.status, "", "hit"}
+      assert without(hit, ~w(x-cache)) == without(got, ~w(x-cache))
+    end
+
+    refute_received {:proxied, %{method: "GET", path: ^path}}
+  end
+
+  defp without(conn, names), do: Enum.reject(resp_headers(conn), &(elem(&1, 0) in names))
+
+  @tag :tmp_dir
+  test "a thumbnail HEAD renders nothing on a miss and sends no length, and a hit's length", %{
+    bucket: bucket,
+    tmp_dir: tmp_dir
+  } do
+    :ok = Supervisor.terminate_child(SlimServe.Supervisor, ThumbCache)
+    on_exit(fn -> {:ok, _pid} = Supervisor.restart_child(SlimServe.Supervisor, ThumbCache) end)
+    start_supervised!({ThumbCache, dir: tmp_dir, max_bytes: 1024 * 1024})
+
+    {:ok, png} = 8 |> Image.build_image!(8, [200, 80, 40]) |> Image.write_to_buffer(".png")
+    S3.put(bucket, "pic.png", png)
+    path = "/#{bucket}/pic.png"
+    port = start_bandit()
+
+    thumb = fn http, method ->
+      :http |> http.connect("127.0.0.1", port) |> elem(1) |> fetch(method, [], "/pic.png?thumb=1")
+    end
+
+    for http <- [Mint.HTTP1, Mint.HTTP2] do
+      assert {:done, head} = thumb.(http, "HEAD")
+      refute_received {:proxied, %{method: "GET", path: ^path}}, inspect(http)
+
+      assert {wire_status(head), wire_header(head, "content-type"), wire_header(head, "content-length"), body(head)} ==
+               {[200], ["image/webp"], [], ""},
+             inspect(http)
+    end
+
+    assert {:done, get} = thumb.(Mint.HTTP1, "GET")
+    assert_received {:proxied, %{method: "GET", path: ^path}}
+    length = [Integer.to_string(byte_size(body(get)))]
+    assert {wire_header(get, "x-cache"), wire_header(get, "content-length")} == {["miss"], length}
+    _ = :sys.get_state(ThumbCache)
+
+    for http <- [Mint.HTTP1, Mint.HTTP2] do
+      assert {:done, hit} = thumb.(http, "HEAD")
+      refute_received {:proxied, %{method: "GET", path: ^path}}, inspect(http)
+
+      assert {wire_status(hit), wire_header(hit, "x-cache"), wire_header(hit, "content-length"), body(hit)} ==
+               {[200], ["hit"], length, ""},
+             inspect(http)
+    end
+  end
+
+  # Download caches nothing over 100 MB.
+  test "a thumbnail HEAD for an image too big to cache answers the GET's 503 and fetches nothing", %{
+    conn: conn,
+    bucket: bucket,
+    rules: rules
+  } do
+    limit = Application.fetch_env!(:slimserve, :thumb_max_file_bytes)
+    on_exit(fn -> Application.put_env(:slimserve, :thumb_max_file_bytes, limit) end)
+    Application.put_env(:slimserve, :thumb_max_file_bytes, 200 * 1024 * 1024)
+
+    S3.put(bucket, "pic.png", "not read")
+    path = "/#{bucket}/pic.png"
+    big = Integer.to_string(101 * 1024 * 1024)
+
+    Agent.update(rules, fn _rule ->
+      fn request -> if request.method == "HEAD", do: {:header, "content-length", big}, else: :pass end
+    end)
+
+    head = head(conn, "/pic.png?thumb=1")
+    refute_received {:proxied, %{method: "GET", path: ^path}}
+    got = get(conn, "/pic.png?thumb=1")
+    assert {head.status, got.status} == {503, 503}
+    refute_received {:proxied, %{method: "GET", path: ^path}}
+  end
+
   test "a streamed answer with the wrong length, range or ETag is refused before any header", %{conn: conn, rules: rules} do
     fill_cache()
 
@@ -164,8 +272,8 @@ defmodule SlimServe.S3DownloadTest do
   defp wire_header(responses, name), do: for({:headers, _ref, headers} <- responses, {^name, value} <- headers, do: value)
 
   # Within two seconds, so a hang that would end only at a timeout fails.
-  defp fetch(conn, method \\ "GET", headers \\ []) do
-    {:ok, conn, _ref} = Mint.HTTP.request(conn, method, "/digits.txt", headers, nil)
+  defp fetch(conn, method \\ "GET", headers \\ [], path \\ "/digits.txt") do
+    {:ok, conn, _ref} = Mint.HTTP.request(conn, method, path, headers, nil)
     collect(conn, [], System.monotonic_time(:millisecond) + 2_000)
   end
 

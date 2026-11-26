@@ -50,10 +50,10 @@ defmodule SlimServeWeb.BrowseController do
   end
 
   defp thumb(conn, {:file, %{key: key, etag: etag} = object}, max_dim) do
+    generate = fn -> Download.with_file(object, &Thumbnail.generate(&1, max_dim), conn.private[:head?] == true) end
+
     if Thumbnail.image?(key) do
-      thumbnail(conn, object.size, ThumbCache.key(key, etag, max_dim), fn ->
-        Download.with_file(object, &Thumbnail.generate(&1, max_dim))
-      end)
+      thumbnail(conn, object.size, ThumbCache.key(key, etag, max_dim), generate)
     else
       BrowseHTML.send_not_found(conn)
     end
@@ -139,6 +139,8 @@ defmodule SlimServeWeb.BrowseController do
     else
       true -> send_resp(conn, 413, "Content Too Large")
       {:ok, webp} -> send_webp(conn, "hit", webp)
+      # Bandit adds no content-length to an empty HEAD answer, so the client is told no length, not 0.
+      :head -> send_webp(conn, "miss", "")
       {:error, :unavailable} -> send_resp(conn, 503, "Service Unavailable")
       {:error, _reason} -> BrowseHTML.send_not_found(conn)
     end
