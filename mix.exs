@@ -74,6 +74,7 @@ defmodule SlimServe.MixProject do
       ],
       precommit: [
         "compile --warnings-as-errors",
+        "cmd elixir scripts/scenario-titles.exs",
         "deps.unlock --check-unused",
         "format --check-formatted",
         "credo",
@@ -83,6 +84,7 @@ defmodule SlimServe.MixProject do
       ci: [
         "hex.audit",
         "compile --warnings-as-errors",
+        "cmd elixir scripts/scenario-titles.exs",
         "deps.unlock --check-unused",
         "format --check-formatted",
         "credo",
