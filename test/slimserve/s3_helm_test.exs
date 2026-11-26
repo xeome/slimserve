@@ -33,12 +33,12 @@ defmodule SlimServe.S3HelmTest do
   test "S3 leaves the data claim exactly as local mode renders it, and does not mount /data", %{tmp_dir: tmp_dir} do
     local = render!(tmp_dir, ["--is-upgrade"])
     s3 = render!(tmp_dir, ["--is-upgrade" | @s3])
-    pvc = "# Source: slimserve/templates/pvc.yml"
+    pvc = "# Source: slimserve-helm/templates/pvc.yml"
 
     assert local[pvc] =~ "kind: PersistentVolumeClaim"
     assert s3[pvc] == local[pvc]
 
-    deployment = "# Source: slimserve/templates/deployment.yml"
+    deployment = "# Source: slimserve-helm/templates/deployment.yml"
     assert local[deployment] =~ "mountPath: /data"
     refute s3[deployment] =~ "/data"
     assert s3[deployment] =~ "mountPath: /cache"
@@ -53,10 +53,10 @@ defmodule SlimServe.S3HelmTest do
     assert out =~ "replicas above 1 need cluster.cookie and auth.secretKeyBase"
 
     docs = render!(tmp_dir, @s3 ++ @cluster)
-    assert docs["# Source: slimserve/templates/deployment.yml"] =~ "value: slimserve@$(POD_IP)"
-    assert docs["# Source: slimserve/templates/headless.yml"] =~ "clusterIP: None"
-    refute docs["# Source: slimserve/templates/service.yml"] =~ "4369"
-    refute Map.has_key?(render!(tmp_dir, @s3), "# Source: slimserve/templates/headless.yml")
+    assert docs["# Source: slimserve-helm/templates/deployment.yml"] =~ "value: slimserve@$(POD_IP)"
+    assert docs["# Source: slimserve-helm/templates/headless.yml"] =~ "clusterIP: None"
+    refute docs["# Source: slimserve-helm/templates/service.yml"] =~ "4369"
+    refute Map.has_key?(render!(tmp_dir, @s3), "# Source: slimserve-helm/templates/headless.yml")
   end
 
   describe "an upgrade previewed against a cluster" do

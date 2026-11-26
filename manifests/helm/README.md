@@ -4,15 +4,17 @@ The chart runs SlimServe in Kubernetes. It serves a persistent volume by default
 
 ## Install
 
-The chart's default image is `ghcr.io/xeome/slimserve:elixir-0.1.0`. That tag is not published
-yet. So build the repository's `Dockerfile`, make the image available to the cluster, and set
-`image.main.repository` and `image.main.tag` in your values file. For an image loaded straight into
-a local cluster, also set `image.main.pullPolicy: Never`.
+The chart's default image is `ghcr.io/xeome/slimserve:1.0.0`, published by the release pipeline.
+To run an image you built from the repository's `Dockerfile`, set `image.main.repository` and
+`image.main.tag` in your values file. For an image loaded straight into a local cluster, also set
+`image.main.pullPolicy: Never`.
 
 `host` is required: set it to the public hostname, for the URLs the app builds.
 
 ```sh
 kubectl create namespace slimserve  # if it does not exist
+helm install files oci://ghcr.io/xeome/slimserve-helm --version 2.0.0 -n slimserve -f values.yaml --wait
+# or, from a checkout of this repository:
 helm install files ./manifests/helm -n slimserve -f values.yaml --wait
 ```
 

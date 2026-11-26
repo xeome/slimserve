@@ -2,7 +2,7 @@ defmodule SlimServe.RuntimeConfigTest do
   # Not async: the variables are the process-wide environment.
   use ExUnit.Case, async: false
 
-  @variables ~w(SLIMSERVE_ROOT PHX_SERVER SLIMSERVE_USERNAME SLIMSERVE_PASSWORD SECRET_KEY_BASE SLIMSERVE_WRITE_PASSWORD SLIMSERVE_UPLOAD_MAX_MB SLIMSERVE_UPLOAD_TYPES SLIMSERVE_HTTPS PHX_HOST PORT)
+  @variables ~w(SLIMSERVE_ROOT PHX_SERVER SLIMSERVE_USERNAME SLIMSERVE_PASSWORD SECRET_KEY_BASE SLIMSERVE_WRITE_PASSWORD SLIMSERVE_UPLOAD_MAX_MB SLIMSERVE_UPLOAD_TYPES SLIMSERVE_HTTPS PHX_HOST PORT CONFIG_FILE SLIMSERVE_IGNORE_PATTERNS SLIMSERVE_CONFIG)
 
   setup do
     saved = Map.new(@variables, &{&1, System.get_env(&1)})
@@ -132,5 +132,19 @@ defmodule SlimServe.RuntimeConfigTest do
     for value <- ["1", "TRUE", "yes", "on"] do
       assert_raise RuntimeError, ~r/SLIMSERVE_HTTPS/, fn -> prod(%{"SLIMSERVE_HTTPS" => value}) end
     end
+  end
+
+  @tag :tmp_dir
+  test "Scenario: A setting only the Go app read refuses the boot and names it", %{tmp_dir: dir} do
+    for name <- ~w(CONFIG_FILE SLIMSERVE_IGNORE_PATTERNS SLIMSERVE_CONFIG) do
+      assert_raise RuntimeError, ~r/#{name}/, fn -> prod(%{name => "/x"}) end
+    end
+
+    assert_raise RuntimeError, ~r/SLIMSERVE_CONFIG.*releases\/tag\/v1\.0\.0/s, fn ->
+      prod(%{"SLIMSERVE_CONFIG" => "/x"})
+    end
+
+    File.write!(Path.join(dir, "slimserve.json"), "{}")
+    assert_raise RuntimeError, ~r/slimserve\.json/, fn -> prod(%{"SLIMSERVE_ROOT" => dir}) end
   end
 end

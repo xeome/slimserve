@@ -1,0 +1,130 @@
+name: Release
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+jobs:
+  # The chart job pushes its bump to master as a fast-forward, so a tag off master's tip would
+  # publish the image and then fail. Checkout's depth-1 tag fetch leaves no origin/master to compare.
+  preflight:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: The tag is a plain version on master's tip
+        run: |
+          # The trigger's glob also matches a leading zero, as in v01.0.0, which is not a semver.
+          re='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+          if ! [[ $GITHUB_REF_NAME =~ $re ]]; then
+            echo "::error::$GITHUB_REF_NAME is not vX.Y.Z without leading zeros."
+            exit 1
+          fi
+          head=$(git rev-parse HEAD)
+          master=$(git ls-remote origin refs/heads/master | cut -f1)
+          if [ "$head" != "$master" ]; then
+            echo "::error::$GITHUB_REF_NAME is $head, but master is $master. Tag master's tip."
+            exit 1
+          fi
+
+  image:
+    needs: preflight
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # The promote job moves the rest once the release exists.
+      - name: Image tags
+        id: tags
+        run: |
+          image=ghcr.io/$GITHUB_REPOSITORY_OWNER/slimserve
+          echo "list=$image:${GITHUB_REF_NAME#v},$image:$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+      # build-push-action's default provenance needs a buildx builder.
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.tags.outputs.list }}
+          # ghcr links the package to the repository through this label.
+          labels: org.opencontainers.image.source=https://github.com/xeome/slimserve
+
+  chart:
+    needs: image
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bump the chart to the tag
+        run: |
+          bash scripts/bump-chart.sh "$GITHUB_REF_NAME"
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git commit -am "chore(release): bump the chart for $GITHUB_REF_NAME"
+            git push origin HEAD:master
+          fi
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.19.0
+      - name: Package and push the chart
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "$TOKEN" | helm registry login ghcr.io -u "$GITHUB_REPOSITORY_OWNER" --password-stdin
+          helm package manifests/helm
+          helm push slimserve-helm-*.tgz "oci://ghcr.io/$GITHUB_REPOSITORY_OWNER/"
+
+  release:
+    needs: chart
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          notes="docs/releases/$GITHUB_REF_NAME.md"
+          if [ -f "$notes" ]; then
+            gh release create "$GITHUB_REF_NAME" --notes-file "$notes"
+          else
+            gh release create "$GITHUB_REF_NAME" --generate-notes
+          fi
+
+  # Last, so :latest stays on the Go image until the release page the boot refusal links exists.
+  # The tag set the Go images had: :0 and :0.3 keep pointing at the Go app.
+  promote:
+    needs: release
+    runs-on: ubuntu-24.04
+    permissions:
+      packages: write
+    steps:
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Point the moving tags at the release
+        run: |
+          image=ghcr.io/$GITHUB_REPOSITORY_OWNER/slimserve
+          version=${GITHUB_REF_NAME#v}
+          minor=${version%.*}
+          major=${version%%.*}
+          args=()
+          for tag in "$minor" "$major" latest "v$minor" "v$major"; do
+            args+=(-t "$image:$tag")
+          done
+          docker buildx imagetools create "${args[@]}" "$image:$version"

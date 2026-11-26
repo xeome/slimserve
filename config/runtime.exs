@@ -11,6 +11,14 @@ port = if config_env() != :test, do: String.to_integer(System.get_env("PORT", "4
 set = fn name -> if (value = System.get_env(name)) != "", do: value end
 
 if config_env() != :test do
+  refuse_go = fn what ->
+    raise "#{what}, but SlimServe 1.0 does not read it. See https://github.com/xeome/slimserve/releases/tag/v1.0.0"
+  end
+
+  for name <- ~w(CONFIG_FILE SLIMSERVE_IGNORE_PATTERNS SLIMSERVE_CONFIG), set.(name), do: refuse_go.("#{name} is set")
+  # /data was the Go image's working directory, so a deployment that kept that volume holds the Go logins.
+  for path <- ~w(/etc/slimserve/config.json /data/slimserve.json), File.exists?(path), do: refuse_go.("#{path} exists")
+
   megabytes = fn name, default -> String.to_integer(System.get_env(name, default)) * 1024 * 1024 end
 
   # Both set puts every route behind a login page; neither leaves the server open.
@@ -82,7 +90,10 @@ if config_env() != :test do
       download_cache_bytes: megabytes.("SLIMSERVE_DOWNLOAD_CACHE_MB", "1024"),
       download_cache_dir: set.("SLIMSERVE_DOWNLOAD_CACHE_DIR") || Path.join(System.tmp_dir!(), "slimserve-downloads")
   else
-    config :slimserve, root: Path.expand(System.get_env("SLIMSERVE_ROOT", "."))
+    root = Path.expand(System.get_env("SLIMSERVE_ROOT", "."))
+    # The Go app read its logins from this file, and SlimServe would serve it as a plain file.
+    if File.exists?(Path.join(root, "slimserve.json")), do: refuse_go.(Path.join(root, "slimserve.json") <> " exists")
+    config :slimserve, root: root
   end
 
   config :slimserve,

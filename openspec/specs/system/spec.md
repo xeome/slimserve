@@ -36,3 +36,15 @@ A page already open shows it only when a write through SlimServe wakes it or the
   node makes a folder of that name
 - **THEN** the first node's open page lists the folder within a second
 - **AND** its next lookup finds the folder
+
+### Requirement: Go settings refuse the boot
+
+A start SHALL refuse to boot, and name what it found, when a setting or config file that only the
+Go app read is present. So an upgrade from the Go app does not run on without its settings, and
+does not serve the Go `slimserve.json`, logins included, as a plain file.
+
+#### Scenario: A setting only the Go app read refuses the boot and names it
+
+- **WHEN** an operator starts SlimServe with `SLIMSERVE_CONFIG=/x`
+- **THEN** the start fails with a message that names `SLIMSERVE_CONFIG` and links the 1.0.0
+  release notes
