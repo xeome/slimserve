@@ -63,8 +63,10 @@ instead of `SLIMSERVE_ROOT`:
   100 MB are kept here once fetched, so a repeat download, ranged or not, reads no bytes from S3.
   Larger files, and misses the cache has no room for, stream through.
 
-Listings are cached for 10 seconds and an open page re-lists every 30. A change made through
-SlimServe shows at once on every node; one made in the bucket directly shows within 30 seconds.
+SlimServe must be the bucket's only writer. A change made through SlimServe shows at once on every
+node. A change made in the bucket directly shows on any page loaded after the cached listing
+expires, at most 10 minutes after it was filled. A page already open shows it only when a write
+through SlimServe wakes it or the page reloads.
 `.slimserveignore` files and hidden names work as on disk; a key whose name is not valid UTF-8, or
 holds a NUL, is not listed.
 

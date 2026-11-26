@@ -48,16 +48,14 @@ defmodule SlimServe.Storage.S3 do
   end
 
   @impl true
-  def list(segments, opts) do
-    fresh? = Keyword.get(opts, :fresh, false)
-
+  def list(segments, _opts) do
     with true <- Enum.all?(segments, &Root.name?/1),
-         {:ok, rules} <- prefetch_rules([{segments, true}], fresh?),
-         {:dir, prefix} <- resolve(segments, fresh?, &Map.fetch!(rules, &1)),
-         {:ok, {objects, prefixes}} <- listing(prefix, fresh?),
+         {:ok, rules} <- prefetch_rules([{segments, true}], false),
+         {:dir, prefix} <- resolve(segments, false, &Map.fetch!(rules, &1)),
+         {:ok, {objects, prefixes}} <- listing(prefix, false),
          entries = for(entry <- entries(prefix, objects, prefixes), Root.name?(entry.name), do: entry),
          folders = for(%{dir?: true, name: name} <- entries, do: {segments ++ [name], true}),
-         {:ok, rules} <- prefetch_rules(folders, fresh?, rules) do
+         {:ok, rules} <- prefetch_rules(folders, false, rules) do
       visible =
         for entry <- entries, not ignored?(segments ++ [entry.name], entry.dir?, &Map.fetch!(rules, &1)), do: entry
 
@@ -96,6 +94,9 @@ defmodule SlimServe.Storage.S3 do
       {:ok, {folder, rules}}, {:ok, acc} -> {:cont, {:ok, Map.put(acc, folder, rules)}}
     end)
   end
+
+  def refill({:list, prefix}), do: listing(prefix, false)
+  def refill({:folder, key}), do: folder?(key, false)
 
   def listing(prefix, fresh?), do: Metadata.fetch({:list, prefix}, fresh?, fn -> keys(prefix, "/") end)
 

@@ -72,6 +72,18 @@ defmodule SlimServe.S3Fixture do
     on_exit(fn -> :telemetry.detach(id) end)
   end
 
+  def watch_callers do
+    id = {__MODULE__, make_ref()}
+    test = self()
+
+    handler = fn _event, _measurements, meta, _config ->
+      send(test, {:s3_call, [self() | Process.get(:"$callers", [])], meta.method, meta.key, meta.query})
+    end
+
+    :ok = :telemetry.attach(id, [:slimserve, :s3, :request], handler, nil)
+    on_exit(fn -> :telemetry.detach(id) end)
+  end
+
   @doc """
   Opens `path` as a LiveView on this node and returns the view, which a test on another node can
   render. A process here holds it until `owner` exits.

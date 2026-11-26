@@ -9,18 +9,16 @@ defmodule SlimServeWeb.ListingLive do
   alias SlimServeWeb.ListingLive.Tree
   alias SlimServeWeb.Login
 
-  # S3 has no watcher, so an open S3 listing re-lists on this timer to show changes made outside the app.
-  @poll_ms 30_000
-
   @reads ~w(select deselect filter open tree_expand)
+
+  # the old S3 poll's period.
+  @retry_cap_ms 30_000
 
   # A tab opened before the view toggle shipped reconnects with a session that has no "view".
   @impl true
   def mount(_params, %{"segments" => segments} = session, socket) do
     view = Map.get(session, "view", "list")
     write? = Login.write?(session)
-
-    if connected?(socket) and Storage.s3?(), do: poll()
 
     {:ok,
      socket
@@ -29,6 +27,8 @@ defmodule SlimServeWeb.ListingLive do
        view: view,
        rail: session["rail"],
        changed: [],
+       relist: nil,
+       retries: 0,
        tree: %{},
        expanded: [],
        watch: %{},
@@ -165,7 +165,7 @@ defmodule SlimServeWeb.ListingLive do
       %{segments: open, selected: selected} = socket.assigns
       following? = segments == open and selected != nil and selected.name == from
       # Listed now, so the inspector follows the new name without waiting for the change message.
-      socket = relist(socket, [])
+      {socket, _unread} = relist(socket)
       entry = following? && Enum.find(socket.assigns.raw, &(&1.name == name))
       {:noreply, if(entry, do: select(socket, inspected(socket, entry)), else: socket)}
     else
@@ -258,30 +258,40 @@ defmodule SlimServeWeb.ListingLive do
     changes(socket, for({folder, topics} <- socket.assigns.watch, topic in topics, do: folder))
   end
 
-  def handle_info(:relist, socket) do
+  def handle_info({:relist, token}, %{assigns: %{relist: token}} = socket) do
     changed = retargeted(socket, socket.assigns.changed, socket.assigns.changed)
     # A changed folder may lead somewhere else now.
     socket = socket |> assign(changed: [], watch: Map.drop(socket.assigns.watch, changed)) |> subscribe(changed)
-    socket = if socket.assigns.segments in changed, do: relist(socket, []), else: socket
-    {:noreply, relevel(socket, changed)}
+    {socket, unread} = if socket.assigns.segments in changed, do: relist(socket), else: {socket, []}
+    {socket, unlisted} = relevel(socket, changed)
+    {:noreply, retry(socket, unread ++ unlisted)}
   end
 
-  # The poll skips the metadata cache, so a change made outside the app shows within one period.
-  def handle_info(:poll, socket) do
-    poll()
-    {:noreply, relist(socket, fresh: true)}
-  end
-
-  defp poll, do: Process.send_after(self(), :poll, Application.get_env(:slimserve, :s3_poll_ms, @poll_ms))
+  def handle_info({:relist, _token}, socket), do: {:noreply, socket}
 
   defp changes(socket, []), do: {:noreply, socket}
 
-  defp changes(%{assigns: %{changed: []}} = socket, folders) do
-    Process.send_after(self(), :relist, 100)
-    {:noreply, assign(socket, changed: folders)}
-  end
+  defp changes(%{assigns: %{changed: changed, retries: retries}} = socket, folders) when changed == [] or retries > 0,
+    do: {:noreply, socket |> assign(changed: Enum.uniq(folders ++ changed), retries: 0) |> schedule(100)}
 
   defp changes(socket, folders), do: {:noreply, assign(socket, changed: Enum.uniq(folders ++ socket.assigns.changed))}
+
+  # Nothing else lists a changed folder again.
+  defp retry(socket, []), do: assign(socket, retries: 0)
+
+  defp retry(socket, unread) do
+    retries = socket.assigns.retries + 1
+
+    socket
+    |> assign(changed: Enum.uniq(unread), retries: retries)
+    |> schedule(min(100 * 2 ** retries, @retry_cap_ms))
+  end
+
+  defp schedule(socket, ms) do
+    token = make_ref()
+    Process.send_after(self(), {:relist, token}, ms)
+    assign(socket, relist: token)
+  end
 
   defp below?(path, folder), do: Enum.take(path, length(folder)) == folder
 
@@ -307,21 +317,22 @@ defmodule SlimServeWeb.ListingLive do
   defp relevel(socket, changed) do
     %{tree: tree, segments: open, counts: counts} = socket.assigns
 
-    {socket, gone} =
-      Enum.reduce(tree, {socket, []}, fn {path, folders}, {socket, gone} ->
+    {socket, gone, unread} =
+      Enum.reduce(tree, {socket, [], []}, fn {path, folders}, {socket, gone, unread} ->
         {socket, listed} = if path != open and path in changed, do: list(socket, path), else: {socket, :unchanged}
+        unread = if match?({:error, _reason}, listed), do: [path | unread], else: unread
 
         case listed do
-          {:ok, entries} -> {level(socket, path, Tree.dirs(entries), changed), gone}
-          :error -> {socket, [path | gone]}
-          _unchanged_or_outage -> {level(socket, path, Enum.map(folders, & &1.name), changed), gone}
+          {:ok, entries} -> {level(socket, path, Tree.dirs(entries), changed), gone, unread}
+          :error -> {socket, [path | gone], unread}
+          _unchanged_or_outage -> {level(socket, path, Enum.map(folders, & &1.name), changed), gone, unread}
         end
       end)
 
     tree = Map.reject(socket.assigns.tree, fn {path, _level} -> Enum.any?(gone, &below?(path, &1)) end)
     socket = assign(socket, tree: tree, expanded: Enum.filter(socket.assigns.expanded, &Map.has_key?(tree, &1)))
     socket = put_tree(socket)
-    if socket.assigns.counts == counts, do: socket, else: stream_entries(socket)
+    {if(socket.assigns.counts == counts, do: socket, else: stream_entries(socket)), unread}
   end
 
   defp level(socket, path, names, changed) do
@@ -335,9 +346,9 @@ defmodule SlimServeWeb.ListingLive do
   end
 
   # So a change landing meanwhile still arrives.
-  defp list(socket, path, opts \\ []) do
+  defp list(socket, path) do
     socket = subscribe(socket, [path])
-    {socket, Storage.list(path, opts)}
+    {socket, Storage.list(path)}
   end
 
   # So each stays as live as the open folder. Subscribing asks the store nothing.
@@ -366,22 +377,22 @@ defmodule SlimServeWeb.ListingLive do
   end
 
   # An outage is not an empty folder.
-  defp relist(socket, opts) do
+  defp relist(socket) do
     segments = socket.assigns.segments
-    {socket, listed} = list(socket, segments, opts)
+    {socket, listed} = list(socket, segments)
 
     case listed do
       {:ok, raw} ->
-        put_raw(socket, raw)
+        {put_raw(socket, raw), []}
 
       {:error, _reason} ->
-        socket
+        {socket, [segments]}
 
       :error ->
         case nearest_dir(segments) do
-          ^segments -> put_raw(socket, [])
-          {:error, _reason} -> socket
-          ancestor -> redirect(socket, to: href(ancestor))
+          ^segments -> {put_raw(socket, []), []}
+          {:error, _reason} -> {socket, [segments]}
+          ancestor -> {redirect(socket, to: href(ancestor)), []}
         end
     end
   end

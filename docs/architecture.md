@@ -92,8 +92,9 @@ symlink hears its target. Its first message schedules one re-list 100 ms
 later, so a burst of events re-lists once. The re-list goes through `SlimServe.Root` like the first
 render, so a dot-file or an ignored file cannot appear, and it sends nothing when the entries are
 unchanged: the sidebar tree, which lists each ancestor and counts each folder shown, is rebuilt
-only when they changed, so an unchanged S3 poll lists no other folder. When the directory no longer resolves, the view redirects to the nearest ancestor that
-does.
+only when they changed. When the directory no longer resolves, the view redirects to the nearest ancestor that
+does. A folder the store could not list keeps its rows and is listed again, after 200 ms and then
+twice as long each time up to 30 s, until it lists.
 
 inotify needs one watch per directory. Past `fs.inotify.max_user_watches`, `inotifywait` exits. The
 Watcher then logs an error and stops, and is not restarted: files are still served, but listings no

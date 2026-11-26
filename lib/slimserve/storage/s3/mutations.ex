@@ -23,10 +23,10 @@ defmodule SlimServe.Storage.S3.Mutations do
   def upload(segments, name, tmp) do
     with true <- proven?(:put),
          {:ok, key} <- fresh(segments, name, false),
-         {:ok, %File.Stat{size: size}} <- File.stat(tmp),
-         headers = [{"content-length", Integer.to_string(size)} | @if_none_match],
-         {:ok, %{status: 200}} <- Client.request(:put, key, body: File.stream!(tmp, 65_536), headers: headers) do
-      announce(:ok, [segments ++ [name]], [])
+         {:ok, %File.Stat{size: size}} <- File.stat(tmp) do
+      headers = [{"content-length", Integer.to_string(size)} | @if_none_match]
+      put = Client.request(:put, key, body: File.stream!(tmp, 65_536), headers: headers)
+      announce(written(put), [segments ++ [name]], [], [])
     else
       _ -> :error
     end
@@ -34,13 +34,16 @@ defmodule SlimServe.Storage.S3.Mutations do
 
   def mkdir(segments, name) do
     with true <- proven?(:mkdir),
-         {:ok, key} <- fresh(segments, name, true),
-         {:ok, %{status: 200}} <- Client.request(:put, key <> "/", body: "", headers: @if_none_match) do
-      announce(:ok, [segments ++ [name]], [])
+         {:ok, key} <- fresh(segments, name, true) do
+      put = Client.request(:put, key <> "/", body: "", headers: @if_none_match)
+      announce(written(put), [segments ++ [name]], [], [])
     else
       _ -> :error
     end
   end
+
+  defp written({:ok, %{status: 200}}), do: :ok
+  defp written(_put), do: :error
 
   def move(segments, from, parent, name) do
     with {kind, _found} = source when kind in [:dir, :file] <- S3.resolve(segments ++ [from], true),
@@ -52,7 +55,7 @@ defmodule SlimServe.Storage.S3.Mutations do
     end
   end
 
-  defp move_source({:file, object}, dest, from, to), do: announce(move_key(object, dest), [from, to], [])
+  defp move_source({:file, object}, dest, from, to), do: announce(move_key(object, dest), [to], [from], [])
 
   # Ignore patterns are relative to their ignore file, so a moved folder could reveal an entry one
   # hides at its current path. Dot-names and other names the gate refuses stay hidden anywhere.
@@ -62,10 +65,10 @@ defmodule SlimServe.Storage.S3.Mutations do
       outcome = Enum.reduce_while(objects, :none, &move_next(&1, &2, dest <> "/" <> rest(&1.key, prefix)))
 
       case outcome do
-        :all -> announce(:ok, [from, to], [from])
+        :all -> announce(:ok, [to], [from], [from])
         # The folder emptied after it resolved.
         :none -> :error
-        outcome -> announce(outcome, [from, to], [from])
+        outcome -> announce(outcome, [to], [from], [from])
       end
     else
       _ -> :error
@@ -100,7 +103,7 @@ defmodule SlimServe.Storage.S3.Mutations do
 
     case S3.resolve(path, true) do
       {:file, object} ->
-        announce(delete_key(object.key, object.etag), [path], [])
+        announce(delete_key(object.key, object.etag), [], [path], [])
 
       {:dir, prefix} ->
         with {:ok, {objects, []}} <- S3.keys(prefix, nil), do: delete_or_ask(objects, prefix, name, path)
@@ -149,13 +152,12 @@ defmodule SlimServe.Storage.S3.Mutations do
         true -> :error
       end
 
-    announce(outcome, [path], [path])
+    announce(outcome, [], [path], [path])
   end
 
-  defp announce(:error, _paths, _trees), do: :error
-
-  defp announce(outcome, paths, trees) do
-    :ok = Metadata.changed(paths, trees)
+  # A write whose answer was lost may still have landed.
+  defp announce(outcome, added, removed, trees) do
+    :ok = Metadata.changed(added, removed, trees)
     outcome
   end
 

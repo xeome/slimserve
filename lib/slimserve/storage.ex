@@ -36,8 +36,7 @@ defmodule SlimServe.Storage do
   @spec resolve([String.t()]) :: {:dir, term()} | {:file, Path.t() | map()} | :error | {:error, term()}
   def resolve(segments), do: backend().resolve(segments)
 
-  @doc "`fresh: true` skips S3's metadata cache."
-  @spec list([String.t()], fresh: boolean()) :: {:ok, [entry()]} | :error | {:error, term()}
+  @spec list([String.t()], keyword()) :: {:ok, [entry()]} | :error | {:error, term()}
   def list(segments, opts \\ []), do: backend().list(segments, opts)
 
   @doc "The topics that carry this folder's `{:dir_changed, dir}` and `{:tree_changed, rel}` messages."

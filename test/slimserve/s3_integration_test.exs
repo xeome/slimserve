@@ -1,5 +1,5 @@
 defmodule SlimServe.S3IntegrationTest do
-  # Not async: the storage backend and the poll period are application env.
+  # Not async: the storage backend is application env.
   use SlimServeWeb.ConnCase, async: false
 
   import Phoenix.LiveViewTest
@@ -11,11 +11,6 @@ defmodule SlimServe.S3IntegrationTest do
   alias Vix.Vips.Image
 
   @moduletag :s3
-
-  setup do
-    Application.put_env(:slimserve, :s3_poll_ms, 50)
-    on_exit(fn -> Application.delete_env(:slimserve, :s3_poll_ms) end)
-  end
 
   defp doc(view), do: view |> render() |> LazyHTML.from_fragment()
 
@@ -32,19 +27,25 @@ defmodule SlimServe.S3IntegrationTest do
   defp list_request?({:s3_request, :get, "", query}, prefix), do: query[:prefix] == prefix
   defp list_request?(_request, _prefix), do: false
 
-  defp poll?({:s3_request, :get, "", query} = request, prefix),
+  defp relist?({:s3_request, :get, "", query} = request, prefix),
     do: list_request?(request, prefix) and query[:delimiter] == "/"
 
-  defp poll?(_request, _prefix), do: false
+  defp relist?(_request, _prefix), do: false
+
+  # The table belongs to the process, so a new one starts empty.
+  defp empty_cache do
+    stop_supervised!(Metadata)
+    start_supervised!(Metadata)
+  end
 
   defp await_lists(prefix, n, seen \\ []) do
-    if Enum.count(seen, &poll?(&1, prefix)) >= n do
+    if Enum.count(seen, &relist?(&1, prefix)) >= n do
       seen
     else
       receive do
         {:s3_request, _method, _key, _query} = request -> await_lists(prefix, n, seen ++ [request])
       after
-        1_000 -> flunk("the page never polled")
+        1_000 -> flunk("the page never listed #{prefix}")
       end
     end
   end
@@ -57,7 +58,7 @@ defmodule SlimServe.S3IntegrationTest do
     end
   end
 
-  test "the tree and the card show a bucket's folders and files, and an unchanged poll lists no subfolder", %{
+  test "the tree and the card show a bucket's folders and files, and a woken page lists no unchanged subfolder", %{
     conn: conn
   } do
     bucket = S3.serve()
@@ -88,10 +89,11 @@ defmodule SlimServe.S3IntegrationTest do
     assert card == %{"image" => {"2", "2.0 KB"}, "document" => {"1", "5 B"}}
 
     # An empty metadata cache, so a tree rebuilt now would have to list each folder it shows.
-    :ok = Metadata.changed([], [])
+    empty_cache()
     S3.watch_requests()
+    :ok = Metadata.changed([["a", "x.png"]], [], [])
 
-    requests = await_lists("a/", 2)
+    requests = await_lists("a/", 1)
     _ = :sys.get_state(view.pid)
     requests = requests ++ flush_requests()
 
@@ -122,14 +124,14 @@ defmodule SlimServe.S3IntegrationTest do
 
   @tag :tmp_dir
   test "a write in the open folder counts none of its unchanged subfolders again", %{conn: conn, tmp_dir: tmp_dir} do
-    # So the only re-list is the one the write's change message asks for.
-    Application.put_env(:slimserve, :s3_poll_ms, 60_000)
     bucket = S3.serve()
     S3.put(bucket, "a/sub/c.txt", "c")
     S3.put(bucket, "a/w/d.txt", "d")
     S3.put(bucket, "z/y.txt", "y")
     Capabilities.check()
     {:ok, view, _html} = live(conn, "/a")
+    # So a re-count of an unchanged subfolder would have to reach the store.
+    empty_cache()
     S3.watch_requests()
 
     file = Path.join(tmp_dir, "n.txt")
@@ -145,12 +147,11 @@ defmodule SlimServe.S3IntegrationTest do
   end
 
   test "a change made while the page lists its folder still reaches the page", %{conn: conn} do
-    Application.put_env(:slimserve, :s3_poll_ms, 60_000)
     bucket = S3.serve()
     S3.put(bucket, "a/x.txt", "x")
     conn = get(conn, "/a")
     # An empty cache, so the connected mount asks the store for the listing.
-    :ok = Metadata.changed([], [])
+    empty_cache()
 
     # Right after the connected mount's own listing of the folder returns, before the page uses it.
     id = make_ref()
@@ -160,10 +161,10 @@ defmodule SlimServe.S3IntegrationTest do
         id,
         [:slimserve, :s3, :request],
         fn _event, _measurements, meta, _config ->
-          if poll?({:s3_request, meta.method, meta.key, meta.query}, "a/") do
+          if relist?({:s3_request, meta.method, meta.key, meta.query}, "a/") do
             :telemetry.detach(id)
             S3.put(bucket, "a/late.txt", "l")
-            :ok = Metadata.changed([["a", "late.txt"]])
+            :ok = Metadata.changed([["a", "late.txt"]], [], [])
           end
         end,
         nil
