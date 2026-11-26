@@ -30,33 +30,36 @@ defmodule SlimServe.ThumbCache do
   # again, so it misses once and ages out like any idle entry.
   defp digest(term), do: :sha256 |> :crypto.hash(:erlang.term_to_binary({:dims, term})) |> Base.encode16(case: :lower)
 
-  @doc "The cached thumbnail's bytes, read in the caller. One that is evicted before it is read is a miss."
+  @doc "One that is evicted before it is read is a miss."
   @spec lookup(atom(), key()) :: {:ok, binary()} | :miss
-  def lookup(name \\ __MODULE__, key), do: DiskCache.read(name, key)
-
-  @doc "Stores a thumbnail, then deletes the oldest ones while the cache is over its cap. Does not wait for either."
-  @spec put(atom(), key(), binary()) :: :ok
-  def put(name \\ __MODULE__, key, webp), do: DiskCache.put(name, key, webp)
-
-  @doc """
-  So the two are evicted together and the inspector can show the size without opening the source.
-  """
-  @spec put_thumb(atom(), key(), binary(), {pos_integer(), pos_integer()}) :: :ok
-  def put_thumb(name \\ __MODULE__, key, webp, {w, h}), do: put(name, key, <<w::32, h::32, webp::binary>>)
-
-  @spec lookup_thumb(atom(), key()) :: {:ok, binary(), {pos_integer(), pos_integer()}} | :miss
-  def lookup_thumb(name \\ __MODULE__, key) do
-    case lookup(name, key) do
-      {:ok, <<w::32, h::32, webp::binary>>} -> {:ok, webp, {w, h}}
-      _ -> :miss
+  def lookup(name \\ __MODULE__, key) do
+    case read(name, key) do
+      {:ok, webp, _dims} -> {:ok, webp}
+      :miss -> :miss
     end
   end
 
+  @doc """
+  Stores a thumbnail, then deletes the oldest ones while the cache is over its cap.
+  Does not wait for either. The size shares the file so the two are evicted together and the inspector
+  can show it without opening the source.
+  """
+  @spec put(atom(), key(), binary(), {pos_integer(), pos_integer()}) :: :ok
+  # No default name: it would define a put/3 that the old put(name, key, webp) still compiles against.
+  def put(name, key, webp, {w, h}), do: DiskCache.put(name, key, <<w::32, h::32, webp::binary>>)
+
   @spec size(atom(), key()) :: {pos_integer(), pos_integer()} | nil
   def size(name \\ __MODULE__, key) do
-    case lookup_thumb(name, key) do
+    case read(name, key) do
       {:ok, _webp, dims} -> dims
       :miss -> nil
+    end
+  end
+
+  defp read(name, key) do
+    case DiskCache.read(name, key) do
+      {:ok, <<w::32, h::32, webp::binary>>} -> {:ok, webp, {w, h}}
+      _ -> :miss
     end
   end
 end

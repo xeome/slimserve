@@ -12,8 +12,8 @@ defmodule SlimServe.ThumbCacheTest do
   end
 
   # put is a cast, so this returns once the cache has handled it.
-  defp put(cache, key, webp) do
-    :ok = ThumbCache.put(cache, key, webp)
+  defp put(cache, key, webp, dims \\ {1, 1}) do
+    :ok = ThumbCache.put(cache, key, webp, dims)
     _ = :sys.get_state(cache)
   end
 
@@ -46,7 +46,7 @@ defmodule SlimServe.ThumbCacheTest do
     age(dir, thumb("5"))
     File.write!(Path.join(dir, key("e") <> ".tmp"), "partial")
 
-    cache = start(name, dir, 101)
+    cache = start(name, dir, 150)
     assert File.ls!(dir) == [thumb("5")]
 
     put(cache, key("d"), bytes("d"))
@@ -68,6 +68,14 @@ defmodule SlimServe.ThumbCacheTest do
     assert Enum.sort(File.ls!(dir)) == [thumb("b"), "photo.webp", "x.tmp"]
   end
 
+  test "Scenario: A thumbnail is stored and read with its dimensions", %{tmp_dir: dir, test: name} do
+    cache = start(name, dir, 1000)
+    put(cache, key("a"), bytes("a"), {640, 480})
+
+    assert ThumbCache.lookup(cache, key("a")) == {:ok, bytes("a")}
+    assert ThumbCache.size(cache, key("a")) == {640, 480}
+  end
+
   @tag capture_log: true
   test "Scenario: A cache directory that cannot be made leaves the server without a cache", %{tmp_dir: dir, test: name} do
     # A file where the directory's parent should be, so it fails for root too.
@@ -76,7 +84,7 @@ defmodule SlimServe.ThumbCacheTest do
     assert {:ok, cache} =
              start_supervised({ThumbCache, dir: Path.join(dir, "file/cache"), max_bytes: 1000, name: name})
 
-    :ok = ThumbCache.put(name, key("a"), bytes("a"))
+    :ok = ThumbCache.put(name, key("a"), bytes("a"), {1, 1})
     # The pid, not the name: a cache that the put crashed would answer under its name again.
     _ = :sys.get_state(cache)
     assert ThumbCache.lookup(name, key("a")) == :miss
