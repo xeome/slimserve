@@ -1,7 +1,6 @@
 defmodule SlimServeWeb.CoreComponents do
   @moduledoc """
-  Components are styled by the graphite classes in `assets/css/app.css`
-  (`.btn`, `.input`, `.badge`, `.flash`, `.table`); Tailwind covers layout.
+  Components are styled by the graphite classes in `assets/css/app.css`; Tailwind covers layout.
   """
   use Phoenix.Component
 

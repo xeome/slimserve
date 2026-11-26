@@ -1,7 +1,5 @@
 defmodule SlimServe.Root do
   @moduledoc """
-  The one gate between a request path and the file system.
-
   Every download and every listing entry goes through `resolve/2`, so a path it refuses
   is neither served nor listed. Its rules apply to both the requested names and the names
   they resolve to through symlinks, so a link with a visible name cannot serve a hidden path.
@@ -10,8 +8,6 @@ defmodule SlimServe.Root do
   alias SlimServe.Ignore
 
   @doc """
-  Resolves the decoded path segments of a request to a directory or a file under `root`.
-
   Answers `:error` for a path that leaves the root, has a component that starts with "." or
   is not valid UTF-8, is ignored by a `.slimserveignore` file, does not exist, or is a file this process cannot
   read. The answer never says which.
@@ -40,7 +36,7 @@ defmodule SlimServe.Root do
   end
 
   @doc """
-  The path a write to `name` in the directory `parent` acts on: the one gate every write goes through.
+  The one gate every write goes through.
 
   Answers `{:ok, abs}` only when `parent` resolves to a directory, `name` is one plain name, and the
   name is not ignored at its requested path or the path it resolves to. `abs` is the name itself, so
@@ -63,9 +59,6 @@ defmodule SlimServe.Root do
     end
   end
 
-  @doc """
-  The PubSub topic for changes in the directory `rel_dir`, relative to the root; `""` and `"."` are the root.
-  """
   @spec topic(Path.t()) :: String.t()
   def topic(rel_dir) when rel_dir in ["", "."], do: "dir:"
   def topic(rel_dir), do: "dir:" <> rel_dir

@@ -45,7 +45,6 @@ defmodule SlimServeWeb.BrowseTest do
     get(conn, href)
   end
 
-  # The listing's view and the ids of the toggle links marked current.
   defp view(conn) do
     page = conn |> html_response(200) |> LazyHTML.from_document()
 
@@ -131,7 +130,6 @@ defmodule SlimServeWeb.BrowseTest do
     test "Scenario: After the Grid link, a reload renders the grid view", %{conn: conn} do
       toggled = toggle(conn, "/sub", "view-grid")
 
-      # recycle/1 carries the response's cookies into the next request, as a browser would.
       assert toggled |> recycle() |> get("/sub") |> view() == {["grid"], ["view-grid"]}
     end
 

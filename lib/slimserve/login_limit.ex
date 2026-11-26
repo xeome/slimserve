@@ -2,7 +2,6 @@ defmodule SlimServe.LoginLimit do
   @moduledoc """
   Counts login attempts per client in a public ETS table: a client with 10 failures in the last
   minute is limited. An IPv6 client is keyed by its /64, which one host usually holds whole.
-  The process only owns the table and sweeps it; requests read and write it directly.
   """
   use GenServer
 

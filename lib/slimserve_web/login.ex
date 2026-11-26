@@ -5,8 +5,7 @@ defmodule SlimServeWeb.Login do
 
   As a plug in the :serve pipeline it lets a request through only when its session holds the
   digest of the configured login; as an `on_mount` hook it refuses a LiveView socket the same way,
-  because the socket is mounted in the endpoint, ahead of the router. `plug SlimServeWeb.Login, :write`
-  and `on_mount {SlimServeWeb.Login, :write}` do the same for write rights.
+  because the socket is mounted in the endpoint, ahead of the router.
   """
   @behaviour Plug
 
@@ -54,7 +53,6 @@ defmodule SlimServeWeb.Login do
   Each grant names the browser's sockets, so a logout can close its open pages, which read by events too.
   A second login keeps the name, because the pages opened after the first one carry it.
   """
-  # A viewer login replaces a write grant from an earlier login in the same browser.
   def put_grant(conn, :login),
     do: conn |> delete_session(@write_key) |> put_session(@session_key, digest()) |> name_sockets()
 
@@ -84,7 +82,6 @@ defmodule SlimServeWeb.Login do
 
   defp logged_in?(session), do: Plug.Crypto.secure_compare(session[@session_key] || "", digest())
 
-  @doc "Whether a session holds write rights: a write password is set, the session's digest is of it, and any login holds too."
   def write?(session) do
     write_on?() and Plug.Crypto.secure_compare(session[@write_key] || "", write_digest()) and
       (not on?() or logged_in?(session))

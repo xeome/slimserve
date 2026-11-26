@@ -74,9 +74,6 @@ defmodule SlimServe.Storage.S3 do
     {__MODULE__, reason} -> {:error, reason}
   end
 
-  @doc """
-  The rules of every folder `ignored?/3` reads for these paths.
-  """
   @spec prefetch_rules([{[String.t()], boolean()}], boolean(), map()) :: {:ok, map()} | {:error, term()}
   def prefetch_rules(paths, fresh?, known \\ %{}) do
     folders =

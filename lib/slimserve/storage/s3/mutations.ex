@@ -6,7 +6,7 @@ defmodule SlimServe.Storage.S3.Mutations do
   A no-clobber guarantee is sent to the provider only when `SlimServe.Storage.S3.Capabilities`
   showed at start that it enforces it. Upload and new folder need theirs and are refused without it.
   Move and Delete instead check the ETag or the absence themselves just before acting, which leaves
-  a short window for a concurrent change (S3-D2/D3).
+  a short window for a concurrent change.
   """
 
   alias SlimServe.Root

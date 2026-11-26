@@ -2,10 +2,6 @@ import Config
 
 # Do not define any compile-time configuration in here, as it won't be applied.
 
-# If you use `mix release`, you need to explicitly enable the server
-# by passing the PHX_SERVER=true when you start it:
-#
-#     PHX_SERVER=true bin/slimserve start
 if System.get_env("PHX_SERVER") do
   config :slimserve, SlimServeWeb.Endpoint, server: true
 end
@@ -17,7 +13,7 @@ set = fn name -> if (value = System.get_env(name)) != "", do: value end
 if config_env() != :test do
   megabytes = fn name, default -> String.to_integer(System.get_env(name, default)) * 1024 * 1024 end
 
-  # Both set puts every route behind a login page; neither leaves the server open. Tests set their own.
+  # Both set puts every route behind a login page; neither leaves the server open.
   login =
     case {set.("SLIMSERVE_USERNAME"), set.("SLIMSERVE_PASSWORD")} do
       {nil, nil} -> nil
@@ -71,7 +67,6 @@ if config_env() != :test do
   config :slimserve, login: login
 
   if storage == :s3 do
-    # AWS_ENDPOINT_URL_S3 names an S3-compatible service; unset, it is AWS.
     config :slimserve,
       storage: :s3,
       s3: [
@@ -87,19 +82,17 @@ if config_env() != :test do
       download_cache_bytes: megabytes.("SLIMSERVE_DOWNLOAD_CACHE_MB", "1024"),
       download_cache_dir: set.("SLIMSERVE_DOWNLOAD_CACHE_DIR") || Path.join(System.tmp_dir!(), "slimserve-downloads")
   else
-    # The one directory served at /. Tests set their own.
     config :slimserve, root: Path.expand(System.get_env("SLIMSERVE_ROOT", "."))
   end
 
   config :slimserve,
-    # Thumbnails: the longest side in pixels, the largest source file, and the disk cache. Tests set their own.
     thumb_max_dim: String.to_integer(System.get_env("SLIMSERVE_THUMB_MAX_DIM", "250")),
     thumb_max_file_bytes: megabytes.("SLIMSERVE_THUMB_MAX_FILE_SIZE_MB", "10"),
     thumb_cache_bytes: megabytes.("SLIMSERVE_THUMB_CACHE_MB", "100"),
     thumb_cache_dir: System.get_env("SLIMSERVE_CACHE_DIR") || Path.join(System.tmp_dir!(), "slimserve-thumbs")
 
   config :slimserve,
-    # A user who logs in with it can change the served files. Tests set their own.
+    # A user who logs in with it can change the served files.
     write_password: write_password,
     upload_max_bytes: megabytes.("SLIMSERVE_UPLOAD_MAX_MB", "100"),
     upload_types: upload_types

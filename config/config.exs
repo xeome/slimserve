@@ -21,7 +21,7 @@ config :phoenix_live_view,
 
 config :slimserve, SlimServeWeb.Endpoint,
   url: [host: "localhost"],
-  # Matches `Plug.Static` in the endpoint: ~p"/assets/..." renders as /.app/assets/...
+  # Matches `Plug.Static` in the endpoint.
   static_url: [path: "/.app"],
   # The host a self-hosted server is reached by is not known ahead: accept the request's own.
   check_origin: :conn,

@@ -34,7 +34,6 @@ defmodule SlimServeWeb.LoginTest do
 
   defp creds(extra \\ %{}), do: Map.merge(%{"username" => "user", "password" => "pass"}, extra)
 
-  # recycle/1 carries the response's cookies into the next request, as a browser would.
   defp log_in(conn) do
     posted = post(conn, "/.app/login", creds())
     assert redirected_to(posted, 302) == "/"
@@ -181,7 +180,6 @@ defmodule SlimServeWeb.LoginTest do
       assert Enum.all?(statuses, &(&1 in [401, 429]))
     end
 
-    # A viewer page reads by events too.
     test "Scenario: Logging out tells that browser's open viewer pages to disconnect", %{conn: conn} do
       logged = log_in(conn)
       socket_id = logged |> get("/") |> get_session("live_socket_id")
@@ -364,7 +362,6 @@ defmodule SlimServeWeb.LoginTest do
 
       assert conn |> html() |> get("/.app/dashboard") |> to_login?()
       assert conn |> get("/.app/dashboard") |> response(401)
-      # A viewer login is not a write login.
       Application.put_env(:slimserve, :login, {"user", "pass"})
       assert conn |> log_in() |> html() |> get("/.app/dashboard") |> to_login?()
     end

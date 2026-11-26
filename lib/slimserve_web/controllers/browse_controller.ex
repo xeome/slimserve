@@ -70,7 +70,6 @@ defmodule SlimServeWeb.BrowseController do
   defp thumb(conn, {:error, _reason}, _max_dim), do: send_resp(conn, 502, "Bad Gateway")
   defp thumb(conn, _missing, _max_dim), do: BrowseHTML.send_not_found(conn)
 
-  # ?view=grid or ?view=list keeps the choice in a cookie and returns to the bare path; any other value is ignored.
   defp listing(conn, segments) do
     case conn.params do
       %{"view" => view} when view in ~w(grid list) ->
@@ -115,7 +114,6 @@ defmodule SlimServeWeb.BrowseController do
 
   defp send_bytes(conn, status, object, offset, length), do: Download.send(conn, status, object, offset, length)
 
-  # One range of bytes=a-b, a- or -n; several ranges, a malformed header or an empty file get the whole file.
   defp byte_range(_headers, 0), do: :full
 
   defp byte_range([header], size) do
@@ -156,7 +154,6 @@ defmodule SlimServeWeb.BrowseController do
     end
   end
 
-  # x-cache says whether the bytes came from the disk cache.
   defp send_webp(conn, cache, webp) do
     conn |> put_resp_content_type("image/webp", nil) |> put_resp_header("x-cache", cache) |> send_resp(200, webp)
   end

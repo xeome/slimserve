@@ -95,7 +95,7 @@ defmodule SlimServe.Storage.S3.Capabilities do
     end
   end
 
-  # One answered but not readable back is the provider's doing (S3-D4).
+  # One answered but not readable back is the provider's doing.
   defp occupy(key, body) do
     {status, writes} = put(key, body, [])
 

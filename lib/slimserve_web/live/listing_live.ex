@@ -72,7 +72,6 @@ defmodule SlimServeWeb.ListingLive do
     if socket.assigns.write? and Login.write?(session), do: {:cont, socket}, else: {:halt, socket}
   end
 
-  # Without write rights there is no upload config, so the upload channel has nothing to accept.
   defp allow_files(socket, false), do: socket
 
   defp allow_files(socket, true) do
@@ -414,7 +413,7 @@ defmodule SlimServeWeb.ListingLive do
     end
   end
 
-  # So the tree is in the first paint: the owner took a second build per load for that.
+  # Lists every folder above this one now, so the tree is complete in the first paint.
   defp put_levels(socket, raw) do
     segments = socket.assigns.segments
 
@@ -487,7 +486,7 @@ defmodule SlimServeWeb.ListingLive do
     end
   end
 
-  # An unfolded level keeps the levels above it, so none hides under a folded parent. They are as live as the rest.
+  # An unfolded level keeps the levels above it, so none hides under a folded parent.
   defp open(socket, segments, raw) do
     keep = for path <- [segments | socket.assigns.expanded], n <- 0..length(path), uniq: true, do: Enum.take(path, n)
 
@@ -939,7 +938,7 @@ defmodule SlimServeWeb.ListingLive do
         </div>
       </div>
       <script :type={Phoenix.LiveView.ColocatedHook} name=".Listing">
-        // LiveViewTest runs none of this: the browser probe and the owner's preview cover it.
+        // No automated test runs this hook: LiveViewTest does not execute JavaScript.
         const typing = t => t.closest?.("input, textarea, select, [contenteditable]")
         const $ = id => document.getElementById(id)
         // A write names its entry from the folder shown when the user acted, so one queued behind an open keeps it.
@@ -968,7 +967,6 @@ defmodule SlimServeWeb.ListingLive do
             this.handleEvent("move_ready", () => { const d = $("move-dialog"); if (d && !d.open) d.showModal() })
             const move = () => $("move-open")?.click()
             const focusRename = () => { const f = $("rename-name"); if (f) { f.focus(); f.select() } }
-            // Rename lives in the inspector.
             const act = (kind, name) =>
               (kind === "rename" ? this.pushEvent("select", {name}).then(focusRename) : this.pushEvent("move_open", {path: here(name)}))
                 .catch(() => {})

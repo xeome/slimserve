@@ -21,7 +21,6 @@ defmodule SlimServe.RuntimeConfigTest do
     prod(%{"SLIMSERVE_USERNAME" => user, "SLIMSERVE_PASSWORD" => pass, "SECRET_KEY_BASE" => secret})[:login]
   end
 
-  # Every other variable unset, so only the ones given decide.
   defp prod(vars) do
     for name <- @variables, do: set(name, vars[name])
 

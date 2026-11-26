@@ -1,6 +1,6 @@
 defmodule SlimServe.S3Fixture do
   @moduledoc """
-  A fresh private bucket on the MinIO that `scripts/test-s3.sh` starts, and the app pointed at it.
+  A fresh private bucket on the MinIO that `scripts/test-s3.sh` starts.
 
   The helpers here talk to the bucket directly, not through the app, so a test can seed and inspect
   exact keys. A bucket that cannot be made raises, so `mix test --only s3` fails without MinIO.

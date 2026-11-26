@@ -4,7 +4,7 @@ defmodule SlimServe.RootPropertyTest do
 
   alias SlimServe.Root
 
-  # Names in the fixture root. Every link_* has a visible name; its target may not.
+  # Every link_* has a visible name; its target may not.
   @names ~w(visible.txt sub inner.txt ignored.txt .secret .hidden .slimserveignore
             link_visible link_sub link_dot link_dotdir link_ignored link_out link_abs)
 

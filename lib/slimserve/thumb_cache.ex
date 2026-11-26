@@ -11,7 +11,6 @@ defmodule SlimServe.ThumbCache do
 
   def child_spec(opts), do: %{id: __MODULE__, start: {__MODULE__, :start_link, [opts]}}
 
-  @doc "Starts the cache on `:dir` with the cap `:max_bytes`, registered as `:name` (this module by default)."
   def start_link(opts), do: DiskCache.start_link(Keyword.merge([name: __MODULE__, ext: "webp"], opts))
 
   @doc """

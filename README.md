@@ -1,95 +1,146 @@
 # SlimServe
 
-SlimServe is being rebuilt as a Phoenix 1.8 application. This branch holds the base: an empty app
-and the gates every later change must pass. The Go version lives on `master`.
+SlimServe serves a folder, or an S3 bucket, as a file browser in the web page. Folders list as a
+table or a grid of thumbnails, and the listing updates by itself when files change. Click a file to
+see its details; follow a link to download it. A login can guard the whole site, and a separate
+write password lets you upload, rename, move and delete from the browser.
 
-## Run it
+![The listing as a table](docs/screenshots/list.png)
 
-```sh
-mise install              # Erlang, Elixir, actionlint and bun, from .tool-versions
-sudo pacman -S inotify-tools   # or apt-get: inotifywait, for the live listing
-mix setup                 # deps, Tailwind and esbuild binaries, first asset build
-mix phx.server            # http://localhost:4000
-```
+![The grid view, with thumbnails](docs/screenshots/grid.png)
 
-Production releases serve plain HTTP by default. For internet-facing deployments, terminate TLS
-at a trusted proxy and enable HTTPS enforcement. Behind any TLS proxy, even on a LAN, set
-`SLIMSERVE_HTTPS=true` and set `PHX_HOST` to the hostname clients use.
+![The inspector, open on an image](docs/screenshots/inspector.png)
 
-## Deploy with Helm
+Hidden files (any name starting with a dot) are never listed or served. A `.slimserveignore` file
+hides more, with gitignore-style patterns, in its folder and everything below it.
 
-Chart 2.0.0 uses the Elixir image. For a fresh install, create the namespace and choose
-an available Elixir image. For a Go upgrade, keep the release name, release namespace
-and PVC size, then provide new values explicitly, including credentials for any enabled
-Go viewer or dashboard login. See the [Helm guide](manifests/helm/README.md) for both commands.
-For production, terminate TLS outside the chart; it does not create an Ingress.
+## Quickstart
 
-## Log in
-
-Set `SLIMSERVE_USERNAME` and `SLIMSERVE_PASSWORD` to put every route behind a login page. Leave both
-unset to serve without one; setting only one refuses to boot. In prod, login also needs a fixed
-`SECRET_KEY_BASE` (`mix phx.gen.secret`): it keys the login in the session cookie, so the server
-refuses to boot without it. Changing the password logs every session out.
-
-## Edit from the browser
-
-Set `SLIMSERVE_WRITE_PASSWORD` to let a user who logs in with it at `/.app/login` upload, rename,
-move and delete files and create folders from the listing, and open `/.app/dashboard`. With viewer
-login on, a write login takes the same username. An empty value counts as unset: no writes, and the
-dashboard answers 404. Changing the write password ends every write session. In prod, set a fixed
-`SECRET_KEY_BASE` too, or write logins end on each restart.
-
-- `SLIMSERVE_UPLOAD_MAX_MB`: the largest upload, default 100.
-- `SLIMSERVE_UPLOAD_TYPES`: a comma list of extensions, such as `jpg,png,pdf`; unset accepts any.
-  An extension with no known MIME type refuses to boot.
-
-Nothing is ever overwritten, and a deleted folder goes with everything in it, hidden files too:
-there is no trash. Uploads and file moves need a file system with hard links (ext4, xfs, btrfs,
-overlayfs); on exFAT or some SMB mounts they are refused. A crash mid-upload can leave a hidden
-`.upload-*` file in the target folder; it is never served, and is safe to delete.
-
-## Serve an S3 bucket
-
-Set `SLIMSERVE_STORAGE=s3` to serve a private bucket of any S3-compatible store, MinIO included,
-instead of `SLIMSERVE_ROOT`:
-
-- `SLIMSERVE_S3_BUCKET`, `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` (required), `AWS_REGION`
-  (default `us-east-1`), `AWS_SESSION_TOKEN`, and `AWS_ENDPOINT_URL_S3` for a store other than AWS.
-  Requests are path-style, so the endpoint names the store, not the bucket.
-- AWS itself is untested. Set `AWS_ENDPOINT_URL_S3` to the bucket region's endpoint there too
-  (`https://s3.<region>.amazonaws.com`): without it, requests go to the global host, and a bucket
-  that redirects to its regional host answers every request with a 502.
-- `SLIMSERVE_DOWNLOAD_CACHE_DIR` and `SLIMSERVE_DOWNLOAD_CACHE_MB` (default 1024): files up to
-  100 MB are kept here once fetched, so a repeat download, ranged or not, reads no bytes from S3.
-  Larger files, and misses the cache has no room for, stream through.
-
-SlimServe must be the bucket's only writer. A change made through SlimServe shows at once on every
-node. A change made in the bucket directly shows on any page loaded after the cached listing
-expires, at most 10 minutes after it was filled. A page already open shows it only when a write
-through SlimServe wakes it or the page reloads.
-`.slimserveignore` files and hidden names work as on disk; a key whose name is not valid UTF-8, or
-holds a NUL, is not listed.
-
-With `SLIMSERVE_WRITE_PASSWORD` set, the server first writes and removes a few objects under the
-bucket's hidden `.slimserve-probe/` prefix, to learn which conditional writes the store enforces.
-Uploads and new folders are refused, with a warning at boot, unless it refuses to overwrite an
-existing key. Where it ignores a stale `If-Match` (MinIO does, on DELETE), move and delete check
-the object themselves just before acting, and a change made in that instant can be lost. A move is
-a copy then a delete: files over 5 GiB copy in 5 GiB parts, and a move or delete that fails
-part-way says so and leaves what it did.
-
-## Check it
+The image is `ghcr.io/xeome/slimserve`. It listens on port 8080 and serves `/data`:
 
 ```sh
-mix precommit   # before every commit, in seconds
-mix ci          # everything CI runs
+docker run -d --name slimserve -p 8080:8080 -v /srv/files:/data:ro ghcr.io/xeome/slimserve:1.0.0
 ```
 
-`mix precommit` compiles with warnings as errors, checks for unused locked deps and formatting
-(Styler), runs Credo and the tests. `mix ci` runs those plus `hex.audit`, Sobelow at medium
-confidence, `deps.audit`, Dialyzer and the tests with a coverage floor. CI runs `mix ci`, then the
-S3 suite against a throwaway MinIO (`scripts/test-s3.sh`, needs Docker) and the chart suite
-(`mix test --only helm`, needs `helm`) (`.github/workflows/ci.yml`). The first Dialyzer run builds its PLTs in `priv/plts` and takes a few
-minutes.
+Then open http://localhost:8080. The container runs as UID and GID 1001, so the files must be
+readable by that user, and writable too if you turn on browser edits.
 
-See `docs/architecture.md` for how a request flows and `AGENTS.md` for the project rules.
+With Docker Compose, and a login:
+
+```yaml
+services:
+  slimserve:
+    image: ghcr.io/xeome/slimserve:1.0.0
+    ports:
+      - "8080:8080"
+    volumes:
+      - /srv/files:/data
+    environment:
+      SLIMSERVE_USERNAME: alice
+      SLIMSERVE_PASSWORD: change-me
+      SLIMSERVE_WRITE_PASSWORD: change-me-too
+      SECRET_KEY_BASE: paste-the-output-of-openssl-rand-base64-48
+    restart: unless-stopped
+```
+
+For Kubernetes, see the [Helm chart](manifests/helm/README.md).
+
+The server speaks plain HTTP. On the internet, put it behind a proxy that terminates TLS, and set
+`SLIMSERVE_HTTPS=true` and `PHX_HOST` to the hostname clients use. Do that behind any TLS proxy,
+even on a LAN.
+
+## Configuration
+
+Everything is set through environment variables.
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `SLIMSERVE_ROOT` | `.` (`/data` in the image) | The folder served at `/`. A release refuses to start unless it names an existing directory. |
+| `PORT` | `4000` (`8080` in the image) | The HTTP port. |
+| `PHX_HOST` | `localhost` | The hostname clients use, for the URLs the app builds. |
+| `SLIMSERVE_HTTPS` | `false` | `true` redirects to HTTPS and marks cookies secure. Needs `PHX_HOST`. |
+| `SECRET_KEY_BASE` | random per start | Signs the session cookie. Required with a login. |
+| `SLIMSERVE_USERNAME`, `SLIMSERVE_PASSWORD` | unset | Put every page behind a login. Set both or neither. |
+| `SLIMSERVE_WRITE_PASSWORD` | unset | Turns on editing from the browser. Must differ from `SLIMSERVE_PASSWORD`. |
+| `SLIMSERVE_UPLOAD_MAX_MB` | `100` | The largest upload. |
+| `SLIMSERVE_UPLOAD_TYPES` | any | Comma-separated extensions to accept, such as `jpg,png,pdf`. |
+| `SLIMSERVE_THUMB_MAX_DIM` | `250` | The longest side of a thumbnail, in pixels. |
+| `SLIMSERVE_THUMB_MAX_FILE_SIZE_MB` | `10` | Images larger than this get no thumbnail. |
+| `SLIMSERVE_THUMB_CACHE_MB`, `SLIMSERVE_CACHE_DIR` | `100`, the temp dir | The thumbnail cache on disk. |
+| `SLIMSERVE_STORAGE` | `local` | `s3` serves a bucket instead of `SLIMSERVE_ROOT`. See below. |
+
+### Login
+
+With `SLIMSERVE_USERNAME` and `SLIMSERVE_PASSWORD` set, every page asks for them. Setting only one
+refuses to start. Changing the password logs everyone out.
+
+Set a fixed `SECRET_KEY_BASE` whenever there is a login: `openssl rand -base64 48` makes one. The
+server refuses to start with a login and without the key, because a fresh key on each start would
+log everyone out.
+
+### Editing from the browser
+
+With `SLIMSERVE_WRITE_PASSWORD` set, whoever logs in with it at `/.app/login` can upload files,
+create folders, and rename, move and delete from the listing. They can also open the Phoenix
+dashboard at `/.app/dashboard`. With a viewer login on, the write login takes the same username.
+Changing the write password ends every write session. Without a fixed `SECRET_KEY_BASE`, so does
+each restart.
+
+- Nothing is ever overwritten. An upload or a move onto an existing name is refused.
+- There is no trash. Deleting a folder deletes everything in it, hidden files too.
+- Uploads and file moves need a file system with hard links: ext4, xfs, btrfs or overlayfs work,
+  exFAT and some SMB mounts do not.
+- A crash during an upload can leave a hidden `.upload-*` file in the target folder. It is never
+  served, and you can delete it.
+- An extension in `SLIMSERVE_UPLOAD_TYPES` with no known MIME type refuses to start.
+
+### Serving an S3 bucket
+
+Set `SLIMSERVE_STORAGE=s3` to serve a private bucket of any S3-compatible store, MinIO included.
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `SLIMSERVE_S3_BUCKET` | required | The bucket. |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | required | The credentials. |
+| `AWS_SESSION_TOKEN` | unset | For temporary credentials. |
+| `AWS_REGION` | `us-east-1` | The region requests are signed for. |
+| `AWS_ENDPOINT_URL_S3` | AWS | The store's URL. Requests are path-style, so it names the store, not the bucket. |
+| `SLIMSERVE_DOWNLOAD_CACHE_MB` | `1024` | The download cache's size. |
+| `SLIMSERVE_DOWNLOAD_CACHE_DIR` | the temp dir | Where the download cache lives. |
+
+Files up to 100 MB are cached on disk once fetched, so a repeat download, ranged or not, reads
+nothing from the bucket. Larger files, and files the cache has no room for, stream through.
+
+AWS itself is untested. If you try it, set `AWS_ENDPOINT_URL_S3` to the bucket region's endpoint
+(`https://s3.<region>.amazonaws.com`). Without it, requests go to the global host, and a bucket that
+redirects to its regional host answers every request with a 502.
+
+SlimServe must be the bucket's only writer. A change made through SlimServe shows at once, on every
+node. A change made in the bucket directly can take up to 10 minutes to show.
+
+If the store lets a write overwrite an existing key, uploads and new folders are off, with a warning
+at start. A move or delete that fails part-way says so and leaves what it already did. The full
+rules are in [openspec/specs/s3-storage/spec.md](openspec/specs/s3-storage/spec.md).
+
+## Development
+
+```sh
+mise install                   # Erlang, Elixir, bun and actionlint, pinned in .tool-versions
+sudo pacman -S inotify-tools   # or apt-get; the app does not start without inotifywait
+mix setup                      # deps, the Tailwind and esbuild binaries, a first asset build
+SLIMSERVE_ROOT=~/Pictures mix phx.server   # http://localhost:4000
+```
+
+Two gates:
+
+- `mix precommit` runs in seconds: compile with warnings as errors, unused locked deps, formatting
+  (Styler), Credo and the tests. Run it before every commit.
+- `mix ci` is everything CI runs: the above plus `hex.audit`, Sobelow, `deps.audit`, Dialyzer, a
+  coverage floor, and the OpenSpec validate, which runs on bun. The first Dialyzer run builds its
+  PLTs in `priv/plts` and takes a few minutes.
+
+CI also runs the S3 suite against a throwaway MinIO (`scripts/test-s3.sh`, needs Docker) and the
+chart suite (`mix test --only helm`, needs `helm`).
+
+What the app does, behaviour by behaviour, is in `openspec/specs/`. How a request flows is in
+`docs/architecture.md`, and the project rules are in `AGENTS.md`.

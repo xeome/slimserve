@@ -6,6 +6,3 @@ config :logger, level: :info
 # which you should run after static files are built and
 # before starting your production server.
 config :slimserve, SlimServeWeb.Endpoint, cache_static_manifest: "priv/static/cache_manifest.json"
-
-# Runtime production configuration, including reading
-# of environment variables, is done on config/runtime.exs.

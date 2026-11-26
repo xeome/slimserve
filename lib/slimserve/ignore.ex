@@ -34,8 +34,6 @@ defmodule SlimServe.Ignore do
   @spec ignored_by?(([String.t()] -> list() | :unreadable), [String.t()], boolean()) :: boolean()
   def ignored_by?(rules_at, segments, dir?), do: walk(rules_at, [], segments, [], dir?)
 
-  # Walks down from the top one name at a time. `layers` holds, for every directory passed,
-  # its rules and the path of the current name relative to it.
   defp walk(rules_at, here, [], _layers, dir?), do: dir? and rules_at.(here) == :unreadable
 
   defp walk(rules_at, here, [name | rest], layers, dir?) do

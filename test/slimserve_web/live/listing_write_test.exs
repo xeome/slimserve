@@ -65,7 +65,6 @@ defmodule SlimServeWeb.ListingWriteTest do
     end
   end
 
-  # Every path under the root, dot-files included, with a file's bytes or a link's target.
   defp tree(root) do
     for path <- Path.wildcard(Path.join(root, "**"), match_dot: true), into: %{} do
       value =
@@ -471,7 +470,6 @@ defmodule SlimServeWeb.ListingWriteTest do
       assert tree(root) == before
     end
 
-    # The browser names the type, so only the name's own extension is trusted.
     test "Scenario: An upload named off the type list is refused, whatever type the browser claims", %{
       writer: writer,
       root: root
