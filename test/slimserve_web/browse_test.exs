@@ -84,14 +84,14 @@ defmodule SlimServeWeb.BrowseTest do
       assert for(href <- hrefs(conn, "/sub"), do: response(get(conn, href), 200)) == ["one", "two"]
     end
 
-    test "a fifo is neither served nor listed", %{conn: conn, root: root} do
+    test "Scenario: A fifo is neither served nor listed", %{conn: conn, root: root} do
       {_out, 0} = System.cmd("mkfifo", [Path.join(root, "pipe")])
 
       assert status(conn, "/pipe") == 404
       refute "/pipe" in hrefs(conn, "/")
     end
 
-    test "the page's icon link downloads the app's own favicon", %{conn: conn} do
+    test "Scenario: The page's icon link downloads the app's own favicon", %{conn: conn} do
       [href] =
         conn
         |> get("/")
@@ -103,7 +103,7 @@ defmodule SlimServeWeb.BrowseTest do
       assert conn |> get(href) |> response(200) == File.read!(Application.app_dir(:slimserve, "priv/static/favicon.ico"))
     end
 
-    test "the listing carries the app CSP without the dashboard's nonce", %{conn: conn} do
+    test "Scenario: The listing carries the app CSP without the dashboard's nonce", %{conn: conn} do
       [csp] = conn |> get("/") |> get_resp_header("content-security-policy")
 
       assert csp =~ "base-uri 'self'"
@@ -253,7 +253,7 @@ defmodule SlimServeWeb.BrowseTest do
     end
   end
 
-  test "browser and non-browser refusals do not distinguish unavailable paths", %{conn: conn} do
+  test "Scenario: Browser and non-browser refusals do not distinguish unavailable paths", %{conn: conn} do
     browser = put_req_header(conn, "accept", "text/html,application/xhtml+xml")
     plain = put_req_header(conn, "accept", "application/json")
 

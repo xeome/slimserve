@@ -26,3 +26,5 @@ npm-debug.log
 /priv/plts/
 
 /.vscode
+
+/node_modules/

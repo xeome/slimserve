@@ -28,35 +28,35 @@ defmodule SlimServe.RuntimeConfigTest do
     "config/runtime.exs" |> Config.Reader.read!(env: :prod) |> Keyword.fetch!(:slimserve)
   end
 
-  test "SLIMSERVE_WRITE_PASSWORD sets the write password, and an empty one counts as unset" do
+  test "Scenario: SLIMSERVE_WRITE_PASSWORD sets the write password, and an empty one counts as unset" do
     assert prod(%{"SLIMSERVE_WRITE_PASSWORD" => "w"})[:write_password] == "w"
     assert prod(%{"SLIMSERVE_WRITE_PASSWORD" => ""})[:write_password] == nil
     assert prod(%{})[:write_password] == nil
   end
 
-  test "uploads default to 100 MB of any type" do
+  test "Scenario: Uploads default to 100 MB of any type" do
     assert prod(%{})[:upload_max_bytes] == 100 * 1024 * 1024
     assert prod(%{})[:upload_types] == :any
     assert prod(%{"SLIMSERVE_UPLOAD_MAX_MB" => "5"})[:upload_max_bytes] == 5 * 1024 * 1024
   end
 
-  test "SLIMSERVE_UPLOAD_TYPES lists extensions, each with its leading dot" do
+  test "Scenario: SLIMSERVE_UPLOAD_TYPES takes extensions with or without their leading dot" do
     assert prod(%{"SLIMSERVE_UPLOAD_TYPES" => "txt"})[:upload_types] == [".txt"]
     assert prod(%{"SLIMSERVE_UPLOAD_TYPES" => "txt, .png"})[:upload_types] == [".txt", ".png"]
   end
 
   # An upload's extension is downcased before it is looked up.
-  test "SLIMSERVE_UPLOAD_TYPES entries are downcased" do
+  test "Scenario: SLIMSERVE_UPLOAD_TYPES entries match in any case" do
     assert prod(%{"SLIMSERVE_UPLOAD_TYPES" => "JPG"})[:upload_types] == [".jpg"]
   end
 
   # An empty list would make allow_upload accept nothing, which no one sets on purpose.
-  test "an SLIMSERVE_UPLOAD_TYPES that lists no extension refuses to boot" do
+  test "Scenario: An SLIMSERVE_UPLOAD_TYPES that lists no extension refuses to boot" do
     assert_raise RuntimeError, ~r/SLIMSERVE_UPLOAD_TYPES/, fn -> prod(%{"SLIMSERVE_UPLOAD_TYPES" => ","}) end
   end
 
   # A viewer would then hold write rights.
-  test "a write password equal to the viewer password refuses to boot" do
+  test "Scenario: A write password equal to the viewer password refuses to boot" do
     login = %{"SLIMSERVE_USERNAME" => "u", "SLIMSERVE_PASSWORD" => "p", "SECRET_KEY_BASE" => "s"}
 
     assert_raise RuntimeError, ~r/SLIMSERVE_WRITE_PASSWORD/, fn ->
@@ -67,12 +67,12 @@ defmodule SlimServe.RuntimeConfigTest do
   end
 
   # allow_upload raises on such an extension, so the boot refuses it first.
-  test "an upload type with no known MIME type refuses to boot" do
+  test "Scenario: An upload type with no known MIME type refuses to boot" do
     assert_raise RuntimeError, ~r/SLIMSERVE_UPLOAD_TYPES/, fn -> prod(%{"SLIMSERVE_UPLOAD_TYPES" => "txt,notatype"}) end
   end
 
   @tag :tmp_dir
-  test "a prod server boots only when SLIMSERVE_ROOT names an existing directory", %{tmp_dir: dir} do
+  test "Scenario: A server boots only when SLIMSERVE_ROOT names an existing directory", %{tmp_dir: dir} do
     File.write!(Path.join(dir, "file"), "")
 
     assert prod_root(dir, "true") == dir
@@ -81,33 +81,33 @@ defmodule SlimServe.RuntimeConfigTest do
     assert_raise RuntimeError, fn -> prod_root(Path.join(dir, "file"), "true") end
   end
 
-  test "prod config loads without a root when PHX_SERVER is unset, as for a mix task" do
+  test "Scenario: A task that starts no server loads without a root" do
     assert prod_root(nil, nil) == File.cwd!()
   end
 
-  test "login is on when both SLIMSERVE_USERNAME and SLIMSERVE_PASSWORD are set, and off when neither is" do
+  test "Scenario: Login is on when both SLIMSERVE_USERNAME and SLIMSERVE_PASSWORD are set, and off when neither is" do
     assert prod_login("u", "p", "secret") == {"u", "p"}
     assert prod_login(nil, nil, nil) == nil
   end
 
-  test "only one of SLIMSERVE_USERNAME and SLIMSERVE_PASSWORD refuses to boot" do
+  test "Scenario: Only one of SLIMSERVE_USERNAME and SLIMSERVE_PASSWORD refuses to boot" do
     assert_raise RuntimeError, ~r/SLIMSERVE_USERNAME and SLIMSERVE_PASSWORD/, fn -> prod_login("u", nil, "secret") end
     assert_raise RuntimeError, ~r/SLIMSERVE_USERNAME and SLIMSERVE_PASSWORD/, fn -> prod_login(nil, "p", "secret") end
   end
 
-  test "an empty SLIMSERVE_PASSWORD beside a set SLIMSERVE_USERNAME refuses to boot" do
+  test "Scenario: An empty SLIMSERVE_PASSWORD beside a set SLIMSERVE_USERNAME refuses to boot" do
     assert_raise RuntimeError, ~r/SLIMSERVE_USERNAME and SLIMSERVE_PASSWORD/, fn -> prod_login("u", "", "secret") end
   end
 
-  test "both empty leaves login off" do
+  test "Scenario: Both login variables empty leave login off" do
     assert prod_login("", "", nil) == nil
   end
 
-  test "login in prod without SECRET_KEY_BASE refuses to boot" do
+  test "Scenario: Login in prod without SECRET_KEY_BASE refuses to boot" do
     assert_raise RuntimeError, ~r/SECRET_KEY_BASE/, fn -> prod_login("u", "p", nil) end
   end
 
-  test "production advertises the URL for each mode without changing the HTTP listener" do
+  test "Scenario: Production advertises the URL for each mode without changing the HTTP listener" do
     https =
       prod(%{"SLIMSERVE_HTTPS" => "true", "PHX_HOST" => "files.example.test", "PORT" => "4081"})[SlimServeWeb.Endpoint]
 
@@ -121,7 +121,7 @@ defmodule SlimServe.RuntimeConfigTest do
     assert endpoint[:url][:scheme] == "http"
   end
 
-  test "HTTPS requires a nonempty PHX_HOST" do
+  test "Scenario: HTTPS requires a nonempty PHX_HOST" do
     for host <- [nil, ""] do
       assert_raise RuntimeError, ~r/PHX_HOST/, fn ->
         prod(%{"SLIMSERVE_HTTPS" => "true", "PHX_HOST" => host})
@@ -129,7 +129,7 @@ defmodule SlimServe.RuntimeConfigTest do
     end
   end
 
-  test "a nonempty SLIMSERVE_HTTPS value other than true or false refuses to boot" do
+  test "Scenario: A nonempty SLIMSERVE_HTTPS value other than true or false refuses to boot" do
     for value <- ["1", "TRUE", "yes", "on"] do
       assert_raise RuntimeError, ~r/SLIMSERVE_HTTPS/, fn -> prod(%{"SLIMSERVE_HTTPS" => value}) end
     end

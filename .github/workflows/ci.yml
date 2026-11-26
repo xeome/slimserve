@@ -29,6 +29,10 @@ jobs:
       # inotifywait, for SlimServe.Watcher and its tests.
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends inotify-tools
       - run: mix deps.get
+      # mix ci runs the OpenSpec validate on bun.
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .tool-versions
       - run: mix ci
       - run: scripts/test-s3.sh mix test --only s3
       - uses: azure/setup-helm@v4

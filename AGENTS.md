@@ -8,8 +8,10 @@ SlimServe on Phoenix 1.8: a server-rendered web app, no database.
   does not boot without it.
 - Gates, in two Mix aliases. `mix precommit` runs in seconds: compile with warnings as errors,
   `deps.unlock --check-unused`, Styler (through `mix format`), Credo and the tests. `mix ci` runs
-  those plus `hex.audit`, Sobelow at medium confidence, mix_audit, Dialyzer and the coverage floor.
-  CI runs `mix ci`.
+  those plus `hex.audit`, Sobelow at medium confidence, mix_audit, Dialyzer, the coverage floor
+  and the strict OpenSpec validate of `openspec/specs/`, on bun. CI runs `mix ci`.
+- Specs in `openspec/specs/` are the behaviour list. A behaviour change edits its spec in the same
+  commit, and a test that covers a scenario carries `Scenario: <exact title>`.
 
 ## Project rules
 

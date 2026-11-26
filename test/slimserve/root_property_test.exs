@@ -9,7 +9,7 @@ defmodule SlimServe.RootPropertyTest do
             link_visible link_sub link_dot link_dotdir link_ignored link_out link_abs)
 
   @tag :tmp_dir
-  property "resolve/2 answers only paths under the root with no dot-component and no ignored name",
+  property "Scenario: Any request path resolves only to a visible path under the root",
            %{tmp_dir: tmp} do
     root = Path.join(tmp, "root")
     outside = Path.join(tmp, "outside")

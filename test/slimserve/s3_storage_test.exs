@@ -34,7 +34,7 @@ defmodule SlimServe.S3StorageTest do
       "PHX_SERVER" => "true"
     }
 
-    test "an S3 server needs no root, and takes its bucket and the standard AWS variables" do
+    test "Scenario: An S3 server needs no root, and takes its bucket and the standard AWS variables" do
       config = prod(@s3)
       assert {config[:storage], config[:root]} == {:s3, nil}
 
@@ -48,18 +48,18 @@ defmodule SlimServe.S3StorageTest do
                ]
     end
 
-    test "an empty download cache directory takes the default" do
+    test "Scenario: An empty download cache directory takes the default" do
       assert prod(Map.put(@s3, "SLIMSERVE_DOWNLOAD_CACHE_DIR", ""))[:download_cache_dir] ==
                Path.join(System.tmp_dir!(), "slimserve-downloads")
     end
 
-    test "an S3 server without a bucket or credentials, or an unknown backend, refuses to boot" do
+    test "Scenario: An S3 server without a bucket or credentials, or an unknown backend, refuses to boot" do
       assert_raise RuntimeError, ~r/SLIMSERVE_S3_BUCKET/, fn -> prod(Map.delete(@s3, "SLIMSERVE_S3_BUCKET")) end
       assert_raise RuntimeError, ~r/AWS_SECRET_ACCESS_KEY/, fn -> prod(Map.delete(@s3, "AWS_SECRET_ACCESS_KEY")) end
       assert_raise RuntimeError, ~r/SLIMSERVE_STORAGE/, fn -> prod(%{"SLIMSERVE_STORAGE" => "ftp"}) end
     end
 
-    test "a local server is still the default and still needs an existing root" do
+    test "Scenario: A local server is still the default and still needs an existing root" do
       assert prod(%{"SLIMSERVE_ROOT" => "/srv"})[:storage] in [nil, :local]
 
       assert_raise RuntimeError, ~r/SLIMSERVE_ROOT/, fn ->
@@ -72,7 +72,7 @@ defmodule SlimServe.S3StorageTest do
     @describetag :s3
     @describetag capture_log: true
 
-    test "removes every version and upload it made, including those whose answer was lost" do
+    test "Scenario: The start-up check removes every version and upload it made, including those whose answer was lost" do
       lost = start_supervised!({Agent, fn -> %{} end})
 
       # The put check's first write and the complete check's upload land, but their answers never come back.
@@ -106,7 +106,7 @@ defmodule SlimServe.S3StorageTest do
       refute Map.has_key?(uploads, "Upload")
     end
 
-    test "a setup write that never landed fails the boot and records no guarantee" do
+    test "Scenario: A start-up check write that never lands fails the boot" do
       S3.serve(endpoint: S3.proxy(fn %{method: method} -> if method == "PUT", do: {:respond, 503}, else: :pass end))
 
       assert Capabilities.check() == {:error, :unreachable}
@@ -118,7 +118,7 @@ defmodule SlimServe.S3StorageTest do
   describe "listing a bucket" do
     @describetag :s3
 
-    test "follows the listing past its first page", %{conn: conn} do
+    test "Scenario: A bucket listing follows the store past its first page", %{conn: conn} do
       bucket = S3.serve()
       names = for n <- 1..1001, do: "f#{String.pad_leading(Integer.to_string(n), 4, "0")}.txt"
       names |> Task.async_stream(&S3.put(bucket, "many/" <> &1, "x"), max_concurrency: 32) |> Stream.run()
@@ -128,7 +128,7 @@ defmodule SlimServe.S3StorageTest do
       assert conn |> get("/many/f1001.txt") |> response(200) == "x"
     end
 
-    test "a listing read before a change is not served after it" do
+    test "Scenario: A listing read before a change is not served after it" do
       bucket = S3.serve()
       S3.put(bucket, "old.txt", "o")
 
@@ -142,7 +142,7 @@ defmodule SlimServe.S3StorageTest do
       assert {:ok, [%{name: "new.txt"}, %{name: "old.txt"}]} = Storage.list([])
     end
 
-    test "a fresh listing reads each folder's ignore object once" do
+    test "Scenario: A fresh listing reads each folder's ignore object once" do
       bucket = S3.serve()
       for key <- ~w(d/a.txt d/b.txt d/c.txt d/sub/x.txt), do: S3.put(bucket, key, "x")
       S3.watch_requests()
@@ -159,7 +159,7 @@ defmodule SlimServe.S3StorageTest do
              }
     end
 
-    test "reads the listed subfolders' ignore objects at the same time" do
+    test "Scenario: The bucket gets both subfolders' ignore-object reads before it answers either" do
       waiting = start_supervised!({Agent, fn -> [] end})
 
       endpoint =
@@ -185,7 +185,7 @@ defmodule SlimServe.S3StorageTest do
     @describetag :s3
     @describetag :tmp_dir
 
-    test "an upload keeps every other folder's entries", %{tmp_dir: tmp_dir} do
+    test "Scenario: After an upload, another folder lists again with no request to the bucket", %{tmp_dir: tmp_dir} do
       bucket = S3.serve()
       for key <- ~w(a/x.txt b/y.txt), do: S3.put(bucket, key, "x")
       Capabilities.check()
@@ -193,12 +193,17 @@ defmodule SlimServe.S3StorageTest do
       assert {:file, _object} = Storage.resolve(["b", "y.txt"])
 
       assert upload(tmp_dir, ["a"], "n.txt") == :ok
+      S3.watch_callers()
+      assert {:ok, [%{name: "y.txt"}]} = Storage.list(["b"])
+      assert {:file, _object} = Storage.resolve(["b", "y.txt"])
+      test = self()
+      assert for({:s3_call, callers, _method, _key, _query} <- flush_calls(), test in callers, do: callers) == []
 
       assert {:ok, {:ok, {[%{key: "b/y.txt"}], []}}} = cached({:list, "b/"})
       assert {:ok, {:file, %{key: "b/y.txt"}}} = cached({:stat, "b/y.txt"})
     end
 
-    test "an upload asks the store again for its own folder's listing only", %{tmp_dir: tmp_dir} do
+    test "Scenario: An upload asks the store again for its own folder's listing only", %{tmp_dir: tmp_dir} do
       bucket = S3.serve()
       S3.put(bucket, "a/b/f.txt", "f")
       Capabilities.check()
@@ -224,7 +229,7 @@ defmodule SlimServe.S3StorageTest do
       assert ancestors == for({key, _value} <- ancestors, do: {key, cached(key)})
     end
 
-    test "a delete that empties an implicit folder leaves the cache holding it absent" do
+    test "Scenario: A delete that empties an implicit folder leaves it absent with no further request" do
       bucket = S3.serve()
       for key <- ~w(a/keep.txt a/b/f.txt), do: S3.put(bucket, key, "x")
       assert {:ok, [%{name: "b"}, %{name: "keep.txt"}]} = Storage.list(["a"])
@@ -244,7 +249,7 @@ defmodule SlimServe.S3StorageTest do
       assert for({:s3_call, callers, _method, _key, _query} <- flush_calls(), test in callers, do: callers) == []
     end
 
-    test "a folder emptied just before an upload into it lists again once the upload lands", %{tmp_dir: tmp_dir} do
+    test "Scenario: A folder emptied just before an upload into it lists again once the upload lands", %{tmp_dir: tmp_dir} do
       bucket = S3.serve()
       S3.put(bucket, "a/b/f.txt", "f")
       Capabilities.check()
@@ -258,7 +263,7 @@ defmodule SlimServe.S3StorageTest do
       assert {:dir, _prefix} = Storage.resolve(["a", "b"])
     end
 
-    test "a folder move clears the cached absences under its destination" do
+    test "Scenario: A folder move makes the names under its destination resolve" do
       bucket = S3.serve()
       S3.put(bucket, "src/f.txt", "f")
       Capabilities.check()
@@ -270,7 +275,9 @@ defmodule SlimServe.S3StorageTest do
       assert {:file, %{key: "dst/f.txt"}} = Storage.resolve(["dst", "f.txt"])
     end
 
-    test "a change fills its folder's listing again before it wakes that folder's pages", %{tmp_dir: tmp_dir} do
+    test "Scenario: After an upload wakes a page, its first listing shows the new file with no request to the bucket", %{
+      tmp_dir: tmp_dir
+    } do
       bucket = S3.serve()
       S3.put(bucket, "a/x.txt", "x")
       Capabilities.check()
@@ -282,9 +289,15 @@ defmodule SlimServe.S3StorageTest do
 
       metadata = Process.whereis(Metadata)
       assert Enum.any?(until_woken("a"), &list_call?(&1, metadata, "a/"))
+      assert {:ok, [%{name: "n.txt"}, %{name: "x.txt"}]} = Storage.list(["a"])
+      test = self()
+      assert for({:s3_call, callers, _method, _key, _query} <- flush_calls(), test in callers, do: callers) == []
     end
 
-    test "a burst of uploads into one folder lists it once and wakes its pages once", %{conn: conn, tmp_dir: tmp_dir} do
+    test "Scenario: A burst of uploads into one folder gets one listing request, and the open page shows all three", %{
+      conn: conn,
+      tmp_dir: tmp_dir
+    } do
       bucket = S3.serve()
       S3.put(bucket, "a/x.txt", "x")
       Capabilities.check()
@@ -307,7 +320,8 @@ defmodule SlimServe.S3StorageTest do
     end
 
     @tag capture_log: true
-    test "a listing the store answers malformed is left uncached and the cache lives on", %{tmp_dir: tmp_dir} do
+    test "Scenario: After a malformed listing answer, the folder is listed from the store again and the server keeps serving",
+         %{tmp_dir: tmp_dir} do
       malformed = start_supervised!({Agent, fn -> false end})
 
       body =
@@ -335,6 +349,9 @@ defmodule SlimServe.S3StorageTest do
       assert Process.whereis(Metadata) == metadata
       assert :ets.info(Metadata) != :undefined
       assert cached({:list, "a/"}) == :miss
+      S3.watch_callers()
+      assert {:ok, [%{name: "n.txt"}, %{name: "x.txt"}]} = Storage.list(["a"])
+      assert Enum.any?(flush_calls(), &list_call?(&1, self(), "a/"))
     end
   end
 
@@ -342,7 +359,7 @@ defmodule SlimServe.S3StorageTest do
     @describetag :s3
 
     @tag :tmp_dir
-    test "woken by a write, reads the store not at all", %{conn: conn, tmp_dir: tmp_dir} do
+    test "Scenario: An open bucket page shows a write and adds no request to the bucket", %{conn: conn, tmp_dir: tmp_dir} do
       bucket = S3.serve()
       for key <- ~w(a/x.txt a/sub/y.txt z/w.txt), do: S3.put(bucket, key, "x")
       Capabilities.check()
@@ -356,7 +373,7 @@ defmodule SlimServe.S3StorageTest do
       assert for({:s3_call, callers, method, key, _query} <- flush_calls(), view.pid in callers, do: {method, key}) == []
     end
 
-    test "asks the store nothing while idle", %{conn: conn} do
+    test "Scenario: While a bucket page sits open and idle, the bucket gets no request", %{conn: conn} do
       Application.put_env(:slimserve, :s3_poll_ms, 50)
       on_exit(fn -> Application.delete_env(:slimserve, :s3_poll_ms) end)
       bucket = S3.serve()
@@ -375,7 +392,7 @@ defmodule SlimServe.S3StorageTest do
 
     @tag :tmp_dir
     @tag capture_log: true
-    test "shows an upload whose answer was lost", %{conn: conn, tmp_dir: tmp_dir} do
+    test "Scenario: An open bucket page shows an upload whose answer was lost", %{conn: conn, tmp_dir: tmp_dir} do
       endpoint =
         S3.proxy(fn %{method: method, path: path} ->
           if method == "PUT" and String.ends_with?(path, "/n.txt"), do: :drop, else: :pass
@@ -393,7 +410,7 @@ defmodule SlimServe.S3StorageTest do
     end
 
     @tag capture_log: true
-    test "drops a file whose delete's answer was lost", %{conn: conn} do
+    test "Scenario: An open bucket page drops a file whose delete's answer was lost", %{conn: conn} do
       endpoint =
         S3.proxy(fn %{method: method, path: path} ->
           if method == "DELETE" and String.ends_with?(path, "/a.txt"), do: :drop, else: :pass
@@ -410,7 +427,7 @@ defmodule SlimServe.S3StorageTest do
     end
 
     @tag :tmp_dir
-    test "keeps its rows while the bucket fails", %{conn: conn, tmp_dir: tmp_dir} do
+    test "Scenario: An open bucket page keeps its rows while the bucket fails", %{conn: conn, tmp_dir: tmp_dir} do
       failing = start_supervised!({Agent, fn -> false end})
 
       bucket =
@@ -430,7 +447,10 @@ defmodule SlimServe.S3StorageTest do
     end
 
     @tag :tmp_dir
-    test "lists a folder it could not read again once the store recovers", %{conn: conn, tmp_dir: tmp_dir} do
+    test "Scenario: An open bucket page lists a folder it could not read again once the store recovers", %{
+      conn: conn,
+      tmp_dir: tmp_dir
+    } do
       failing = start_supervised!({Agent, fn -> false end})
 
       bucket =
@@ -449,7 +469,7 @@ defmodule SlimServe.S3StorageTest do
       assert eventually(view, ["/b.txt", "/c.txt"])
     end
 
-    test "a delete of the open folder sends the page to the nearest folder", %{conn: conn} do
+    test "Scenario: A delete of the open bucket folder sends the page to the nearest folder", %{conn: conn} do
       bucket = S3.serve()
       S3.put(bucket, "p/x.txt", "x")
       {:ok, view, _html} = live(conn, "/p")
@@ -460,7 +480,7 @@ defmodule SlimServe.S3StorageTest do
       assert_redirect(view, "/", 1_000)
     end
 
-    test "a store error while finding the nearest folder keeps the rows", %{conn: conn} do
+    test "Scenario: A store error while finding the nearest folder keeps the rows", %{conn: conn} do
       failing = start_supervised!({Agent, fn -> false end})
 
       bucket =

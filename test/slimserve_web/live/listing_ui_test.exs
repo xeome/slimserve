@@ -93,7 +93,7 @@ defmodule SlimServeWeb.ListingUITest do
   end
 
   describe "folder tree" do
-    test "shows each ancestor's folders with exact counts, the open path expanded, and a new folder", %{
+    test "Scenario: The folder tree shows each ancestor's folders with exact counts and the open path expanded", %{
       reader: reader,
       root: root
     } do
@@ -120,10 +120,11 @@ defmodule SlimServeWeb.ListingUITest do
       eventually(fn -> {"a/b/new", "0", false, false} in tree(view) end)
     end
 
-    test "a guest unfolds a folder off the open path in place, and it stays unfolded across a relist and an open", %{
-      reader: reader,
-      root: root
-    } do
+    test "Scenario: A guest unfolds a folder off the open path in place, and it stays unfolded across a relist and an open",
+         %{
+           reader: reader,
+           root: root
+         } do
       File.mkdir_p!(Path.join(root, "z/y/x"))
       File.mkdir_p!(Path.join(root, "z/w"))
       File.write!(Path.join(root, "z/f.txt"), "f")
@@ -154,7 +155,7 @@ defmodule SlimServeWeb.ListingUITest do
       assert {"z/y", "1", false, false} in tree(view)
     end
 
-    test "an unfolded level drops a deleted subfolder and shows a renamed one, with no click", %{
+    test "Scenario: An unfolded level drops a deleted subfolder and shows a renamed one, with no click", %{
       reader: reader,
       root: root
     } do
@@ -172,7 +173,7 @@ defmodule SlimServeWeb.ListingUITest do
       end)
     end
 
-    test "a file added to a folder shown as a node updates that node's count", %{reader: reader, root: root} do
+    test "Scenario: A file added to a folder shown as a node updates that node's count", %{reader: reader, root: root} do
       File.mkdir_p!(Path.join(root, "z"))
       {:ok, view, _html} = live(reader, "/sub")
       assert {"z", "0", false, false} in tree(view)
@@ -181,7 +182,7 @@ defmodule SlimServeWeb.ListingUITest do
       eventually(fn -> {"z", "1", false, false} in tree(view) end)
     end
 
-    test "after an open away from a level, the page is subscribed to the levels it shows and no other", %{
+    test "Scenario: After an open away from a level, only changes in the levels the page still shows reach it", %{
       reader: reader,
       root: root
     } do
@@ -195,7 +196,7 @@ defmodule SlimServeWeb.ListingUITest do
       assert dirs.() == ["", "sub", "z"]
     end
 
-    test "an unfolded folder keeps the levels above it across an open, unfolded and live", %{
+    test "Scenario: An unfolded folder keeps the levels above it across an open, unfolded and live", %{
       reader: reader,
       root: root
     } do
@@ -212,7 +213,7 @@ defmodule SlimServeWeb.ListingUITest do
       assert has_element?(view, "#tree .node[data-path='z/y/x']")
     end
 
-    test "a symlinked folder's node follows the link to its new target", %{reader: reader, root: root} do
+    test "Scenario: A symlinked folder's node follows the link to its new target", %{reader: reader, root: root} do
       File.mkdir_p!(Path.join(root, "t1"))
       File.mkdir_p!(Path.join(root, "t2"))
       File.write!(Path.join(root, "t1/a.txt"), "a")
@@ -229,7 +230,10 @@ defmodule SlimServeWeb.ListingUITest do
       eventually(fn -> {"l", "3", false, false} in tree(view) end)
     end
 
-    test "unfolding a hidden, ignored, .. or file path is refused, the tree unchanged", %{reader: reader, root: root} do
+    test "Scenario: Unfolding a hidden, ignored, .. or file path is refused, the tree unchanged", %{
+      reader: reader,
+      root: root
+    } do
       File.write!(Path.join(root, "a.txt"), "a")
       File.mkdir_p!(Path.join(root, ".hidden/in"))
       File.mkdir_p!(Path.join(root, "ign/in"))
@@ -245,7 +249,7 @@ defmodule SlimServeWeb.ListingUITest do
       end
     end
 
-    test "the rail cookie renders the rail folded on the first paint", %{conn: conn} do
+    test "Scenario: The rail cookie renders the rail folded on the first paint", %{conn: conn} do
       side = fn conn -> conn |> get("/") |> html_response(200) |> LazyHTML.from_document() |> LazyHTML.query("#side") end
       classes = fn conn -> conn |> side.() |> LazyHTML.attribute("class") |> hd() |> String.split() end
 
@@ -257,7 +261,10 @@ defmodule SlimServeWeb.ListingUITest do
       refute "rail" in classes.(conn)
     end
 
-    test "the first, disconnected paint already lists the folder tree", %{reader: reader, root: root} do
+    test "Scenario: The first paint, before the page connects, already lists the folder tree", %{
+      reader: reader,
+      root: root
+    } do
       File.mkdir_p!(Path.join(root, "z"))
       html = reader |> get("/") |> html_response(200)
 
@@ -267,7 +274,10 @@ defmodule SlimServeWeb.ListingUITest do
   end
 
   describe "category card" do
-    test "counts the open folder's own files by kind, by extension in any case", %{reader: reader, root: root} do
+    test "Scenario: The folder card counts the open folder's own files by kind, by extension in any case", %{
+      reader: reader,
+      root: root
+    } do
       File.write!(Path.join(root, "sub/a.png"), :binary.copy("a", 1000))
       File.write!(Path.join(root, "sub/B.JPG"), :binary.copy("b", 1048))
       File.write!(Path.join(root, "sub/notes.txt"), "hello")
@@ -284,7 +294,10 @@ defmodule SlimServeWeb.ListingUITest do
   end
 
   describe "filter" do
-    test "survives a relist, and a hidden file that changes stays hidden", %{reader: reader, root: root} do
+    test "Scenario: The name filter survives a relist, and a hidden file that changes stays hidden", %{
+      reader: reader,
+      root: root
+    } do
       File.write!(Path.join(root, "a1.txt"), "a")
       File.write!(Path.join(root, "b.txt"), "b")
       {:ok, view, _html} = live(reader, "/")
@@ -307,7 +320,7 @@ defmodule SlimServeWeb.ListingUITest do
   end
 
   describe "inspector" do
-    test "a guest selects and filters; SVG previews as an image, HTML never embeds; no write controls", %{
+    test "Scenario: A guest selects and filters; SVG previews as an image, HTML never embeds; no write controls", %{
       reader: reader,
       root: root
     } do
@@ -333,7 +346,10 @@ defmodule SlimServeWeb.ListingUITest do
       assert names(view) == ["pic.svg"]
     end
 
-    test "only the last selected row is marked, and a row the filter hid stays hidden", %{reader: reader, root: root} do
+    test "Scenario: Only the last selected row is marked, and a row the filter hid stays hidden", %{
+      reader: reader,
+      root: root
+    } do
       File.write!(Path.join(root, "a.txt"), "a")
       File.write!(Path.join(root, "b.txt"), "b")
       {:ok, view, _html} = live(reader, "/")
@@ -349,7 +365,7 @@ defmodule SlimServeWeb.ListingUITest do
       assert selected(view) == ["b.txt"]
     end
 
-    test "an image's kind line carries its pixel size once its thumbnail is made", %{reader: reader, root: root} do
+    test "Scenario: An image's kind line carries its pixel size once its thumbnail is made", %{reader: reader, root: root} do
       :ok = 200 |> Image.build_image!(100, [200, 80, 40]) |> Image.write_to_file(Path.join(root, "pic.png"))
       kind_line = fn view -> view |> doc() |> LazyHTML.query("#inspector .kindline") |> text() end
 
@@ -365,7 +381,10 @@ defmodule SlimServeWeb.ListingUITest do
       assert kind_line.(view) == "PNG image · 200 × 100"
     end
 
-    test "a JPEG turned a quarter by its EXIF orientation shows its size as displayed", %{reader: reader, root: root} do
+    test "Scenario: A JPEG turned a quarter by its EXIF orientation shows its size as displayed", %{
+      reader: reader,
+      root: root
+    } do
       {:ok, turned} =
         200 |> Image.build_image!(100, [200, 80, 40]) |> Image.mutate(&MutableImage.set(&1, "orientation", :gint, 6))
 
@@ -378,7 +397,7 @@ defmodule SlimServeWeb.ListingUITest do
       assert view |> doc() |> LazyHTML.query("#inspector .kindline") |> text() == "JPG image · 100 × 200"
     end
 
-    test "the selection clears when its file is removed outside the page", %{reader: reader, root: root} do
+    test "Scenario: The selection clears when its file is removed outside the page", %{reader: reader, root: root} do
       File.write!(Path.join(root, "x.txt"), "x")
       {:ok, view, _html} = live(reader, "/")
 
@@ -389,10 +408,11 @@ defmodule SlimServeWeb.ListingUITest do
       eventually(fn -> not has_element?(view, "#inspector") end)
     end
 
-    test "a rename keeps the entry in its folder and the inspector follows it; a name with a slash is refused", %{
-      writer: writer,
-      root: root
-    } do
+    test "Scenario: A rename keeps the entry in its folder and the inspector follows it; a name with a slash is refused",
+         %{
+           writer: writer,
+           root: root
+         } do
       File.write!(Path.join(root, "sub/x.txt"), "x")
       File.mkdir_p!(Path.join(root, "sub/inner"))
       {:ok, view, _html} = live(writer, "/sub")
@@ -413,7 +433,7 @@ defmodule SlimServeWeb.ListingUITest do
       refute File.exists?(Path.join(root, "sub/inner"))
     end
 
-    test "Move to… moves the file into the folder picked in the dialog", %{writer: writer, root: root} do
+    test "Scenario: Move to… moves the file into the folder picked in the dialog", %{writer: writer, root: root} do
       File.write!(Path.join(root, "a.txt"), "a")
       File.mkdir_p!(Path.join(root, "sub/deep"))
       {:ok, view, _html} = live(writer, "/")
@@ -428,7 +448,7 @@ defmodule SlimServeWeb.ListingUITest do
       refute File.exists?(Path.join(root, "a.txt"))
     end
 
-    test "Move to… opens on the current folders each time, with nothing expanded from before", %{
+    test "Scenario: Move to… opens on the current folders each time, with nothing expanded from before", %{
       writer: writer,
       root: root
     } do
@@ -449,7 +469,7 @@ defmodule SlimServeWeb.ListingUITest do
       assert has_element?(view, "#picker .node[data-path='sub/new']")
     end
 
-    test "a rename or move onto the entry's own place changes nothing and reports nothing", %{
+    test "Scenario: A rename or move onto the entry's own place changes nothing and reports nothing", %{
       writer: writer,
       root: root
     } do
@@ -485,10 +505,11 @@ defmodule SlimServeWeb.ListingUITest do
       view
     end
 
-    test "a guest opens a subfolder: the list, crumbs, tree, title and selection follow, and its changes show", %{
-      reader: reader,
-      root: root
-    } do
+    test "Scenario: A guest opens a subfolder: the list, crumbs, tree, title and selection follow, and its changes show",
+         %{
+           reader: reader,
+           root: root
+         } do
       File.write!(Path.join(root, "a.txt"), "a")
       File.write!(Path.join(root, "sub/x.txt"), "x")
       File.mkdir_p!(Path.join(root, "sub/deep"))
@@ -511,10 +532,11 @@ defmodule SlimServeWeb.ListingUITest do
       eventually(fn -> names(view) == ["deep", "x.txt", "y.txt"] end)
     end
 
-    test "a file, a missing, hidden or ignored folder, a .. path and an encoded trick are refused, the page unchanged", %{
-      reader: reader,
-      root: root
-    } do
+    test "Scenario: Opening a file, a missing, hidden or ignored folder, a .. path or an encoded trick is refused, the page unchanged",
+         %{
+           reader: reader,
+           root: root
+         } do
       File.write!(Path.join(root, "a.txt"), "a")
       File.mkdir_p!(Path.join(root, ".hidden"))
       File.mkdir_p!(Path.join(root, "ign"))
@@ -531,7 +553,7 @@ defmodule SlimServeWeb.ListingUITest do
       end
     end
 
-    test "a path that is not a string is refused, and the page lives on", %{reader: reader} do
+    test "Scenario: Opening a path that is not a string is refused, and the page lives on", %{reader: reader} do
       {:ok, view, _html} = live(reader, "/")
       # So a crash of the page fails the assertions below instead of killing the test.
       Process.flag(:trap_exit, true)
@@ -546,7 +568,10 @@ defmodule SlimServeWeb.ListingUITest do
       assert has_element?(view, "#listing[data-path='/']")
     end
 
-    test "a folder that resolves but cannot be listed is refused, the page unchanged", %{reader: reader, root: root} do
+    test "Scenario: Opening a folder that resolves but cannot be listed is refused, the page unchanged", %{
+      reader: reader,
+      root: root
+    } do
       locked = Path.join(root, "locked")
       File.mkdir_p!(locked)
       {:ok, view, _html} = live(reader, "/")
@@ -560,7 +585,7 @@ defmodule SlimServeWeb.ListingUITest do
       assert render(view) == before
     end
 
-    test "after opening a subfolder, a change in the folder it left no longer relists it", %{
+    test "Scenario: After opening a subfolder, a change in the folder it left no longer relists the page", %{
       reader: reader,
       root: root
     } do
@@ -583,7 +608,10 @@ defmodule SlimServeWeb.ListingUITest do
   end
 
   describe "row menu" do
-    test "opening a row's menu and deleting from it leaves the selection where it was", %{writer: writer, root: root} do
+    test "Scenario: Opening a row's menu and deleting from it leaves the selection where it was", %{
+      writer: writer,
+      root: root
+    } do
       File.write!(Path.join(root, "a.txt"), "a")
       File.write!(Path.join(root, "b.txt"), "b")
       {:ok, view, _html} = live(writer, "/")
@@ -597,10 +625,11 @@ defmodule SlimServeWeb.ListingUITest do
       assert has_element?(view, "#inspector[data-name='a.txt']")
     end
 
-    test "Move to… opens the dialog on the menu's row and leaves the selection and the inspector", %{
-      writer: writer,
-      root: root
-    } do
+    test "Scenario: Move to… from a row's menu opens the dialog on that row and leaves the selection and the inspector",
+         %{
+           writer: writer,
+           root: root
+         } do
       File.write!(Path.join(root, "a.txt"), "a")
       File.write!(Path.join(root, "b.txt"), "b")
       {:ok, view, _html} = live(writer, "/")
@@ -617,7 +646,11 @@ defmodule SlimServeWeb.ListingUITest do
       assert File.exists?(Path.join(root, "a.txt"))
     end
 
-    test "offers reads to everyone and writes only with write rights", %{reader: reader, writer: writer, root: root} do
+    test "Scenario: The row menu offers reads to everyone and writes only with write rights", %{
+      reader: reader,
+      writer: writer,
+      root: root
+    } do
       File.write!(Path.join(root, "a.txt"), "a")
       menu = "#entries tr[data-name='a.txt'] .menu "
 

@@ -4,7 +4,7 @@ defmodule SlimServe.IgnoreTest do
   alias SlimServe.Ignore
 
   @tag :tmp_dir
-  test "the glob subset: anchoring, wildcards, and literal regex characters", %{tmp_dir: root} do
+  test "Scenario: Patterns anchor, match wildcards and take other characters literally", %{tmp_dir: root} do
     File.write!(Path.join(root, ".slimserveignore"), """
     # a comment, then a blank line
 
@@ -49,7 +49,7 @@ defmodule SlimServe.IgnoreTest do
 
   # A folder about to be made does not exist yet, so only the hint says it is one.
   @tag :tmp_dir
-  test "the dir? hint makes a missing leaf match a dir-only pattern", %{tmp_dir: root} do
+  test "Scenario: A directory-only pattern matches a folder not made yet", %{tmp_dir: root} do
     File.write!(Path.join(root, ".slimserveignore"), "build/\n")
 
     refute Ignore.ignored?(root, ~w(build))

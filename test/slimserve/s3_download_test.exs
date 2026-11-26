@@ -43,7 +43,7 @@ defmodule SlimServe.S3DownloadTest do
   defp object_get?(request),
     do: request.method == "GET" and String.ends_with?(URI.parse(request.path).path, "/digits.txt")
 
-  test "a small file is fetched once, then every full and ranged answer comes from the cache", %{conn: conn} do
+  test "Scenario: A small file is fetched once, then every full and ranged answer comes from the cache", %{conn: conn} do
     full = ranged(conn, nil)
     assert {full.status, full.resp_body, header(full, "x-cache")} == {200, @digits, "miss"}
     assert header(full, "content-type") == "text/plain"
@@ -66,7 +66,7 @@ defmodule SlimServe.S3DownloadTest do
     refute_received {:s3_request, :get, _key, _query}
   end
 
-  test "a miss the cache has no room for streams, with the normalized range pinned to the ETag", %{
+  test "Scenario: A miss the cache has no room for streams, with the normalized range pinned to the ETag", %{
     conn: conn,
     bucket: bucket
   } do
@@ -85,7 +85,10 @@ defmodule SlimServe.S3DownloadTest do
     assert {whole.status, whole.resp_body, header(whole, "x-cache")} == {200, @digits, "stream"}
   end
 
-  test "a HEAD that would stream answers with GET's status and headers but fetches no body", %{conn: conn, bucket: bucket} do
+  test "Scenario: A HEAD that would stream answers with GET's status and headers but fetches no body", %{
+    conn: conn,
+    bucket: bucket
+  } do
     path = "/#{bucket}/digits.txt"
     fill_cache()
 
@@ -102,7 +105,7 @@ defmodule SlimServe.S3DownloadTest do
 
   defp resp_headers(conn), do: conn.resp_headers |> List.keydelete("x-request-id", 0) |> Enum.sort()
 
-  test "a HEAD on a cacheable file fetches and caches nothing on a miss, and answers a hit from the cache", %{
+  test "Scenario: A HEAD on a cacheable file fetches and caches nothing on a miss, and answers a hit from the cache", %{
     conn: conn,
     bucket: bucket
   } do
@@ -141,7 +144,7 @@ defmodule SlimServe.S3DownloadTest do
   defp without(conn, names), do: Enum.reject(resp_headers(conn), &(elem(&1, 0) in names))
 
   @tag :tmp_dir
-  test "a thumbnail HEAD renders nothing on a miss and sends no length, and a hit's length", %{
+  test "Scenario: A thumbnail HEAD renders nothing on a miss and sends no length, and a hit's length", %{
     bucket: bucket,
     tmp_dir: tmp_dir
   } do
@@ -184,7 +187,7 @@ defmodule SlimServe.S3DownloadTest do
   end
 
   # Download caches nothing over 100 MB.
-  test "a thumbnail HEAD for an image too big to cache answers the GET's 503 and fetches nothing", %{
+  test "Scenario: A thumbnail HEAD for an image too big to cache answers the GET's 503 and fetches nothing", %{
     conn: conn,
     bucket: bucket,
     rules: rules
@@ -208,7 +211,10 @@ defmodule SlimServe.S3DownloadTest do
     refute_received {:proxied, %{method: "GET", path: ^path}}
   end
 
-  test "a streamed answer with the wrong length, range or ETag is refused before any header", %{conn: conn, rules: rules} do
+  test "Scenario: A streamed answer with the wrong length, range or ETag is refused before any header", %{
+    conn: conn,
+    rules: rules
+  } do
     fill_cache()
 
     for {name, value} <- [{"content-length", "5"}, {"content-range", "bytes 0-3/10"}, {"etag", ~s("other")}] do
@@ -223,7 +229,7 @@ defmodule SlimServe.S3DownloadTest do
   end
 
   @tag capture_log: true
-  test "a streamed body cut short closes an HTTP/1 connection and resets an HTTP/2 stream", %{rules: rules} do
+  test "Scenario: A streamed body cut short closes an HTTP/1 connection and resets an HTTP/2 stream", %{rules: rules} do
     fill_cache()
     on_get(rules, {:truncate, 4})
     port = start_bandit()
@@ -242,7 +248,9 @@ defmodule SlimServe.S3DownloadTest do
   end
 
   # On the wire, where Bandit, not the ConnTest adapter, decides what a HEAD's headers say.
-  test "a streamed HEAD sends GET's status and length over HTTP/1 and HTTP/2 but fetches no body", %{bucket: bucket} do
+  test "Scenario: A streamed HEAD sends GET's status and length over HTTP/1 and HTTP/2 but fetches no body", %{
+    bucket: bucket
+  } do
     path = "/#{bucket}/digits.txt"
     fill_cache()
     port = start_bandit()

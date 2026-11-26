@@ -58,9 +58,10 @@ defmodule SlimServe.S3IntegrationTest do
     end
   end
 
-  test "the tree and the card show a bucket's folders and files, and a woken page lists no unchanged subfolder", %{
-    conn: conn
-  } do
+  test "Scenario: The tree and the card show a bucket's folders and files, and a change lists no unchanged subfolder again",
+       %{
+         conn: conn
+       } do
     bucket = S3.serve()
     S3.put(bucket, "a/x.png", String.duplicate("x", 1000))
     S3.put(bucket, "a/B.JPG", String.duplicate("b", 1048))
@@ -100,7 +101,7 @@ defmodule SlimServe.S3IntegrationTest do
     refute Enum.any?(requests, &(list_request?(&1, "a/sub/") or list_request?(&1, "z/")))
   end
 
-  test "an unfolded level drops a subfolder another page deletes", %{conn: conn} do
+  test "Scenario: On a bucket, an unfolded level drops a subfolder another page deletes", %{conn: conn} do
     bucket = S3.serve()
     S3.put(bucket, "z/y/f.txt", "f")
     S3.put(bucket, "z/w/g.txt", "g")
@@ -123,7 +124,10 @@ defmodule SlimServe.S3IntegrationTest do
   defp names(view), do: view |> doc() |> LazyHTML.query("#entries .name .label") |> Enum.map(&text/1)
 
   @tag :tmp_dir
-  test "a write in the open folder counts none of its unchanged subfolders again", %{conn: conn, tmp_dir: tmp_dir} do
+  test "Scenario: A write in the open folder counts none of its unchanged subfolders again", %{
+    conn: conn,
+    tmp_dir: tmp_dir
+  } do
     bucket = S3.serve()
     S3.put(bucket, "a/sub/c.txt", "c")
     S3.put(bucket, "a/w/d.txt", "d")
@@ -146,7 +150,7 @@ defmodule SlimServe.S3IntegrationTest do
            )
   end
 
-  test "a change made while the page lists its folder still reaches the page", %{conn: conn} do
+  test "Scenario: A change made while the page lists its folder still reaches the page", %{conn: conn} do
     bucket = S3.serve()
     S3.put(bucket, "a/x.txt", "x")
     conn = get(conn, "/a")
@@ -177,7 +181,10 @@ defmodule SlimServe.S3IntegrationTest do
   end
 
   @tag :tmp_dir
-  test "an image's kind line carries its pixel size once its thumbnail is made", %{conn: conn, tmp_dir: tmp_dir} do
+  test "Scenario: On a bucket, an image's kind line carries its pixel size once its thumbnail is made", %{
+    conn: conn,
+    tmp_dir: tmp_dir
+  } do
     # An empty cache, so the size can only come from this test's thumbnail.
     :ok = Supervisor.terminate_child(SlimServe.Supervisor, ThumbCache)
     on_exit(fn -> {:ok, _pid} = Supervisor.restart_child(SlimServe.Supervisor, ThumbCache) end)

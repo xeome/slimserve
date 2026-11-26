@@ -58,7 +58,7 @@ defmodule SlimServeWeb.ListingLiveTest do
 
   describe "Listing" do
     # A tab opened before the view toggle shipped reconnects with a session that has no "view".
-    test "a session without a view mounts the list view", %{conn: conn} do
+    test "Scenario: A tab left open from before the view switch reconnects to the list view", %{conn: conn} do
       {:ok, view, _html} = live_isolated(conn, SlimServeWeb.ListingLive, session: %{"segments" => ["sub"]})
 
       assert has_element?(view, "#listing[data-view=list]")
@@ -67,7 +67,7 @@ defmodule SlimServeWeb.ListingLiveTest do
     end
 
     # The grid and list views share this markup and differ only in CSS.
-    test "a mixed folder shows each entry's thumbnail or kind icon, its size and its modified time", %{
+    test "Scenario: A mixed folder shows each entry's thumbnail or kind icon, its size and its modified time", %{
       conn: conn,
       root: root
     } do

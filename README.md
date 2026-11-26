@@ -6,7 +6,7 @@ and the gates every later change must pass. The Go version lives on `master`.
 ## Run it
 
 ```sh
-mise install              # Erlang, Elixir and actionlint, from .tool-versions
+mise install              # Erlang, Elixir, actionlint and bun, from .tool-versions
 sudo pacman -S inotify-tools   # or apt-get: inotifywait, for the live listing
 mix setup                 # deps, Tailwind and esbuild binaries, first asset build
 mix phx.server            # http://localhost:4000

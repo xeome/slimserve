@@ -90,7 +90,10 @@ defmodule SlimServe.MixProject do
         "sobelow --exit medium --skip -i Config.HTTPS",
         "deps.audit",
         "dialyzer",
-        "test --cover --warnings-as-errors"
+        "test --cover --warnings-as-errors",
+        # Keeps Node out: bunx execs `node` from PATH through the bin's shebang.
+        "cmd bun install --frozen-lockfile",
+        "cmd env OPENSPEC_TELEMETRY=0 bun node_modules/@fission-ai/openspec/bin/openspec.js validate --specs --strict --no-interactive"
       ]
     ]
   end

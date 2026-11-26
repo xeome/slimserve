@@ -34,7 +34,7 @@ defmodule SlimServeWeb.S3IntegrationTest do
   defp listed(conn, path), do: conn |> get(path) |> html_response(200) |> hrefs()
 
   describe "browsing a bucket" do
-    test "lists folders first and drops each folder's own marker", %{conn: conn, bucket: bucket} do
+    test "Scenario: A bucket lists folders first and drops each folder's own marker", %{conn: conn, bucket: bucket} do
       S3.put(bucket, "a.txt", "alpha")
       S3.put(bucket, "a b+c.txt", "spaced")
       S3.put(bucket, "docs/", "")
@@ -48,7 +48,7 @@ defmodule SlimServeWeb.S3IntegrationTest do
       assert conn |> get("/a%20b%2Bc.txt") |> response(200) == "spaced"
     end
 
-    test "hides dot-names, ignored paths and invalid names, and refuses them by URL",
+    test "Scenario: A bucket hides dot-names, ignored paths and invalid names, and refuses them by URL",
          %{conn: conn, bucket: bucket} do
       S3.put(bucket, ".slimserveignore", "secret/\n*.log\n")
       S3.put(bucket, ".env", "dot")
@@ -70,7 +70,7 @@ defmodule SlimServeWeb.S3IntegrationTest do
 
     # MinIO cannot hold both, so the listing that has both is stubbed.
     @tag :proxied
-    test "a name that is both an object and a prefix is listed once, as a folder", %{conn: conn, rules: rules} do
+    test "Scenario: A name that is both an object and a prefix is listed once, as a folder", %{conn: conn, rules: rules} do
       listing = """
       <ListBucketResult><IsTruncated>false</IsTruncated>\
       <Contents><Key>both</Key><ETag>"e1"</ETag><Size>1</Size><LastModified>2026-01-01T00:00:00.000Z</LastModified></Contents>\
@@ -87,7 +87,7 @@ defmodule SlimServeWeb.S3IntegrationTest do
       assert html |> LazyHTML.from_fragment() |> LazyHTML.query("#entries .kind.dir") |> Enum.count() == 1
     end
 
-    test "an ignore file that is not valid UTF-8 hides its folder", %{conn: conn, bucket: bucket} do
+    test "Scenario: A bucket ignore file that is not valid UTF-8 hides its folder", %{conn: conn, bucket: bucket} do
       S3.put(bucket, "d/.slimserveignore", <<0xFF, 0xFE>>)
       S3.put(bucket, "d/x.txt", "x")
       S3.put(bucket, "y.txt", "y")
@@ -110,7 +110,7 @@ defmodule SlimServeWeb.S3IntegrationTest do
       {:ok, writer: conn |> post("/.app/login", %{"password" => "wpass"}) |> recycle()}
     end
 
-    test "a writer uploads, makes a folder, moves a file there and back and deletes it, and another page follows",
+    test "Scenario: On a bucket, a writer uploads, makes a folder, moves a file there and back and deletes it, and another page follows",
          %{writer: writer, bucket: bucket} do
       assert %{put: true, mkdir: true} = Capabilities.check()
       {:ok, view, _html} = live(writer, "/")
@@ -139,7 +139,7 @@ defmodule SlimServeWeb.S3IntegrationTest do
       refute has_element?(view, "#flash-error")
     end
 
-    test "an upload or a new folder onto a name taken after the fresh check is refused, and the winner stays",
+    test "Scenario: An upload or a new folder onto a name taken after the fresh check is refused, and the winner stays",
          %{writer: writer, bucket: bucket} do
       Capabilities.check()
       {:ok, view, _html} = live(writer, "/")
@@ -155,7 +155,7 @@ defmodule SlimServeWeb.S3IntegrationTest do
       assert S3.objects(bucket) == %{"race.txt" => "winner", "racedir/" => "winner marker"}
     end
 
-    test "a folder moves key by key to the exact new keys, markers and dot-files included",
+    test "Scenario: A folder moves key by key to the exact new keys, markers and dot-files included",
          %{writer: writer, bucket: bucket} do
       Capabilities.check()
       seed = %{"c/" => "", "c/d/" => "", "c/d/x.txt" => "x", "c/.env" => "secret", "c/sp ace/y+z.txt" => "yz"}
@@ -172,7 +172,7 @@ defmodule SlimServeWeb.S3IntegrationTest do
       assert S3.objects(bucket) == Map.put(moved, "cc/keep.txt", "k")
     end
 
-    test "a folder holding a file its ignore rules hide does not move, even when the cached rules are older",
+    test "Scenario: A folder holding a file its ignore rules hide does not move, even when the cached rules are older",
          %{writer: writer, bucket: bucket} do
       Capabilities.check()
       S3.put(bucket, "a/deep/secret.txt", "s")
@@ -186,7 +186,7 @@ defmodule SlimServeWeb.S3IntegrationTest do
       assert S3.objects(bucket) == before
     end
 
-    test "a move uses the entry's kind now, not the kind the page listed", %{writer: writer, bucket: bucket} do
+    test "Scenario: A move uses the entry's kind now, not the kind the page listed", %{writer: writer, bucket: bucket} do
       Capabilities.check()
       Application.put_env(:slimserve, :upload_types, [".txt"])
       S3.put(bucket, "k", "a file")
@@ -199,7 +199,7 @@ defmodule SlimServeWeb.S3IntegrationTest do
       assert S3.objects(bucket) == %{"k2/inner.txt" => "i"}
     end
 
-    test "a folder with files is deleted only after the bar that counts them, and asks again after a change",
+    test "Scenario: A bucket folder with files is deleted only after the bar that counts them, and asks again after a change",
          %{writer: writer, bucket: bucket} do
       Capabilities.check()
       S3.put(bucket, "sub/", "")
@@ -222,7 +222,7 @@ defmodule SlimServeWeb.S3IntegrationTest do
       assert S3.objects(bucket) == %{}
     end
 
-    test "a folder holding only empty folders is deleted only after the bar", %{writer: writer, bucket: bucket} do
+    test "Scenario: A folder holding only empty folders is deleted only after the bar", %{writer: writer, bucket: bucket} do
       Capabilities.check()
       S3.put(bucket, "sub/", "")
       S3.put(bucket, "sub/deep/", "")
@@ -234,7 +234,7 @@ defmodule SlimServeWeb.S3IntegrationTest do
     end
 
     @tag :proxied
-    test "a folder delete that fails for one key reports a partial outcome and keeps that key",
+    test "Scenario: A folder delete that fails for one key reports a partial outcome and keeps that key",
          %{writer: writer, bucket: bucket, rules: rules} do
       Capabilities.check()
       for key <- ~w(f/a.txt f/b.txt f/c.txt), do: S3.put(bucket, key, key)
@@ -253,7 +253,7 @@ defmodule SlimServeWeb.S3IntegrationTest do
     # A provider that answers 200 to a conditional write it did not honour fails the check.
     @tag :proxied
     @tag capture_log: true
-    test "without the no-clobber guarantees, upload and new folder are refused, and move and delete still work",
+    test "Scenario: Without the no-clobber guarantees, upload and new folder are refused, and move and delete still work",
          %{writer: writer, bucket: bucket, rules: rules} do
       Agent.update(rules, fn _rule ->
         fn request ->
@@ -282,7 +282,7 @@ defmodule SlimServeWeb.S3IntegrationTest do
     end
 
     @tag :tmp_dir
-    test "a replaced image gets a new thumbnail URL and the new thumbnail",
+    test "Scenario: A replaced image gets a new thumbnail URL and the new thumbnail",
          %{writer: writer, conn: conn, bucket: bucket, tmp_dir: tmp_dir} do
       # An empty thumbnail cache, so the first request can only miss.
       :ok = Supervisor.terminate_child(SlimServe.Supervisor, SlimServe.ThumbCache)

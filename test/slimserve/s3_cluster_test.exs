@@ -44,7 +44,7 @@ defmodule SlimServe.S3ClusterTest do
     end
   end
 
-  test "a write on one node shows at once on another node's open page and next request", %{bucket: bucket, b: b} do
+  test "Scenario: A write on one node shows at once on another node's open page and next request", %{bucket: bucket, b: b} do
     S3.put(bucket, "a.txt", "a")
 
     # B has read both the folder and the name about to be made, so its cache holds the old answers.

@@ -29,7 +29,9 @@ defmodule SlimServeWeb.HTTPSTest do
     Application.put_env(:slimserve, :login, {"user", "pass"})
   end
 
-  test "HTTP redirects to the canonical HTTPS host before socket dispatch", %{conn: conn} do
+  test "Scenario: With HTTPS on, plain HTTP redirects to the canonical HTTPS host, the live socket path too", %{
+    conn: conn
+  } do
     enable_https()
 
     for path <- ["/folder/?sort=name", @socket_path] do
@@ -40,7 +42,7 @@ defmodule SlimServeWeb.HTTPSTest do
   end
 
   @tag capture_log: true
-  test "a forwarded HTTPS WebSocket origin passes the endpoint origin check", %{conn: conn} do
+  test "Scenario: A forwarded HTTPS WebSocket origin passes the origin check", %{conn: conn} do
     enable_https()
 
     socket =
@@ -56,7 +58,7 @@ defmodule SlimServeWeb.HTTPSTest do
     assert socket |> put_req_header("origin", "https://other.example.test") |> get(url) |> response(403)
   end
 
-  test "the login cookie follows the HTTPS policy even for localhost HTTP", %{conn: conn} do
+  test "Scenario: The login cookie follows the HTTPS policy even for localhost HTTP", %{conn: conn} do
     for request <- [conn, forwarded_https(conn)] do
       logged_in = log_in(request, "http://192.0.2.8:4081")
       assert logged_in.scheme == :http

@@ -34,7 +34,10 @@ defmodule SlimServe.DiskCacheTest do
     pid
   end
 
-  test "a published file is claimed by its key, and a claim of an unknown key misses", %{tmp_dir: dir, test: name} do
+  test "Scenario: A kept file is served from the cache with its bytes, and a file never kept misses", %{
+    tmp_dir: dir,
+    test: name
+  } do
     cache = start(name, dir, 1000)
     path = fill(cache, "a", "abc")
 
@@ -43,7 +46,10 @@ defmodule SlimServe.DiskCacheTest do
     assert DiskCache.claim(cache, key("b")) == :miss
   end
 
-  test "held room counts against the cap until it is released", %{tmp_dir: dir, test: name} do
+  test "Scenario: While one download fills the cache, another miss gets no room, and gets room once the first ends", %{
+    tmp_dir: dir,
+    test: name
+  } do
     cache = start(name, dir, 100)
     assert {:ok, tmp} = DiskCache.reserve(cache, 100)
     assert DiskCache.reserve(cache, 1) == :full
@@ -52,7 +58,10 @@ defmodule SlimServe.DiskCacheTest do
     assert {:ok, _tmp} = DiskCache.reserve(cache, 1)
   end
 
-  test "a holder that exits gives back its room and leaves no temporary file", %{tmp_dir: dir, test: name} do
+  test "Scenario: A download that ends early leaves no partial file, and a file the size of the cache still fits", %{
+    tmp_dir: dir,
+    test: name
+  } do
     cache = start(name, dir, 100)
     test = self()
 
@@ -72,7 +81,10 @@ defmodule SlimServe.DiskCacheTest do
     assert {:ok, _tmp} = DiskCache.reserve(cache, 100)
   end
 
-  test "eviction takes the least recently touched file, and never a held one", %{tmp_dir: dir, test: name} do
+  test "Scenario: Eviction takes the least recently downloaded file, and never one being sent", %{
+    tmp_dir: dir,
+    test: name
+  } do
     cache = start(name, dir, 250)
     for char <- ~w(a b), do: DiskCache.release(cache, fill(cache, char, String.duplicate(char, 100)))
     age(dir, "a", 120)
@@ -92,7 +104,7 @@ defmodule SlimServe.DiskCacheTest do
     send(sender, :stop)
   end
 
-  test "room the cap can never hold is refused without evicting anything", %{tmp_dir: dir, test: name} do
+  test "Scenario: A file larger than the whole cache is not kept and evicts nothing", %{tmp_dir: dir, test: name} do
     cache = start(name, dir, 100)
     DiskCache.release(cache, fill(cache, "a", "abc"))
 
@@ -100,7 +112,7 @@ defmodule SlimServe.DiskCacheTest do
     assert File.ls!(dir) == [key("a") <> ".bin"]
   end
 
-  test "a cache directory removed from outside is made again when room is reserved", %{tmp_dir: dir, test: name} do
+  test "Scenario: A cache directory removed from outside is made again", %{tmp_dir: dir, test: name} do
     sub = Path.join(dir, "cache")
     cache = start(name, sub, 100)
     DiskCache.release(cache, fill(cache, "a", String.duplicate("a", 90)))
@@ -110,7 +122,10 @@ defmodule SlimServe.DiskCacheTest do
     assert File.write(tmp, "b") == :ok
   end
 
-  test "an object published twice by two misses is counted once", %{tmp_dir: dir, test: name} do
+  test "Scenario: Two misses of one file at once keep one copy, and a file that fills the rest still fits", %{
+    tmp_dir: dir,
+    test: name
+  } do
     cache = start(name, dir, 100)
     {:ok, first} = DiskCache.reserve(cache, 40)
     {:ok, second} = DiskCache.reserve(cache, 40)

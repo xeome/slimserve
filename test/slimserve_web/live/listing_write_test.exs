@@ -100,7 +100,7 @@ defmodule SlimServeWeb.ListingWriteTest do
   defp remove(view, path), do: render_hook(view, "delete", %{"path" => "/" <> path})
 
   describe "with write rights" do
-    test "a writer uploads, makes a folder, moves a file there and back and deletes it, and another page follows",
+    test "Scenario: A writer uploads, makes a folder, moves a file there and back and deletes it, and another page follows",
          %{writer: writer, root: root} do
       {:ok, view, _html} = live(writer, "/")
       {:ok, other, _html} = live(writer, "/")
@@ -131,7 +131,10 @@ defmodule SlimServeWeb.ListingWriteTest do
       assert_listed(other, ["/new", "/sub"])
     end
 
-    test "after opening a subfolder in the page, a new folder and an upload land in it", %{writer: writer, root: root} do
+    test "Scenario: After opening a subfolder in the page, a new folder and an upload land in it", %{
+      writer: writer,
+      root: root
+    } do
       {:ok, view, _html} = live(writer, "/")
       render_hook(view, "open", %{"path" => "/sub"})
 
@@ -144,7 +147,7 @@ defmodule SlimServeWeb.ListingWriteTest do
       refute File.exists?(Path.join(root, "u.txt"))
     end
 
-    test "an upload queued in one folder is dropped when the page opens another, so it lands in neither", %{
+    test "Scenario: An upload queued in one folder is dropped when the page opens another, so it lands in neither", %{
       writer: writer,
       root: root
     } do
@@ -160,7 +163,7 @@ defmodule SlimServeWeb.ListingWriteTest do
     end
 
     # A Del or a drop sent in the root can reach the server after an open it queued behind.
-    test "a delete sent for the root's file after the page opened /sub deletes the root's file, not sub's", %{
+    test "Scenario: A delete sent for the root's file after the page opened /sub deletes the root's file, not sub's", %{
       writer: writer,
       root: root
     } do
@@ -174,7 +177,7 @@ defmodule SlimServeWeb.ListingWriteTest do
       assert File.read!(Path.join(root, "sub/x.txt")) == "sub"
     end
 
-    test "a move sent for the root's file after the page opened /sub moves the root's file, not sub's", %{
+    test "Scenario: A move sent for the root's file after the page opened /sub moves the root's file, not sub's", %{
       writer: writer,
       root: root
     } do
@@ -188,7 +191,7 @@ defmodule SlimServeWeb.ListingWriteTest do
       assert File.read!(Path.join(root, "sub/x.txt")) == "sub"
     end
 
-    test "a write path that climbs out, hides a slash, or names a hidden or ignored entry is refused", %{
+    test "Scenario: A write path that climbs out, hides a slash, or names a hidden or ignored entry is refused", %{
       writer: writer,
       root: root,
       outside: outside
@@ -214,7 +217,7 @@ defmodule SlimServeWeb.ListingWriteTest do
       assert {tree(root), tree(outside)} == before
     end
 
-    test "a successful upload leaves no temporary file", %{writer: writer, root: root} do
+    test "Scenario: A successful upload leaves no temporary file", %{writer: writer, root: root} do
       {:ok, view, _html} = live(writer, "/")
 
       upload(view, "a.txt", "hello")
@@ -222,7 +225,7 @@ defmodule SlimServeWeb.ListingWriteTest do
     end
 
     # A relist resets the stream; an id by position would patch the row of b.txt with a.txt.
-    test "a relist keeps each entry's row id", %{writer: writer, root: root} do
+    test "Scenario: A file that sorts first leaves each existing row on its own entry", %{writer: writer, root: root} do
       File.write!(Path.join(root, "b.txt"), "b")
       {:ok, view, _html} = live(writer, "/")
       before = row_id(view, "b.txt")
@@ -233,7 +236,7 @@ defmodule SlimServeWeb.ListingWriteTest do
     end
 
     # A relative link's target would change meaning in another folder.
-    test "a link is renamed within its own folder, and not moved to another", %{writer: writer, root: root} do
+    test "Scenario: A link is renamed within its own folder, and not moved to another", %{writer: writer, root: root} do
       File.ln_s!("sub", Path.join(root, "to-dir"))
       {:ok, view, _html} = live(writer, "/")
       before = tree(root)
@@ -245,7 +248,10 @@ defmodule SlimServeWeb.ListingWriteTest do
       assert File.read_link!(Path.join(root, "renamed")) == "sub"
     end
 
-    test "a folder renamed onto an existing empty folder is refused, and both stay", %{writer: writer, root: root} do
+    test "Scenario: A folder renamed onto an existing empty folder is refused, and both stay", %{
+      writer: writer,
+      root: root
+    } do
       File.mkdir_p!(Path.join(root, "x"))
       File.write!(Path.join(root, "x/f.txt"), "f")
       File.mkdir_p!(Path.join(root, "y"))
@@ -256,7 +262,10 @@ defmodule SlimServeWeb.ListingWriteTest do
       assert tree(root) == before
     end
 
-    test "a folder moves with its files, and a dot-file inside it does not block the move", %{writer: writer, root: root} do
+    test "Scenario: A folder moves with its files, and a dot-file inside it does not block the move", %{
+      writer: writer,
+      root: root
+    } do
       File.mkdir_p!(Path.join(root, "c/d"))
       File.write!(Path.join(root, "c/d/x.txt"), "x")
       File.write!(Path.join(root, "c/.env"), "secret")
@@ -268,7 +277,7 @@ defmodule SlimServeWeb.ListingWriteTest do
       assert File.read!(Path.join(root, "sub/c/.env")) == "secret"
     end
 
-    test "an upload onto an existing name is refused, leaving its bytes and no temporary file", %{
+    test "Scenario: An upload onto an existing name is refused, leaving its bytes and no temporary file", %{
       writer: writer,
       root: root
     } do
@@ -280,7 +289,10 @@ defmodule SlimServeWeb.ListingWriteTest do
       assert Enum.sort(File.ls!(root)) == [".ready", "a.txt", "sub"]
     end
 
-    test "a rename or a new folder onto an existing name is refused, and both stay", %{writer: writer, root: root} do
+    test "Scenario: A rename or a new folder onto an existing name is refused, and both stay", %{
+      writer: writer,
+      root: root
+    } do
       File.write!(Path.join(root, "a.txt"), "a")
       File.write!(Path.join(root, "b.txt"), "b")
       {:ok, view, _html} = live(writer, "/")
@@ -292,7 +304,7 @@ defmodule SlimServeWeb.ListingWriteTest do
       assert tree(root) == before
     end
 
-    test "a rename out of the root, to a dot-name or of a folder into its own child is refused", %{
+    test "Scenario: A rename out of the root, to a dot-name or of a folder into its own child is refused", %{
       writer: writer,
       root: root
     } do
@@ -310,7 +322,7 @@ defmodule SlimServeWeb.ListingWriteTest do
       refute File.exists?(Path.join(root, "../out.txt"))
     end
 
-    test "a write aimed at a hidden or ignored name, or into an ignored folder, is refused", %{
+    test "Scenario: A write aimed at a hidden or ignored name, or into an ignored folder, is refused", %{
       writer: writer,
       root: root
     } do
@@ -334,7 +346,7 @@ defmodule SlimServeWeb.ListingWriteTest do
     end
 
     # Patterns are relative to their ignore file, so the move would reveal the file at its new path.
-    test "a folder holding a file an ignore pattern hides at its current path does not move", %{
+    test "Scenario: A folder holding a file an ignore pattern hides at its current path does not move", %{
       writer: writer,
       root: root
     } do
@@ -348,7 +360,10 @@ defmodule SlimServeWeb.ListingWriteTest do
       assert tree(root) == before
     end
 
-    test "deleting a link to a file or a folder removes the link and leaves its target", %{writer: writer, root: root} do
+    test "Scenario: Deleting a link to a file or a folder removes the link and leaves its target", %{
+      writer: writer,
+      root: root
+    } do
       File.write!(Path.join(root, "sub/x.txt"), "x")
       File.ln_s!("sub", Path.join(root, "to-dir"))
       File.ln_s!("sub/x.txt", Path.join(root, "to-file"))
@@ -361,14 +376,17 @@ defmodule SlimServeWeb.ListingWriteTest do
       assert File.read!(Path.join(root, "sub/x.txt")) == "x"
     end
 
-    test "deleting an empty folder removes it at once", %{writer: writer, root: root} do
+    test "Scenario: Deleting an empty folder removes it at once", %{writer: writer, root: root} do
       {:ok, view, _html} = live(writer, "/")
 
       remove(view, "sub")
       refute File.exists?(Path.join(root, "sub"))
     end
 
-    test "a folder with files is deleted only after the confirm bar that counts them", %{writer: writer, root: root} do
+    test "Scenario: A folder with files is deleted only after the confirm bar that counts them", %{
+      writer: writer,
+      root: root
+    } do
       File.mkdir_p!(Path.join(root, "sub/deep"))
       File.write!(Path.join(root, "sub/x.txt"), "x")
       File.write!(Path.join(root, "sub/deep/.y"), "y")
@@ -387,7 +405,7 @@ defmodule SlimServeWeb.ListingWriteTest do
       refute File.exists?(Path.join(root, "sub"))
     end
 
-    test "a folder that gained a file after the confirm bar opened stays, and the bar counts again", %{
+    test "Scenario: A folder that gained a file after the confirm bar opened stays, and the bar counts again", %{
       writer: writer,
       root: root
     } do
@@ -403,7 +421,7 @@ defmodule SlimServeWeb.ListingWriteTest do
       assert has_element?(view, "#confirm-delete[data-count='2']")
     end
 
-    test "a folder replaced by another of the same count after the confirm bar opened stays", %{
+    test "Scenario: A folder replaced by another of the same count after the confirm bar opened stays", %{
       writer: writer,
       root: root
     } do
@@ -418,7 +436,7 @@ defmodule SlimServeWeb.ListingWriteTest do
       assert File.read(Path.join(root, "sub/new.txt")) == {:ok, "n"}
     end
 
-    test "deleting a folder that links out of the root leaves the outside folder whole", %{
+    test "Scenario: Deleting a folder that links out of the root leaves the outside folder whole", %{
       writer: writer,
       root: root,
       outside: outside
@@ -434,7 +452,7 @@ defmodule SlimServeWeb.ListingWriteTest do
       assert File.read!(Path.join(outside, "keep.txt")) == "k"
     end
 
-    test "an upload over the size limit or of a type off the list is refused, with the entry's error shown", %{
+    test "Scenario: An upload over the size limit or of a type off the list is refused, with the entry's error shown", %{
       writer: writer,
       root: root
     } do
@@ -454,7 +472,7 @@ defmodule SlimServeWeb.ListingWriteTest do
     end
 
     # The browser names the type, so only the name's own extension is trusted.
-    test "an upload named off the type list is refused, whatever type the browser claims", %{
+    test "Scenario: An upload named off the type list is refused, whatever type the browser claims", %{
       writer: writer,
       root: root
     } do
@@ -467,7 +485,7 @@ defmodule SlimServeWeb.ListingWriteTest do
       assert tree(root) == before
     end
 
-    test "a file renamed to an extension off the type list is refused", %{writer: writer, root: root} do
+    test "Scenario: A file renamed to an extension off the type list is refused", %{writer: writer, root: root} do
       Application.put_env(:slimserve, :upload_types, [".jpg"])
       File.write!(Path.join(root, "page.jpg"), "p")
       {:ok, view, _html} = live(writer, "/")
@@ -508,7 +526,10 @@ defmodule SlimServeWeb.ListingWriteTest do
       end
     end
 
-    test "every event leaves the disk unchanged, and the write UI is absent", %{reader: reader, root: root} do
+    test "Scenario: Without write rights every event leaves the disk unchanged, and the write UI is absent", %{
+      reader: reader,
+      root: root
+    } do
       File.write!(Path.join(root, "a.txt"), "a")
       File.write!(Path.join(root, "sub/x.txt"), "x")
       {:ok, view, _html} = live(reader, "/")
@@ -521,7 +542,7 @@ defmodule SlimServeWeb.ListingWriteTest do
       assert tree(root) == before
     end
 
-    test "an open write page stops writing once the write password changes", %{writer: writer, root: root} do
+    test "Scenario: An open write page stops writing once the write password changes", %{writer: writer, root: root} do
       File.write!(Path.join(root, "a.txt"), "a")
       File.write!(Path.join(root, "sub/x.txt"), "x")
       before = tree(root)
@@ -537,7 +558,7 @@ defmodule SlimServeWeb.ListingWriteTest do
       assert tree(root) == before
     end
 
-    test "a write session stops writing once the write password is unset", %{writer: writer, root: root} do
+    test "Scenario: A write session stops writing once the write password is unset", %{writer: writer, root: root} do
       File.write!(Path.join(root, "a.txt"), "a")
       Application.delete_env(:slimserve, :write_password)
       {:ok, view, _html} = live(writer, "/")

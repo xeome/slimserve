@@ -44,7 +44,9 @@ defmodule SlimServe.S3HelmTest do
     assert s3[deployment] =~ "mountPath: /cache"
   end
 
-  test "replicas cluster only over S3, with a shared cookie and signing key, beside the HTTP Service", %{tmp_dir: tmp_dir} do
+  test "Scenario: Replicas cluster only over S3, with a shared cookie and signing key, beside the HTTP Service", %{
+    tmp_dir: tmp_dir
+  } do
     assert {out, 1} = helm(tmp_dir, ["--set", "replicas=2", "--set-string", "cluster.cookie=c,auth.secretKeyBase=k"])
     assert out =~ "replicas above 1 need storage.backend: s3"
     assert {out, 1} = helm(tmp_dir, @s3 ++ ["--set", "replicas=2"])
