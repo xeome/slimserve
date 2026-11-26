@@ -48,11 +48,11 @@ defmodule SlimServe.Storage.S3 do
   end
 
   @impl true
-  def list(segments, _opts) do
+  def list(segments) do
     with true <- Enum.all?(segments, &Root.name?/1),
          {:ok, rules} <- prefetch_rules([{segments, true}], false),
          {:dir, prefix} <- resolve(segments, false, &Map.fetch!(rules, &1)),
-         {:ok, {objects, prefixes}} <- listing(prefix, false),
+         {:ok, {objects, prefixes}} <- listing(prefix),
          entries = for(entry <- entries(prefix, objects, prefixes), Root.name?(entry.name), do: entry),
          folders = for(%{dir?: true, name: name} <- entries, do: {segments ++ [name], true}),
          {:ok, rules} <- prefetch_rules(folders, false, rules) do
@@ -95,10 +95,10 @@ defmodule SlimServe.Storage.S3 do
     end)
   end
 
-  def refill({:list, prefix}), do: listing(prefix, false)
+  def refill({:list, prefix}), do: listing(prefix)
   def refill({:folder, key}), do: folder?(key, false)
 
-  def listing(prefix, fresh?), do: Metadata.fetch({:list, prefix}, fresh?, fn -> keys(prefix, "/") end)
+  def listing(prefix), do: Metadata.fetch({:list, prefix}, false, fn -> keys(prefix, "/") end)
 
   @doc "Keys come URL-encoded, so one that XML cannot carry does not break the whole listing."
   def keys(prefix, delimiter), do: page(prefix, delimiter, nil, [], [])

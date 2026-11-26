@@ -48,7 +48,7 @@ defmodule SlimServe.S3ClusterTest do
     S3.put(bucket, "a.txt", "a")
 
     # B has read both the folder and the name about to be made, so its cache holds the old answers.
-    assert {:ok, [%{name: "a.txt"}]} = :erpc.call(b, Storage, :list, [[], []])
+    assert {:ok, [%{name: "a.txt"}]} = :erpc.call(b, Storage, :list, [[]])
     assert :erpc.call(b, Storage, :resolve, [["docs"]]) == :error
     {:ok, view, _html} = :erpc.call(b, S3, :hold_view, ["/", self()])
     assert hrefs(view) == ["/a.txt"]

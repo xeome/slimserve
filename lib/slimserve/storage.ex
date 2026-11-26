@@ -21,7 +21,7 @@ defmodule SlimServe.Storage do
   @type result :: :ok | :partial | :error
 
   @callback resolve([String.t()]) :: {:dir, term()} | {:file, Path.t() | map()} | :error | {:error, term()}
-  @callback list([String.t()], keyword()) :: {:ok, [entry()]} | :error | {:error, term()}
+  @callback list([String.t()]) :: {:ok, [entry()]} | :error | {:error, term()}
   @callback topics([String.t()]) :: [String.t()]
   @callback upload([String.t()], String.t(), Path.t()) :: result()
   @callback mkdir([String.t()], String.t()) :: result()
@@ -36,8 +36,8 @@ defmodule SlimServe.Storage do
   @spec resolve([String.t()]) :: {:dir, term()} | {:file, Path.t() | map()} | :error | {:error, term()}
   def resolve(segments), do: backend().resolve(segments)
 
-  @spec list([String.t()], keyword()) :: {:ok, [entry()]} | :error | {:error, term()}
-  def list(segments, opts \\ []), do: backend().list(segments, opts)
+  @spec list([String.t()]) :: {:ok, [entry()]} | :error | {:error, term()}
+  def list(segments), do: backend().list(segments)
 
   @doc "The topics that carry this folder's `{:dir_changed, dir}` and `{:tree_changed, rel}` messages."
   @spec topics([String.t()]) :: [String.t()]

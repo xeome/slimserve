@@ -25,7 +25,7 @@ defmodule SlimServe.Storage.Local do
   # Exactly the names Root.resolve/2 would serve: the listing has no filter of its own.
   # File.ls/1 skips names that are not valid UTF-8 (spec: Directory listing).
   @impl true
-  def list(segments, _opts) do
+  def list(segments) do
     thumb_max_file_bytes = Application.fetch_env!(:slimserve, :thumb_max_file_bytes)
 
     with {:dir, dir} <- resolve(segments),
