@@ -44,9 +44,14 @@
 {{- end -}}
 
 {{- define "slimserve.persistence" -}}
-{{- if kindIs "invalid" .Values.persistence.enabled -}}
+{{- /* default dict: persistence set to null removes the map. */ -}}
+{{- $enabled := (.Values.persistence | default dict).enabled -}}
+{{- if kindIs "invalid" $enabled -}}
 {{- if ne (toString .Values.storage.backend) "s3" }}true{{ end -}}
-{{- else if eq (toString .Values.persistence.enabled) "true" }}true{{ end -}}
+{{- else if not (kindIs "bool" $enabled) -}}
+{{- /* Even with the schema skipped: a non-empty string such as "false" would read as on. */ -}}
+{{- fail "persistence.enabled must be true, false or null" -}}
+{{- else if $enabled }}true{{ end -}}
 {{- end -}}
 
 {{- define "slimserve.labels" -}}
