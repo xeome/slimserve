@@ -8,7 +8,7 @@ port: 8080
 host: ""
 
 persistence:
-  enabled: true
+  enabled: null  # on for local storage, off on S3.
 
 replicas: null  # 1 on local storage, 2 on S3.
 

@@ -1,4 +1,4 @@
-{{- if eq (toString .Values.persistence.enabled) "true" }}
+{{- if include "slimserve.persistence" . }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:

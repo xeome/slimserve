@@ -31,8 +31,9 @@ so a misspelt key fails the install.
 
 The pod mounts `/data` from the `subpath` folder of `<release>-data-pvc`, with `fsGroup: 1001`.
 The volume must support that group, or already let UID and GID 1001 read the files, and write them
-if you turn on browser edits. `persistence.enabled: false` puts the files in an `emptyDir`, which vanishes
-with the pod, so use it only for a throwaway install.
+if you turn on browser edits. `persistence.enabled` defaults to on for local storage and off on S3.
+On local storage, `persistence.enabled: false` puts the files in an `emptyDir`, which vanishes with
+the pod, so use it only for a throwaway install.
 
 Local storage runs one replica by default. `replicas` above 1 needs persistence on and the cluster
 settings under [Replicas](#replicas). Every pod mounts the same `ReadWriteOnce` claim, so the chart
@@ -119,8 +120,11 @@ endpoint (`https://s3.<region>.amazonaws.com`), because a bucket that redirects 
 host answers every request with a 502. The [root README](../../README.md#serving-an-s3-bucket) lists
 what the store must support.
 
-The pod then mounts no `/data`. An existing data claim stays, unmounted, so switching back to local
-finds its files, and the chart refuses to drop it.
+The pod then mounts no `/data`. An S3 release keeps an existing data claim, unmounted, only with
+`persistence.enabled=true`, so switching back to local finds its files. The chart refuses an upgrade
+that would drop the claim, but only on a real upgrade or `--dry-run=server`. A plain `--dry-run`
+and `helm template` do not see the claim. Argo CD renders with `helm template`, so with pruning on,
+Argo CD deletes the claim and any files in it.
 
 Each pod caches fetched files up to 100 MB in an `emptyDir` capped at `s3.downloadCacheMB` (default
 1024).
@@ -167,6 +171,15 @@ Chart 3 needs a SlimServe image that serves `/.app/healthz`, the one it defaults
    shell on a single container needs both set. A chart release with 1 replica does not set
    `RELEASE_DISTRIBUTION`, so `bin/slimserve remote`, `rpc`, `stop` and `pid` cannot reach its pod.
    Above 1 replica the chart sets both.
+6. An S3 release from chart 2 has a data claim it does not use. If
+   `kubectl get pvc <release>-data-pvc` shows it Pending, it never held files: delete it before the
+   upgrade. If it is Bound, it may hold files from local storage: set `persistence.enabled=true` to
+   keep it. A values file copied from chart 2's `helm show values` carries
+   `persistence.enabled: true`. On S3, remove that line unless you keep a Bound claim on purpose.
+   Otherwise the deleted claim comes back Pending and `--wait` hangs. A renderer without cluster
+   access, such as Argo CD with pruning on or `helm template | kubectl apply --prune`, gets no
+   refusal and deletes the claim. So if the claim is Bound and holds files, set
+   `persistence.enabled=true` before you sync.
 
 ## Upgrading from the Go chart
 
