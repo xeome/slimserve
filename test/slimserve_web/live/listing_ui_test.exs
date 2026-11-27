@@ -30,14 +30,29 @@ defmodule SlimServeWeb.ListingUITest do
   end
 
   # inotifywait reports nothing until its watches are set, so poke the root until an event comes back.
-  defp ready(root, tries \\ 50) do
+  defp ready(root) do
     :ok = Phoenix.PubSub.subscribe(SlimServe.PubSub, Root.topic(""))
+    # One write broadcasts more than once, so an earlier call can leave an event that a stopped watcher sent.
+    flush()
+    poke(root, 50)
+    Phoenix.PubSub.unsubscribe(SlimServe.PubSub, Root.topic(""))
+  end
+
+  defp flush do
+    receive do
+      {:dir_changed, _dir} -> flush()
+    after
+      0 -> :ok
+    end
+  end
+
+  defp poke(root, tries) do
     File.write!(Path.join(root, ".ready"), "x")
 
     receive do
-      {:dir_changed, _dir} -> Phoenix.PubSub.unsubscribe(SlimServe.PubSub, Root.topic(""))
+      {:dir_changed, _dir} -> :ok
     after
-      100 -> if tries > 0, do: ready(root, tries - 1), else: flunk("the watcher never reported an event")
+      100 -> if tries > 0, do: poke(root, tries - 1), else: flunk("the watcher never reported an event")
     end
   end
 
@@ -104,6 +119,10 @@ defmodule SlimServeWeb.ListingUITest do
       File.write!(Path.join(root, "a/b/q.txt"), "q")
       for name <- ~w(x.txt y.txt .dot ignored.txt), do: File.write!(Path.join(root, "a/b/d/" <> name), "x")
       File.write!(Path.join(root, "a/b/d/.slimserveignore"), "ignored.txt\n")
+      # inotifywait may not watch a folder made inside a folder made at the same moment.
+      stop_supervised!(SlimServe.Watcher)
+      start_supervised!({SlimServe.Watcher, root: root})
+      ready(root)
 
       {:ok, view, _html} = live(reader, "/a/b")
 
