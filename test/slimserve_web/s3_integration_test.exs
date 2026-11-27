@@ -3,15 +3,13 @@ defmodule SlimServeWeb.S3IntegrationTest do
   use SlimServeWeb.ConnCase, async: false
 
   import Phoenix.LiveViewTest
+  import SlimServeWeb.ListingHelpers
 
   alias SlimServe.S3Fixture, as: S3
   alias SlimServe.Storage.S3.Capabilities
   alias Vix.Vips.Image
 
   @moduletag :s3
-
-  # The spec's bound: a connected listing updates within a second.
-  @within 1_000
 
   # A test tagged :proxied reaches MinIO through a proxy whose rule it can change: see S3Fixture.proxy/1.
   setup %{conn: conn} = tags do
@@ -118,24 +116,24 @@ defmodule SlimServeWeb.S3IntegrationTest do
 
       upload(view, "a.txt", "hello")
       assert S3.objects(bucket) == %{"a.txt" => "hello"}
-      assert_listed(other, ["/a.txt"])
+      await_page(other, &(hrefs(render(&1)) == ["/a.txt"]))
 
       view |> element("#mkdir-form") |> render_submit(%{"name" => "new"})
       assert S3.objects(bucket) == %{"a.txt" => "hello", "new/" => ""}
-      assert_listed(other, ["/new", "/a.txt"])
+      await_page(other, &(hrefs(render(&1)) == ["/new", "/a.txt"]))
 
       rename(view, "a.txt", "new/b.txt")
       assert S3.objects(bucket) == %{"new/" => "", "new/b.txt" => "hello"}
-      assert_listed(other, ["/new"])
+      await_page(other, &(hrefs(render(&1)) == ["/new"]))
 
       {:ok, in_new, _html} = live(writer, "/new")
       rename(in_new, "new/b.txt", "a.txt")
       assert S3.objects(bucket) == %{"new/" => "", "a.txt" => "hello"}
-      assert_listed(other, ["/new", "/a.txt"])
+      await_page(other, &(hrefs(render(&1)) == ["/new", "/a.txt"]))
 
       remove(view, "a.txt")
       assert S3.objects(bucket) == %{"new/" => ""}
-      assert_listed(other, ["/new"])
+      await_page(other, &(hrefs(render(&1)) == ["/new"]))
       refute has_element?(view, "#flash-error")
     end
 
@@ -300,7 +298,15 @@ defmodule SlimServeWeb.S3IntegrationTest do
 
       remove(view, "p.png")
       upload(view, "p.png", png([0, 0, 200]))
-      [new_thumb] = eventually(fn -> thumbs(view) end, &(&1 not in [[], [old_thumb]]))
+
+      new_thumb =
+        await_page(view, fn view ->
+          case thumbs(view) do
+            [thumb] when thumb != old_thumb -> thumb
+            _ -> nil
+          end
+        end)
+
       blue = get(conn, new_thumb)
       assert get_resp_header(blue, "x-cache") == ["miss"]
       assert pixel(blue.resp_body) != pixel(red.resp_body)
@@ -325,24 +331,4 @@ defmodule SlimServeWeb.S3IntegrationTest do
 
   defp rename(view, from, to), do: render_hook(view, "rename", %{"path" => "/" <> from, "to" => to})
   defp remove(view, path), do: render_hook(view, "delete", %{"path" => "/" <> path})
-
-  defp assert_listed(view, expected), do: eventually(fn -> hrefs(render(view)) end, &(&1 == expected))
-
-  defp eventually(read, done?, deadline \\ System.monotonic_time(:millisecond) + @within) do
-    value = read.()
-
-    cond do
-      done?.(value) ->
-        value
-
-      System.monotonic_time(:millisecond) > deadline ->
-        flunk("still #{inspect(value)} after #{@within} ms")
-
-      true ->
-        receive do
-        after
-          20 -> eventually(read, done?, deadline)
-        end
-    end
-  end
 end

@@ -3,6 +3,7 @@ defmodule SlimServe.S3ClusterTest do
   use SlimServeWeb.ConnCase, async: false
 
   import Phoenix.LiveViewTest
+  import SlimServeWeb.ListingHelpers
 
   alias SlimServe.S3Fixture, as: S3
   alias SlimServe.Storage
@@ -34,14 +35,14 @@ defmodule SlimServe.S3ClusterTest do
   end
 
   defp await_pubsub(b) do
-    members = for group <- :pg.which_groups(Phoenix.PubSub), pid <- :pg.get_members(Phoenix.PubSub, group), do: node(pid)
+    {ref, groups} = :pg.monitor_scope(Phoenix.PubSub)
+    if not Enum.any?(List.flatten(Map.values(groups)), &(node(&1) == b)), do: await_join(ref, b)
+    :pg.demonitor(Phoenix.PubSub, ref)
+  end
 
-    if b not in members do
-      receive do
-      after
-        20 -> await_pubsub(b)
-      end
-    end
+  defp await_join(ref, b) do
+    assert_receive {^ref, :join, _group, pids}
+    if not Enum.any?(pids, &(node(&1) == b)), do: await_join(ref, b)
   end
 
   test "Scenario: A write on one node shows at once on another node's open page and next request", %{bucket: bucket, b: b} do
@@ -56,27 +57,10 @@ defmodule SlimServe.S3ClusterTest do
     Capabilities.check()
     assert Storage.mkdir([], "docs") == :ok
 
-    # Well inside the 10 s cache expiry and the 30 s poll.
-    assert eventually(view, ["/docs", "/a.txt"])
+    await_page(view, &(hrefs(&1) == ["/docs", "/a.txt"]))
     assert {:dir, _prefix} = :erpc.call(b, Storage, :resolve, [["docs"]])
   end
 
   defp hrefs(view),
     do: view |> render() |> LazyHTML.from_fragment() |> LazyHTML.query("#entries .name a") |> LazyHTML.attribute("href")
-
-  defp eventually(view, expected, deadline \\ System.monotonic_time(:millisecond) + 1_000) do
-    cond do
-      hrefs(view) == expected ->
-        true
-
-      System.monotonic_time(:millisecond) > deadline ->
-        flunk("listed #{inspect(hrefs(view))}, expected #{inspect(expected)}")
-
-      true ->
-        receive do
-        after
-          20 -> eventually(view, expected, deadline)
-        end
-    end
-  end
 end

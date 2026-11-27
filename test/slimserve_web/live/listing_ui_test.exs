@@ -3,15 +3,13 @@ defmodule SlimServeWeb.ListingUITest do
   use SlimServeWeb.ConnCase, async: false
 
   import Phoenix.LiveViewTest
+  import SlimServeWeb.ListingHelpers
 
   alias SlimServe.Root
   alias Vix.Vips.Image
   alias Vix.Vips.MutableImage
 
   @moduletag :tmp_dir
-
-  # The spec's bound: a connected listing updates within a second.
-  @within 1_000
 
   setup %{conn: conn, tmp_dir: tmp_dir} do
     root = Path.join(tmp_dir, "root")
@@ -27,49 +25,6 @@ defmodule SlimServeWeb.ListingUITest do
     conn = %{conn | remote_ip: {0xFD03, 0, 0, rem(System.unique_integer([:positive]), 65_536), 0, 0, 0, 1}}
     writer = conn |> post("/.app/login", %{"password" => "wpass"}) |> recycle()
     {:ok, root: root, reader: conn, writer: writer}
-  end
-
-  # inotifywait reports nothing until its watches are set, so poke the root until an event comes back.
-  defp ready(root) do
-    :ok = Phoenix.PubSub.subscribe(SlimServe.PubSub, Root.topic(""))
-    # One write broadcasts more than once, so an earlier call can leave an event that a stopped watcher sent.
-    flush()
-    poke(root, 50)
-    Phoenix.PubSub.unsubscribe(SlimServe.PubSub, Root.topic(""))
-  end
-
-  defp flush do
-    receive do
-      {:dir_changed, _dir} -> flush()
-    after
-      0 -> :ok
-    end
-  end
-
-  defp poke(root, tries) do
-    File.write!(Path.join(root, ".ready"), "x")
-
-    receive do
-      {:dir_changed, _dir} -> :ok
-    after
-      100 -> if tries > 0, do: poke(root, tries - 1), else: flunk("the watcher never reported an event")
-    end
-  end
-
-  defp eventually(check, deadline \\ System.monotonic_time(:millisecond) + @within) do
-    cond do
-      check.() ->
-        :ok
-
-      System.monotonic_time(:millisecond) > deadline ->
-        flunk("the page never reached the expected state")
-
-      true ->
-        receive do
-        after
-          20 -> eventually(check, deadline)
-        end
-    end
   end
 
   defp doc(view), do: view |> render() |> LazyHTML.from_fragment()
@@ -136,7 +91,7 @@ defmodule SlimServeWeb.ListingUITest do
              ]
 
       File.mkdir!(Path.join(root, "a/b/new"))
-      eventually(fn -> {"a/b/new", "0", false, false} in tree(view) end)
+      await_page(view, &({"a/b/new", "0", false, false} in tree(&1)))
     end
 
     test "Scenario: A guest unfolds a folder off the open path in place, and it stays unfolded across a relist and an open",
@@ -166,7 +121,7 @@ defmodule SlimServeWeb.ListingUITest do
       assert page_title(view) == "/"
 
       File.write!(Path.join(root, "new.txt"), "n")
-      eventually(fn -> "new.txt" in names(view) end)
+      await_page(view, &("new.txt" in names(&1)))
       assert {"z/y", "1", false, false} in tree(view)
 
       render_hook(view, "open", %{"path" => "/sub"})
@@ -187,8 +142,8 @@ defmodule SlimServeWeb.ListingUITest do
       File.rm_rf!(Path.join(root, "z/y"))
       File.rename!(Path.join(root, "z/w"), Path.join(root, "z/v"))
 
-      eventually(fn ->
-        tree(view) == [{"sub", "0", false, false}, {"z", "1", true, false}, {"z/v", "0", false, false}]
+      await_page(view, fn v ->
+        tree(v) == [{"sub", "0", false, false}, {"z", "1", true, false}, {"z/v", "0", false, false}]
       end)
     end
 
@@ -198,7 +153,7 @@ defmodule SlimServeWeb.ListingUITest do
       assert {"z", "0", false, false} in tree(view)
 
       File.write!(Path.join(root, "z/new.txt"), "n")
-      eventually(fn -> {"z", "1", false, false} in tree(view) end)
+      await_page(view, &({"z", "1", false, false} in tree(&1)))
     end
 
     test "Scenario: After an open away from a level, only changes in the levels the page still shows reach it", %{
@@ -243,10 +198,10 @@ defmodule SlimServeWeb.ListingUITest do
 
       File.rm!(Path.join(root, "l"))
       File.ln_s!("t2", Path.join(root, "l"))
-      eventually(fn -> {"l", "2", false, false} in tree(view) end)
+      await_page(view, &({"l", "2", false, false} in tree(&1)))
 
       File.write!(Path.join(root, "t2/d.txt"), "d")
-      eventually(fn -> {"l", "3", false, false} in tree(view) end)
+      await_page(view, &({"l", "3", false, false} in tree(&1)))
     end
 
     test "Scenario: Unfolding a hidden, ignored, .. or file path is refused, the tree unchanged", %{
@@ -325,13 +280,13 @@ defmodule SlimServeWeb.ListingUITest do
       assert names(view) == ["a1.txt"]
 
       File.write!(Path.join(root, "a2.txt"), "a")
-      eventually(fn -> names(view) == ["a1.txt", "a2.txt"] end)
+      await_page(view, &(names(&1) == ["a1.txt", "a2.txt"]))
 
       File.write!(Path.join(root, "b.txt"), "bigger")
       File.write!(Path.join(root, "a1.txt"), "bigger")
 
-      eventually(fn ->
-        view |> doc() |> LazyHTML.query("#entries tr[data-name='a1.txt'] .size") |> text() == "6 B"
+      await_page(view, fn v ->
+        v |> doc() |> LazyHTML.query("#entries tr[data-name='a1.txt'] .size") |> text() == "6 B"
       end)
 
       assert names(view) == ["a1.txt", "a2.txt"]
@@ -424,7 +379,7 @@ defmodule SlimServeWeb.ListingUITest do
       assert has_element?(view, "#inspector[data-name='x.txt']")
 
       File.rm!(Path.join(root, "x.txt"))
-      eventually(fn -> not has_element?(view, "#inspector") end)
+      await_page(view, &(not has_element?(&1, "#inspector")))
     end
 
     test "Scenario: A rename keeps the entry in its folder and the inspector follows it; a name with a slash is refused",
@@ -439,7 +394,7 @@ defmodule SlimServeWeb.ListingUITest do
       select(view, "x.txt")
       view |> element("#rename-form") |> render_submit(%{"name" => "y.txt"})
       assert File.read(Path.join(root, "sub/y.txt")) == {:ok, "x"}
-      eventually(fn -> has_element?(view, "#inspector[data-name='y.txt']") end)
+      await_page(view, &has_element?(&1, "#inspector[data-name='y.txt']"))
 
       before = disk(root)
       view |> element("#rename-form") |> render_submit(%{"name" => "inner/z.txt"})
@@ -548,7 +503,7 @@ defmodule SlimServeWeb.ListingUITest do
       assert has_element?(view, "#listing[data-path='/sub']")
 
       File.write!(Path.join(root, "sub/y.txt"), "y")
-      eventually(fn -> names(view) == ["deep", "x.txt", "y.txt"] end)
+      await_page(view, &(names(&1) == ["deep", "x.txt", "y.txt"]))
     end
 
     test "Scenario: Opening a file, a missing, hidden or ignored folder, a .. path or an encoded trick is refused, the page unchanged",
@@ -616,7 +571,7 @@ defmodule SlimServeWeb.ListingUITest do
       # The root's ignore file hides x.txt from any later listing of sub, so only a relist could drop it.
       :ok = Phoenix.PubSub.subscribe(SlimServe.PubSub, Root.topic(""))
       File.write!(Path.join(root, ".slimserveignore"), "x.txt\n")
-      assert_receive {:dir_changed, _dir}, @within
+      assert_receive {:dir_changed, _dir}
       _ = :sys.get_state(view.pid)
 
       # A page still on the root's topic relists 100 ms after the change message.

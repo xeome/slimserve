@@ -279,10 +279,9 @@ defmodule SlimServe.S3DownloadTest do
   defp wire_status(responses), do: for({:status, _ref, status} <- responses, do: status)
   defp wire_header(responses, name), do: for({:headers, _ref, headers} <- responses, {^name, value} <- headers, do: value)
 
-  # Within two seconds, so a hang that would end only at a timeout fails.
   defp fetch(conn, method \\ "GET", headers \\ [], path \\ "/digits.txt") do
     {:ok, conn, _ref} = Mint.HTTP.request(conn, method, path, headers, nil)
-    collect(conn, [], System.monotonic_time(:millisecond) + 2_000)
+    collect(conn, [], System.monotonic_time(:millisecond) + Application.fetch_env!(:ex_unit, :assert_receive_timeout))
   end
 
   # The `{:proxied, _}` ones stay in the mailbox for the test to check.
