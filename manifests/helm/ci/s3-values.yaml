@@ -1,0 +1,16 @@
+# ct install: two replicas on the stand-in S3 from scripts/kind/s3.yaml.
+host: files.example.test
+storage:
+  backend: s3
+s3:
+  bucket: slimserve
+  endpoint: http://s3.s3.svc.cluster.local:8333
+  accessKeyId: ci-access-key
+  secretAccessKey: ci-secret-key
+# The claim renders on S3 while persistence is on, and nothing mounts it, so --wait would hang on it.
+persistence:
+  enabled: false
+cluster:
+  cookie: ci-test-cookie
+auth:
+  secretKeyBase: ci-test-secret-key-base-ci-test-secret-key-base-ci-test-secret-key-base

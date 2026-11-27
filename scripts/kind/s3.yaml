@@ -1,0 +1,58 @@
+# The stand-in S3 for scripts/kind-test.sh. Not under restricted admission: it is not the chart under test.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: s3
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: s3
+  namespace: s3
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: s3
+  template:
+    metadata:
+      labels:
+        app: s3
+    spec:
+      # The Service named s3 would inject S3_PORT=tcp://..., which weed reads as its own setting.
+      enableServiceLinks: false
+      containers:
+        - name: s3
+          image: chrislusf/seaweedfs:4.55@sha256:7ca46aeae2f223b37e5d91593c17ab37738eec6df6ab69b48a0487f7643342b9
+          args: [mini, -dir=/data]
+          env:
+            - name: AWS_ACCESS_KEY_ID
+              value: ci-access-key
+            - name: AWS_SECRET_ACCESS_KEY
+              value: ci-secret-key
+            # Created at start: the app never creates its bucket.
+            - name: S3_BUCKET
+              value: slimserve
+          ports:
+            - containerPort: 8333
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8333
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: s3
+  namespace: s3
+spec:
+  selector:
+    app: s3
+  ports:
+    - port: 8333

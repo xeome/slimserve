@@ -2,7 +2,7 @@ image:
   main:
     repository: ghcr.io/xeome/slimserve
     pullPolicy: IfNotPresent
-    tag: "" # Defaults to the chart appVersion.
+    tag: ""  # Defaults to the chart appVersion.
 
 port: 8080
 host: ""
@@ -10,18 +10,18 @@ host: ""
 persistence:
   enabled: true
 
-replicas: null # 1 on local storage, 2 on S3.
+replicas: null  # 1 on local storage, 2 on S3.
 
 storage:
   backend: local
 
 s3:
   bucket: ""
-  endpoint: "" # AWS_ENDPOINT_URL_S3; AWS is untested, set it to https://s3.<region>.amazonaws.com there too.
+  endpoint: ""  # AWS_ENDPOINT_URL_S3; AWS is untested, set it to https://s3.<region>.amazonaws.com there too.
   region: us-east-1
   accessKeyId: ""
   secretAccessKey: ""
-  downloadCacheMB: 1024 # Per pod, in an emptyDir.
+  downloadCacheMB: 1024  # Per pod, in an emptyDir.
 
 cluster:
   cookie: ""

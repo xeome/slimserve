@@ -1,0 +1,36 @@
+# The app image has no HTTP client.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ printf "%s-test-healthz" .Release.Name | quote }}
+  # The release namespace, where helm test --logs looks; the Service may sit in slimserve.namespace.
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "slimserve.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: test
+spec:
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    runAsGroup: 65534
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: wget
+      image: busybox:1.37@sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec
+      command:
+        - wget
+        - -q
+        - -T
+        - "10"
+        - -O-
+        - {{ printf "http://%s.%s:%v/.app/healthz" (include "slimserve.main" .) (include "slimserve.namespace" .) (index .Values.service.ports 0).port | quote }}
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+            - ALL
+        readOnlyRootFilesystem: true

@@ -1,0 +1,6 @@
+host: files.example.test
+replicas: 2
+cluster:
+  cookie: ci-test-cookie
+auth:
+  secretKeyBase: ci-test-secret-key-base-ci-test-secret-key-base-ci-test-secret-key-base

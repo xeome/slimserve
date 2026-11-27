@@ -388,7 +388,17 @@ defmodule SlimServe.S3HelmTest do
     labels =
       ~r/  namespace: "files"\n  labels:\n    app\.kubernetes\.io\/name: slimserve-helm\n    app\.kubernetes\.io\/instance: files\n    app\.kubernetes\.io\/version: "\d+\.\d+\.\d+"\n    app\.kubernetes\.io\/component: server\n    app\.kubernetes\.io\/managed-by: Helm\n    helm\.sh\/chart: slimserve-helm-\d+\.\d+\.\d+\n/
 
-    assert map_size(docs) == 8
+    assert docs |> Map.keys() |> Enum.sort() == [
+             "# Source: slimserve-helm/templates/deployment.yml",
+             "# Source: slimserve-helm/templates/headless.yml",
+             "# Source: slimserve-helm/templates/networkpolicy.yml",
+             "# Source: slimserve-helm/templates/pdb.yml",
+             "# Source: slimserve-helm/templates/pvc.yml",
+             "# Source: slimserve-helm/templates/secret.yml",
+             "# Source: slimserve-helm/templates/service.yml",
+             "# Source: slimserve-helm/templates/serviceaccount.yml",
+             "# Source: slimserve-helm/templates/tests/healthz.yml"
+           ]
 
     for {source, doc} <- docs do
       assert {source, doc =~ labels} == {source, true}
