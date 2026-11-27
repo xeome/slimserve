@@ -26,6 +26,8 @@ config :slimserve, SlimServeWeb.Endpoint,
   # The host a self-hosted server is reached by is not known ahead: accept the request's own.
   check_origin: :conn,
   adapter: Bandit.PhoenixAdapter,
+  # On shutdown an open HTTP request runs to its end: the pod's grace period is the one limit.
+  http: [thousand_island_options: [shutdown_timeout: :infinity]],
   render_errors: [
     formats: [html: SlimServeWeb.ErrorHTML, json: SlimServeWeb.ErrorJSON],
     layout: false

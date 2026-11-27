@@ -1,0 +1,2 @@
+## bin/slimserve remote and rpc reach the node on 4370 without listening there themselves.
+-start_epmd false -erl_epmd_port 4370 -dist_listen false

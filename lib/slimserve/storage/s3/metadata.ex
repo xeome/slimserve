@@ -14,6 +14,8 @@ defmodule SlimServe.Storage.S3.Metadata do
   alias SlimServe.Root
   alias SlimServe.Storage.S3
 
+  require Logger
+
   @table __MODULE__
   @ttl_ms 600_000
   @sweep_ms 60_000
@@ -72,7 +74,7 @@ defmodule SlimServe.Storage.S3.Metadata do
     :ets.insert(@table, {:generation, 0})
     :ok = Phoenix.PubSub.subscribe(SlimServe.PubSub, @topic)
     Process.send_after(self(), :sweep, @sweep_ms)
-    {:ok, %{burst: nil, filling: %{}}}
+    {:ok, %{burst: nil, filling: %{}, warned?: false}}
   end
 
   @impl true
@@ -82,7 +84,8 @@ defmodule SlimServe.Storage.S3.Metadata do
   end
 
   @impl true
-  def handle_info({:changed, _added, _removed, _trees} = change, state), do: {:noreply, clear(change, state)}
+  def handle_info({:changed, added, removed, trees} = change, state)
+      when is_list(added) and is_list(removed) and is_list(trees), do: {:noreply, clear(change, state)}
 
   def handle_info(:fill, %{burst: {keys, wake}} = state) do
     {:ok, pid} = Task.start_link(fn -> keys |> Task.async_stream(&S3.refill/1, timeout: :infinity) |> Stream.run() end)
@@ -100,6 +103,19 @@ defmodule SlimServe.Storage.S3.Metadata do
     :ets.select_delete(@table, [{{:_, :_, :"$1"}, [{:<, :"$1", now}], [true]}])
     Process.send_after(self(), :sweep, @sweep_ms)
     {:noreply, state}
+  end
+
+  # A node of another version may send a change this one cannot read, so nothing held here can be
+  # trusted. The generation bumps first, as in a clear, so a fill in flight takes its entry back.
+  # It warns once per process: a peer of another version may send many.
+  def handle_info(message, state) do
+    if not state.warned?,
+      do: Logger.warning("S3 metadata cache emptied on an unknown message: #{inspect(message, limit: 5)}")
+
+    :ets.update_counter(@table, :generation, 1)
+    # Every entry is a triple; the generation row is a pair, so it stays for fill/2.
+    :ets.select_delete(@table, [{{:_, :_, :_}, [], [true]}])
+    {:noreply, %{state | warned?: true}}
   end
 
   defp clear({:changed, added, removed, trees}, state) do

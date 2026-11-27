@@ -2,7 +2,7 @@ defmodule SlimServe.RuntimeConfigTest do
   # Not async: the variables are the process-wide environment.
   use ExUnit.Case, async: false
 
-  @variables ~w(SLIMSERVE_ROOT PHX_SERVER SLIMSERVE_USERNAME SLIMSERVE_PASSWORD SECRET_KEY_BASE SLIMSERVE_WRITE_PASSWORD SLIMSERVE_UPLOAD_MAX_MB SLIMSERVE_UPLOAD_TYPES SLIMSERVE_HTTPS PHX_HOST PORT CONFIG_FILE SLIMSERVE_IGNORE_PATTERNS SLIMSERVE_CONFIG)
+  @variables ~w(SLIMSERVE_ROOT PHX_SERVER SLIMSERVE_USERNAME SLIMSERVE_PASSWORD SECRET_KEY_BASE SLIMSERVE_WRITE_PASSWORD SLIMSERVE_UPLOAD_MAX_MB SLIMSERVE_UPLOAD_TYPES SLIMSERVE_HTTPS PHX_HOST PORT CONFIG_FILE SLIMSERVE_IGNORE_PATTERNS SLIMSERVE_CONFIG SLIMSERVE_TRUSTED_PROXIES)
 
   setup do
     saved = Map.new(@variables, &{&1, System.get_env(&1)})
@@ -146,5 +146,43 @@ defmodule SlimServe.RuntimeConfigTest do
 
     File.write!(Path.join(dir, "slimserve.json"), "{}")
     assert_raise RuntimeError, ~r/slimserve\.json/, fn -> prod(%{"SLIMSERVE_ROOT" => dir}) end
+  end
+
+  test "Scenario: A SLIMSERVE_TRUSTED_PROXIES entry that is not an address or CIDR refuses to boot and names it" do
+    for entry <- ["10.0.0.0/33", "proxy.example.test", "10.0.0.0/x"] do
+      assert_raise RuntimeError, ~r/SLIMSERVE_TRUSTED_PROXIES.*#{Regex.escape(entry)}/, fn ->
+        prod(%{"SLIMSERVE_TRUSTED_PROXIES" => "192.0.2.1, " <> entry})
+      end
+    end
+  end
+
+  test "SLIMSERVE_TRUSTED_PROXIES makes a listed proxy's X-Forwarded-For the client address" do
+    trusted = prod(%{"SLIMSERVE_TRUSTED_PROXIES" => "192.0.2.1, 10.0.0.0/8"})[:trusted_proxies]
+    Application.put_env(:slimserve, :trusted_proxies, trusted)
+    on_exit(fn -> Application.delete_env(:slimserve, :trusted_proxies) end)
+
+    conn =
+      :get
+      |> Plug.Test.conn("/")
+      |> Map.put(:remote_ip, {10, 1, 2, 3})
+      |> Plug.Conn.put_req_header("x-forwarded-for", "203.0.113.9")
+
+    assert SlimServeWeb.ClientIp.call(conn, []).remote_ip == {203, 0, 113, 9}
+  end
+
+  test "a SLIMSERVE_TRUSTED_PROXIES entry written IPv4-mapped trusts its IPv4 peers" do
+    trusted = prod(%{"SLIMSERVE_TRUSTED_PROXIES" => "::ffff:10.0.0.0/104, ::ffff:192.0.2.1"})[:trusted_proxies]
+    Application.put_env(:slimserve, :trusted_proxies, trusted)
+    on_exit(fn -> Application.delete_env(:slimserve, :trusted_proxies) end)
+
+    for peer <- [{10, 1, 2, 3}, {192, 0, 2, 1}, {0, 0, 0, 0, 0, 0xFFFF, 0x0A01, 0x0203}] do
+      conn =
+        :get
+        |> Plug.Test.conn("/")
+        |> Map.put(:remote_ip, peer)
+        |> Plug.Conn.put_req_header("x-forwarded-for", "203.0.113.9")
+
+      assert SlimServeWeb.ClientIp.call(conn, []).remote_ip == {203, 0, 113, 9}
+    end
   end
 end

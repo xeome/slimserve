@@ -23,15 +23,21 @@ scheme and port. Turning HTTPS on MUST NOT change the port it listens on.
 
 With `SLIMSERVE_HTTPS=true` and `PHX_HOST` set to the hostname clients use, the server SHALL
 redirect plain HTTP to that host over HTTPS, trust a proxy's forwarded HTTPS, accept a live socket
-only from the origin the request itself names, and mark the login cookie secure. A request to `localhost` or `127.0.0.1`
-MUST NOT be redirected. A production server SHALL refuse to boot with HTTPS on and no `PHX_HOST`,
-or with `SLIMSERVE_HTTPS` set to anything but true or false.
+only from the origin the request names, and mark the login cookie secure. Requests to `localhost`,
+`127.0.0.1`, `/.app/healthz` and `/.app/readyz` MUST NOT be redirected. A production server SHALL
+refuse to boot with HTTPS on and no `PHX_HOST`, or with `SLIMSERVE_HTTPS` set to anything but true
+or false.
 
 #### Scenario: With HTTPS on, plain HTTP redirects to the canonical HTTPS host, the live socket path too
 
 - **WHEN** HTTPS is on and a client asks for a folder with a query, or the live socket path, over
   plain HTTP on another host name
 - **THEN** the answer is a 301 to the same path and query on the configured HTTPS host
+
+#### Scenario: With HTTPS on, a plain-HTTP health probe is answered, not redirected
+
+- **WHEN** HTTPS is on and a probe asks for `/.app/readyz` over plain HTTP
+- **THEN** it answers 200, while `/` over plain HTTP answers 301
 
 #### Scenario: A forwarded HTTPS WebSocket origin passes the origin check
 

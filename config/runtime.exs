@@ -63,6 +63,26 @@ if config_env() != :test do
         if types == [], do: raise("SLIMSERVE_UPLOAD_TYPES lists no extension"), else: types
     end
 
+  # The proxies whose X-Forwarded-For names the client. Unset trusts none.
+  trusted_proxies =
+    for entry <- String.split(set.("SLIMSERVE_TRUSTED_PROXIES") || "", ",", trim: true),
+        entry = String.trim(entry),
+        entry != "" do
+      [address | bits] = String.split(entry, "/", parts: 2)
+
+      with {:ok, ip} <- :inet.parse_strict_address(String.to_charlist(address)),
+           max = if(tuple_size(ip) == 4, do: 32, else: 128),
+           {bits, ""} when bits in 0..max//1 <- Integer.parse(List.first(bits, "#{max}")) do
+        case ip do
+          # SlimServeWeb.ClientIp unmaps an IPv4-mapped peer, so a mapped entry is unmapped too.
+          {0, 0, 0, 0, 0, 0xFFFF, _ab, _cd} when bits >= 96 -> {:inet.ipv4_mapped_ipv6_address(ip), bits - 96}
+          _unmapped -> {ip, bits}
+        end
+      else
+        _invalid -> raise "SLIMSERVE_TRUSTED_PROXIES: #{entry} is not an address or CIDR"
+      end
+    end
+
   storage =
     case set.("SLIMSERVE_STORAGE") do
       nil -> :local
@@ -72,7 +92,7 @@ if config_env() != :test do
     end
 
   config :slimserve, SlimServeWeb.Endpoint, http: [port: port]
-  config :slimserve, login: login
+  config :slimserve, login: login, trusted_proxies: trusted_proxies
 
   if storage == :s3 do
     config :slimserve,

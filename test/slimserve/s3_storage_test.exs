@@ -69,6 +69,37 @@ defmodule SlimServe.S3StorageTest do
     end
   end
 
+  # Metadata needs no store.
+  describe "an unknown cluster message" do
+    @describetag capture_log: true
+
+    # A node of another version may send a change this one cannot read.
+    test "Scenario: An unknown cluster message empties that node's S3 cache" do
+      metadata = start_supervised!(Metadata)
+      ref = Process.monitor(metadata)
+      test = self()
+
+      fill = fn ->
+        send(test, :filled)
+        {:ok, :value}
+      end
+
+      for {message, n} <- Enum.with_index([{:changed, :from_a_newer_version}, {:changed, :a, :b, :c}]) do
+        key = {:list, "d#{n}/"}
+        assert Metadata.fetch(key, false, fill) == {:ok, :value}
+        assert_received :filled
+
+        Phoenix.PubSub.broadcast(SlimServe.PubSub, "s3:changes", message)
+        _ = :sys.get_state(Metadata)
+
+        assert Process.whereis(Metadata) == metadata
+        refute_received {:DOWN, ^ref, :process, _pid, _reason}
+        assert Metadata.fetch(key, false, fill) == {:ok, :value}
+        assert_received :filled
+      end
+    end
+  end
+
   describe "the start-up capability check" do
     @describetag :s3
     @describetag capture_log: true

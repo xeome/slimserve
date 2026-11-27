@@ -3,13 +3,14 @@
 ## Purpose
 
 These rules hold for the whole app: how many nodes may serve, and how fast what one shows follows
-a change. Three cases are not required. An open page need not follow writers to the bucket other
+a change. Four cases are not required. An open page need not follow writers to the bucket other
 than SlimServe, because only SlimServe should write the bucket. So a direct bucket edit shows on a
 page loaded after the cached listing expires, at most 10 minutes after it was filled. And an
 upload whose answer was lost while still in flight may look missing until that expiry. On local
 storage, a folder made inside a folder made at the same moment, by `mkdir -p` for example, may not
 follow the disk on an open page until the app restarts. A page load still lists it, because a local
-listing is read from disk.
+listing is read from disk. And an upload still in progress over the page's live connection when a
+node shuts down is cut, so the user sends it again.
 
 ## Requirements
 
@@ -51,3 +52,52 @@ does not serve the Go `slimserve.json`, logins included, as a plain file.
 - **WHEN** an operator starts SlimServe with `SLIMSERVE_CONFIG=/x`
 - **THEN** the start fails with a message that names `SLIMSERVE_CONFIG` and links the 1.0.0
   release notes
+
+### Requirement: Health endpoints
+
+Every node SHALL answer `GET /.app/healthz` with 200 while it runs, and `GET /.app/readyz` with 200
+while it takes new requests. Both SHALL answer without login, over plain HTTP with HTTPS on, and
+without reaching the bucket.
+
+#### Scenario: The health paths answer 200 without login and with S3 unreachable
+
+- **WHEN** login is on, the S3 endpoint refuses connections, and a probe asks for
+  `/.app/healthz` and `/.app/readyz`
+- **THEN** both answer 200
+- **AND** `/` still answers 401
+
+### Requirement: Clean shutdown
+
+On SIGTERM a node SHALL answer `/.app/readyz` with 503 and keep accepting requests for 5 seconds,
+so a proxy stops sending to it first. It SHALL then stop accepting and let every open HTTP request
+other than the page's live connection, such as a download, run to its end.
+
+#### Scenario: After SIGTERM, /.app/readyz answers 503 while an open download completes
+
+- **WHEN** a client is part way through a 32 MB download and the node gets SIGTERM
+- **THEN** `/.app/readyz` answers 503
+- **AND** the download still receives every byte
+
+### Requirement: Cluster messages survive a version step
+
+A node SHALL keep serving when another node sends it a cluster message it does not know, as a
+node of another version may during a rolling upgrade. An unknown message about S3 changes SHALL
+empty that node's S3 cache, so its next request reads the bucket.
+
+#### Scenario: An unknown cluster message empties that node's S3 cache
+
+- **WHEN** a node has a folder listing cached and gets an S3 change message it does not know
+- **THEN** the node keeps serving, and its next listing of that folder asks the bucket
+
+### Requirement: Fixed cluster ports
+
+A release SHALL run with no epmd and take cluster connections on port 4370 only, so a network
+policy can name the one port. `bin/slimserve remote` and `bin/slimserve rpc` SHALL reach a running
+node without taking that port.
+
+#### Scenario: Two replicas cluster through port 4370 with nothing on 4369
+
+- **WHEN** two release containers on one network start with `RELEASE_DISTRIBUTION=name` and one
+  cookie, and one connects to the other through `bin/slimserve rpc`
+- **THEN** each lists the other
+- **AND** each listens on 4370 and nothing listens on 4369

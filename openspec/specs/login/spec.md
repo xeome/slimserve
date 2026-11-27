@@ -10,9 +10,9 @@ which settings refuse to boot.
 
 ### Requirement: Login
 
-With `SLIMSERVE_USERNAME` and `SLIMSERVE_PASSWORD` both set, every route SHALL answer a browser's
-GET with a 302 to `/.app/login?next=<path>` and anything else with a bare 401 until the user logs
-in, and a live socket without the login SHALL be refused at mount. A login SHALL return to `next`
+With login on, every route but `/.app/healthz` and `/.app/readyz` SHALL answer a browser's GET
+with a 302 to `/.app/login?next=<path>` and anything else with a bare 401 until the user logs in,
+and a live socket without the login SHALL be refused at mount. A login SHALL return to `next`
 only when it is a local path, else to `/`. Changing the password SHALL log every session out.
 
 #### Scenario: Every route answers the login page or a refusal until the user logs in
@@ -98,7 +98,8 @@ whose password changed included.
 
 The system SHALL answer 429 to every login attempt from a client after 10 failed logins from it
 in a rolling minute, the right password included. It SHALL count an IPv6 client by its /64 and an
-IPv4 client by its own address, and it MUST hold under parallel attempts.
+IPv4 client by its own address. The count SHALL span every node: a failure on one node reaches the
+others a moment later. On one node the limit MUST hold under parallel attempts.
 
 #### Scenario: The 11th wrong viewer login from one address answers 429, even with the right password
 
@@ -120,6 +121,31 @@ IPv4 client by its own address, and it MUST hold under parallel attempts.
 
 - **WHEN** one client sends 30 wrong logins at once
 - **THEN** at most 10 answer 401, and the rest 429
+
+#### Scenario: Failed logins from one client on two nodes count toward one limit
+
+- **WHEN** a client fails to log in 5 times on one node and 5 times on another
+- **THEN** its next login on the second node answers 429, even with the right password
+
+### Requirement: Client address behind a proxy
+
+The login rate limit SHALL take the client to be the peer, unless the peer is in
+`SLIMSERVE_TRUSTED_PROXIES`, a comma list of addresses and CIDRs. Then the client SHALL be the
+right-most `X-Forwarded-For` address that is not a trusted proxy. A `SLIMSERVE_TRUSTED_PROXIES`
+entry that is not an address or CIDR SHALL refuse the boot.
+
+#### Scenario: A spoofed X-Forwarded-For from an untrusted peer is ignored, and one from a trusted proxy is used
+
+- **WHEN** `SLIMSERVE_TRUSTED_PROXIES=10.0.0.0/8`, and 10 wrong logins come through 10.1.2.3 with
+  `X-Forwarded-For: 198.18.0.1`
+- **THEN** a login through that proxy as 198.18.0.1 answers 429, and one as 198.18.0.2 logs in
+- **AND** 10 wrong logins from the untrusted 198.18.0.3, each with another `X-Forwarded-For`,
+  make its 11th answer 429
+
+#### Scenario: A SLIMSERVE_TRUSTED_PROXIES entry that is not an address or CIDR refuses to boot and names it
+
+- **WHEN** a server starts with `SLIMSERVE_TRUSTED_PROXIES=192.0.2.1, 10.0.0.0/33`
+- **THEN** it refuses to boot, naming `SLIMSERVE_TRUSTED_PROXIES` and `10.0.0.0/33`
 
 ### Requirement: Login settings
 

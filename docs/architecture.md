@@ -11,17 +11,20 @@ SlimServe is one OTP application, `:slimserve`, with no database.
 | `SlimServeWeb.Telemetry` | Telemetry metrics and the periodic poller |
 | `DNSCluster` | Joins nodes found by `DNS_CLUSTER_QUERY`; ignored when unset |
 | `Phoenix.PubSub` (`SlimServe.PubSub`) | Message bus for LiveView and channels |
-| `SlimServe.LoginLimit` | Owns the public ETS table of login attempts per client (an IPv6 one by its /64) and sweeps it every minute |
+| `SlimServe.LoginLimit` | Owns the public ETS table of login attempts per client (an IPv6 one by its /64), shares each attempt with the other nodes over PubSub, and sweeps it every minute |
 | `SlimServe.ThumbCache` | The thumbnail disk cache: the only process that writes or deletes in the cache directory |
 | `SlimServe.Watcher` | Watches the root through `inotifywait` and tells open listings their directory changed; `:temporary` |
-| `SlimServeWeb.Endpoint` | The Bandit HTTP server; started last, so it serves only once the rest is up |
+| `SlimServeWeb.Endpoint` | The Bandit HTTP server; serves only once the rest is up. On shutdown it first closes every live connection (an upload on one is cut), then closes its listener and waits for every open HTTP request |
+| `SlimServe.Readiness` | `/.app/readyz`'s answer. Started last, so it stops first: it turns not ready and holds the Endpoint up for the 5 s accept window |
 
 ## Request path
 
 ```
 Bandit
-  -> SlimServeWeb.Endpoint   Plug.Static (priv/static, at /.app), live reload in dev, RequestId,
-                             Telemetry, Parsers, MethodOverride, Head, Session (signed cookie)
+  -> SlimServeWeb.Endpoint   SlimServeWeb.Health (the two probe paths, before the HTTPS redirect),
+                             Plug.Static (priv/static, at /.app), live reload in dev, RequestId,
+                             Telemetry, Parsers, MethodOverride, Head, SlimServeWeb.ClientIp
+                             (X-Forwarded-For from a trusted proxy), Session (signed cookie)
   -> SlimServeWeb.Router     :serve pipeline: session, the SlimServeWeb.Login gate, flash, root layout, CSRF protection,
                              secure headers with the CSP. No `accepts`: a download answers
                              any Accept header

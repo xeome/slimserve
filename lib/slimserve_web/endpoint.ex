@@ -10,14 +10,12 @@ defmodule SlimServeWeb.Endpoint do
   @http_session Plug.Session.init(Keyword.put(@session_options, :secure, false))
   @https_session Plug.Session.init(Keyword.put(@session_options, :secure, true))
 
-  # Rewrite or redirect before Phoenix dispatches either socket transport.
+  # A probe is answered over plain HTTP too. Rewrite or redirect before Phoenix dispatches either socket transport.
   @impl Plug
   def call(conn, opts) do
-    conn =
-      case Application.get_env(:slimserve, :ssl_redirect) do
-        nil -> conn
-        ssl_redirect -> Plug.SSL.call(conn, ssl_redirect)
-      end
+    conn = SlimServeWeb.Health.call(conn, [])
+    ssl_redirect = Application.get_env(:slimserve, :ssl_redirect)
+    conn = if ssl_redirect != nil and not conn.halted, do: Plug.SSL.call(conn, ssl_redirect), else: conn
 
     if conn.halted, do: conn, else: super(conn, opts)
   end
@@ -57,6 +55,7 @@ defmodule SlimServeWeb.Endpoint do
   # Plug.Head turns HEAD into GET, so controllers read this to skip an S3 fetch or a thumbnail render.
   plug :mark_head
   plug Plug.Head
+  plug SlimServeWeb.ClientIp
   plug :session
   plug SlimServeWeb.Router
 
