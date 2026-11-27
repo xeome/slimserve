@@ -1,8 +1,9 @@
 defmodule SlimServe.S3StorageTest do
-  # Not async: the storage backend, the poll period and the process environment are global.
+  # Not async: the storage backend and the process environment are global.
   use SlimServeWeb.ConnCase, async: false
 
   import Phoenix.LiveViewTest
+  import SlimServeWeb.ListingHelpers
 
   alias SlimServe.S3Fixture, as: S3
   alias SlimServe.Storage
@@ -128,17 +129,18 @@ defmodule SlimServe.S3StorageTest do
       assert conn |> get("/many/f1001.txt") |> response(200) == "x"
     end
 
-    test "Scenario: A listing read before a change is not served after it" do
+    @tag :tmp_dir
+    test "Scenario: A listing read before a change is not served after it", %{tmp_dir: tmp_dir} do
       bucket = S3.serve()
       S3.put(bucket, "old.txt", "o")
+      Capabilities.check()
 
       # The listing comes back, then a change lands before the fill is stored.
-      S3.after_request(:get, "", fn ->
-        S3.put(bucket, "new.txt", "n")
-        Metadata.changed([["new.txt"]], [], [])
-      end)
+      test = self()
+      S3.after_request(:get, "", fn -> send(test, {:uploaded, upload(tmp_dir, [], "new.txt")}) end)
 
       assert {:ok, [%{name: "old.txt"}]} = Storage.list([])
+      assert_receive {:uploaded, :ok}
       assert {:ok, [%{name: "new.txt"}, %{name: "old.txt"}]} = Storage.list([])
     end
 
@@ -215,7 +217,7 @@ defmodule SlimServe.S3StorageTest do
 
       assert upload(tmp_dir, ["a", "b"], "g.txt") == :ok
 
-      assert_receive {:dir_changed, "a/b"}, 1_000
+      assert_receive {:dir_changed, "a/b"}
       metadata = Process.whereis(Metadata)
 
       assert [{:get, "", query}] =
@@ -240,7 +242,7 @@ defmodule SlimServe.S3StorageTest do
 
       assert Storage.delete(["a", "b"], "f.txt") == :ok
 
-      assert_receive {:dir_changed, "a"}, 1_000
+      assert_receive {:dir_changed, "a"}
       assert {:ok, {:ok, {_objects, []}}} = cached({:list, "a/"})
       assert cached({:folder, "a/b"}) == {:ok, {:ok, false}}
       S3.watch_callers()
@@ -310,7 +312,7 @@ defmodule SlimServe.S3StorageTest do
 
       woken = until_woken("a")
       refute_receive {:dir_changed, "a"}, 300
-      assert eventually(view, ["/a/n1.txt", "/a/n2.txt", "/a/n3.txt", "/a/x.txt"])
+      await_page(view, &(hrefs(&1) == ["/a/n1.txt", "/a/n2.txt", "/a/n3.txt", "/a/x.txt"]))
       _ = :sys.get_state(view.pid)
       calls = woken ++ flush_calls()
 
@@ -344,7 +346,7 @@ defmodule SlimServe.S3StorageTest do
 
       assert upload(tmp_dir, ["a"], "n.txt") == :ok
 
-      assert_receive {:dir_changed, "a"}, 1_000
+      assert_receive {:dir_changed, "a"}
       refute Agent.get(malformed, & &1)
       assert Process.whereis(Metadata) == metadata
       assert :ets.info(Metadata) != :undefined
@@ -368,14 +370,12 @@ defmodule SlimServe.S3StorageTest do
 
       assert upload(tmp_dir, ["a"], "n.txt") == :ok
 
-      assert eventually(view, ["/a/sub", "/a/n.txt", "/a/x.txt"])
+      await_page(view, &(hrefs(&1) == ["/a/sub", "/a/n.txt", "/a/x.txt"]))
       _ = :sys.get_state(view.pid)
       assert for({:s3_call, callers, method, key, _query} <- flush_calls(), view.pid in callers, do: {method, key}) == []
     end
 
     test "Scenario: While a bucket page sits open and idle, the bucket gets no request", %{conn: conn} do
-      Application.put_env(:slimserve, :s3_poll_ms, 50)
-      on_exit(fn -> Application.delete_env(:slimserve, :s3_poll_ms) end)
       bucket = S3.serve()
       S3.put(bucket, "a.txt", "a")
       {:ok, view, _html} = live(conn, "/")
@@ -405,7 +405,7 @@ defmodule SlimServe.S3StorageTest do
 
       assert upload(tmp_dir, [], "n.txt") == :error
 
-      assert eventually(view, ["/a.txt", "/n.txt"])
+      await_page(view, &(hrefs(&1) == ["/a.txt", "/n.txt"]))
       assert {:ok, [%{name: "a.txt"}, %{name: "n.txt"}]} = Storage.list([])
     end
 
@@ -422,7 +422,7 @@ defmodule SlimServe.S3StorageTest do
 
       assert Storage.delete([], "a.txt") == :error
 
-      assert eventually(view, ["/b.txt"])
+      await_page(view, &(hrefs(&1) == ["/b.txt"]))
       assert {:ok, [%{name: "b.txt"}]} = Storage.list([])
     end
 
@@ -466,7 +466,7 @@ defmodule SlimServe.S3StorageTest do
       await_list(view.pid, "")
       Agent.update(failing, fn _ -> false end)
 
-      assert eventually(view, ["/b.txt", "/c.txt"])
+      await_page(view, &(hrefs(&1) == ["/b.txt", "/c.txt"]))
     end
 
     test "Scenario: A delete of the open bucket folder sends the page to the nearest folder", %{conn: conn} do
@@ -477,7 +477,7 @@ defmodule SlimServe.S3StorageTest do
       assert {:confirm, asked} = Storage.delete([], "p")
       assert Storage.confirm_delete([], "p", asked) == :ok
 
-      assert_redirect(view, "/", 1_000)
+      assert_redirect(view, "/")
     end
 
     test "Scenario: A store error while finding the nearest folder keeps the rows", %{conn: conn} do
@@ -497,7 +497,7 @@ defmodule SlimServe.S3StorageTest do
       end)
 
       assert Storage.delete(["p"], "x.txt") == :ok
-      assert_receive :failing, 1_000
+      assert_receive :failing
       _ = :sys.get_state(view.pid)
 
       assert hrefs(view) == ["/p/x.txt"]
@@ -523,21 +523,17 @@ defmodule SlimServe.S3StorageTest do
   defp list_call?(_call, _pid, _prefix), do: false
 
   defp until_woken(dir, calls \\ []) do
-    receive do
+    assert_receive message when message == {:dir_changed, dir} or elem(message, 0) == :s3_call
+
+    case message do
       {:dir_changed, ^dir} -> Enum.reverse(calls)
-      {:s3_call, _callers, _method, _key, _query} = call -> until_woken(dir, [call | calls])
-    after
-      1_000 -> flunk("#{dir} was never woken")
+      call -> until_woken(dir, [call | calls])
     end
   end
 
   defp await_list(pid, prefix) do
-    receive do
-      {:s3_call, _callers, _method, _key, _query} = call ->
-        if list_call?(call, pid, prefix), do: :ok, else: await_list(pid, prefix)
-    after
-      1_000 -> flunk("the page never listed #{inspect(prefix)}")
-    end
+    assert_receive {:s3_call, _callers, _method, _key, _query} = call
+    if list_call?(call, pid, prefix), do: :ok, else: await_list(pid, prefix)
   end
 
   defp flush_calls(acc \\ []) do
@@ -558,20 +554,4 @@ defmodule SlimServe.S3StorageTest do
 
   defp hrefs(view),
     do: view |> render() |> LazyHTML.from_fragment() |> LazyHTML.query("#entries .name a") |> LazyHTML.attribute("href")
-
-  defp eventually(view, expected, deadline \\ System.monotonic_time(:millisecond) + 1_000) do
-    cond do
-      hrefs(view) == expected ->
-        true
-
-      System.monotonic_time(:millisecond) > deadline ->
-        flunk("listed #{inspect(hrefs(view))}, expected #{inspect(expected)}")
-
-      true ->
-        receive do
-        after
-          20 -> eventually(view, expected, deadline)
-        end
-    end
-  end
 end

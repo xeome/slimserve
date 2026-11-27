@@ -3,13 +3,9 @@ defmodule SlimServeWeb.ListingWriteTest do
   use SlimServeWeb.ConnCase, async: false
 
   import Phoenix.LiveViewTest
-
-  alias SlimServe.Root
+  import SlimServeWeb.ListingHelpers
 
   @moduletag :tmp_dir
-
-  # The spec's bound: a connected listing updates within a second.
-  @within 1_000
 
   setup %{conn: conn, tmp_dir: tmp_dir} do
     root = Path.join(tmp_dir, "root")
@@ -32,37 +28,8 @@ defmodule SlimServeWeb.ListingWriteTest do
     {:ok, root: root, outside: outside, reader: conn, writer: writer}
   end
 
-  # inotifywait reports nothing until its watches are set, so poke the root until an event comes back.
-  defp ready(root, tries \\ 50) do
-    :ok = Phoenix.PubSub.subscribe(SlimServe.PubSub, Root.topic(""))
-    File.write!(Path.join(root, ".ready"), "x")
-
-    receive do
-      {:dir_changed, _dir} -> Phoenix.PubSub.unsubscribe(SlimServe.PubSub, Root.topic(""))
-    after
-      100 -> if tries > 0, do: ready(root, tries - 1), else: flunk("the watcher never reported an event")
-    end
-  end
-
   defp hrefs(view) do
     view |> render() |> LazyHTML.from_fragment() |> LazyHTML.query("#entries .name a") |> LazyHTML.attribute("href")
-  end
-
-  defp assert_listed(view, expected, deadline \\ System.monotonic_time(:millisecond) + @within) do
-    case hrefs(view) do
-      ^expected ->
-        :ok
-
-      listed ->
-        if System.monotonic_time(:millisecond) > deadline do
-          flunk("listed #{inspect(listed)}, expected #{inspect(expected)}")
-        end
-
-        receive do
-        after
-          20 -> assert_listed(view, expected, deadline)
-        end
-    end
   end
 
   defp tree(root) do
@@ -106,28 +73,28 @@ defmodule SlimServeWeb.ListingWriteTest do
 
       upload(view, "a.txt", "hello")
       assert File.read!(Path.join(root, "a.txt")) == "hello"
-      assert_listed(other, ["/sub", "/a.txt"])
+      await_page(other, &(hrefs(&1) == ["/sub", "/a.txt"]))
 
       view |> element("#mkdir-form") |> render_submit(%{"name" => "new"})
       assert File.dir?(Path.join(root, "new"))
-      assert_listed(other, ["/new", "/sub", "/a.txt"])
+      await_page(other, &(hrefs(&1) == ["/new", "/sub", "/a.txt"]))
 
       view |> element("#entries tr[data-name='a.txt']") |> render_click()
       view |> element("#move-open") |> render_click()
       view |> element("form[data-name='a.txt']") |> render_submit(%{"to" => "sub/b.txt"})
       refute File.exists?(Path.join(root, "a.txt"))
       assert File.read!(Path.join(root, "sub/b.txt")) == "hello"
-      assert_listed(other, ["/new", "/sub"])
+      await_page(other, &(hrefs(&1) == ["/new", "/sub"]))
 
       {:ok, in_sub, _html} = live(writer, "/sub")
       rename(in_sub, "sub/b.txt", "a.txt")
       refute File.exists?(Path.join(root, "sub/b.txt"))
       assert File.read!(Path.join(root, "a.txt")) == "hello"
-      assert_listed(other, ["/new", "/sub", "/a.txt"])
+      await_page(other, &(hrefs(&1) == ["/new", "/sub", "/a.txt"]))
 
       view |> element("button[phx-click=delete][phx-value-path='/a.txt']") |> render_click()
       refute File.exists?(Path.join(root, "a.txt"))
-      assert_listed(other, ["/new", "/sub"])
+      await_page(other, &(hrefs(&1) == ["/new", "/sub"]))
     end
 
     test "Scenario: After opening a subfolder in the page, a new folder and an upload land in it", %{
@@ -230,7 +197,7 @@ defmodule SlimServeWeb.ListingWriteTest do
       before = row_id(view, "b.txt")
 
       File.write!(Path.join(root, "a.txt"), "a")
-      assert_listed(view, ["/sub", "/a.txt", "/b.txt"])
+      await_page(view, &(hrefs(&1) == ["/sub", "/a.txt", "/b.txt"]))
       assert row_id(view, "b.txt") == before
     end
 

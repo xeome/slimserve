@@ -263,6 +263,7 @@ defmodule SlimServeWeb.ListingLive do
     socket = socket |> assign(changed: [], watch: Map.drop(socket.assigns.watch, changed)) |> subscribe(changed)
     {socket, unread} = if socket.assigns.segments in changed, do: relist(socket), else: {socket, []}
     {socket, unlisted} = relevel(socket, changed)
+    :telemetry.execute([:slimserve, :listing, :relisted], %{}, %{})
     {:noreply, retry(socket, unread ++ unlisted)}
   end
 

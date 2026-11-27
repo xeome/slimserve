@@ -187,7 +187,7 @@ defmodule SlimServeWeb.LoginTest do
       SlimServeWeb.Endpoint.subscribe(socket_id)
 
       post(logged, "/.app/logout")
-      assert_receive %Broadcast{topic: ^socket_id, event: "disconnect"}
+      assert_received %Broadcast{topic: ^socket_id, event: "disconnect"}
     end
   end
 
@@ -283,7 +283,7 @@ defmodule SlimServeWeb.LoginTest do
       SlimServeWeb.Endpoint.subscribe(socket_id)
 
       out = post(logged, "/.app/logout")
-      assert_receive %Broadcast{topic: ^socket_id, event: "disconnect"}
+      assert_received %Broadcast{topic: ^socket_id, event: "disconnect"}
       refute out |> recycle() |> write_ui?()
     end
 
@@ -297,7 +297,7 @@ defmodule SlimServeWeb.LoginTest do
       SlimServeWeb.Endpoint.subscribe(first)
 
       post(again, "/.app/logout")
-      assert_receive %Broadcast{topic: ^first, event: "disconnect"}
+      assert_received %Broadcast{topic: ^first, event: "disconnect"}
     end
   end
 
