@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "global": { "type": "object" },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "main": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "repository": { "type": "string" },
+            "pullPolicy": { "type": "string" },
+            "tag": { "type": ["string", "number"] }
+          }
+        }
+      }
+    },
+    "port": { "type": ["integer", "string"] },
+    "host": { "type": "string" },
+    "persistence": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "enabled": { "type": ["boolean", "string"] } }
+    },
+    "replicas": { "type": ["integer", "null", "string"], "minimum": 0 },
+    "storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "backend": { "enum": ["local", "s3"] } }
+    },
+    "s3": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "bucket": { "type": ["string", "integer"] },
+        "endpoint": { "type": "string" },
+        "region": { "type": "string" },
+        "accessKeyId": { "type": ["string", "integer"] },
+        "secretAccessKey": { "type": ["string", "integer"] },
+        "downloadCacheMB": { "type": ["integer", "string"], "minimum": 0 }
+      }
+    },
+    "cluster": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "cookie": { "type": ["string", "integer"] } }
+    },
+    "networkPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "enabled": { "type": "boolean" } }
+    },
+    "trustedProxies": { "type": "array", "items": { "type": "string" } },
+    "service": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string" },
+        "ports": { "type": "array", "items": { "type": "object" } }
+      }
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": { "main": { "type": "object" } }
+        },
+        "requests": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "main": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": { "storage": { "type": ["string", "integer"] } }
+            }
+          }
+        }
+      }
+    },
+    "nodeSelector": { "type": "object" },
+    "tolerations": { "type": "array", "items": { "type": "object" } },
+    "affinity": { "type": "object" },
+    "thumbnail": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxDimension": { "type": ["integer", "string"] },
+        "maxFileSizeMB": { "type": ["integer", "string"] },
+        "cacheMB": { "type": ["integer", "string"] },
+        "cacheDir": { "type": "string" }
+      }
+    },
+    "upload": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxMB": { "type": ["integer", "string"], "minimum": 1 },
+        "types": { "type": "string" }
+      }
+    },
+    "auth": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": ["boolean", "string"] },
+        "username": { "type": ["string", "integer"] },
+        "password": { "type": ["string", "integer"] },
+        "writePassword": { "type": ["string", "integer"] },
+        "secretKeyBase": { "type": ["string", "integer"] }
+      }
+    },
+    "existingSecret": { "type": "string" },
+    "main": { "type": "object" }
+  }
+}

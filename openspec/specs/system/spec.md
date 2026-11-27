@@ -16,16 +16,19 @@ node shuts down is cut, so the user sends it again.
 
 ### Requirement: Nodes
 
-On local storage one node SHALL serve. On S3, several replicas MAY share the bucket and SHALL
-reach each other, and more than one replica MUST have a shared cluster cookie.
+Several replicas MAY serve on either storage, and SHALL reach each other. More than one replica
+MUST have a shared cluster cookie and signing key. More than one replica on local storage SHALL
+share one persistent volume and run on the Kubernetes node that holds it. On S3 the replicas MAY
+spread across nodes.
 
-#### Scenario: Replicas cluster only over S3, with a shared cookie and signing key, beside the HTTP Service
+#### Scenario: Replicas cluster on either storage, with a shared cookie and signing key, beside the HTTP Service
 
-- **WHEN** an operator deploys more than one replica
-- **THEN** the deployment is refused on local storage, and on S3 without a shared cluster cookie
-  and signing key
-- **AND** with both, each replica is named by its address and finds the others, while the
-  cluster's port stays off the public HTTP service
+- **WHEN** an operator deploys `replicas: 3`
+- **THEN** it is refused without a shared cluster cookie and signing key, and on local storage
+  without a persistent volume
+- **AND** with them, each replica is named by its address and finds the others, the cluster's
+  port stays off the public HTTP Service, and on local storage every replica runs on the
+  Kubernetes node that holds the disk
 
 ### Requirement: Freshness
 

@@ -125,7 +125,9 @@ rules are in [openspec/specs/s3-storage/spec.md](openspec/specs/s3-storage/spec.
 
 ### Running several replicas
 
-Several replicas can serve one S3 bucket behind a proxy or an Ingress.
+Several replicas can serve one S3 bucket behind a proxy or an Ingress. On local storage they can
+serve one volume too, all on the node that holds it: the [Helm chart](manifests/helm/README.md#storage)
+pins them there.
 
 - Probe `GET /.app/healthz` for liveness and `GET /.app/readyz` for readiness. Both answer without
   login, and over plain HTTP with `SLIMSERVE_HTTPS=true`. Neither reaches the bucket.

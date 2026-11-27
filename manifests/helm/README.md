@@ -4,7 +4,7 @@ The chart runs SlimServe in Kubernetes. It serves a persistent volume by default
 
 ## Install
 
-The chart's default image is `ghcr.io/xeome/slimserve:1.0.0`, published by the release pipeline.
+The chart's default image is `ghcr.io/xeome/slimserve:1.1.0`, published by the release pipeline.
 To run an image you built from the repository's `Dockerfile`, set `image.main.repository` and
 `image.main.tag` in your values file. For an image loaded straight into a local cluster, also set
 `image.main.pullPolicy: Never`.
@@ -13,13 +13,19 @@ To run an image you built from the repository's `Dockerfile`, set `image.main.re
 
 ```sh
 kubectl create namespace slimserve  # if it does not exist
-helm install files oci://ghcr.io/xeome/slimserve-helm --version 2.0.0 -n slimserve -f values.yaml --wait
-# or, from a checkout of this repository:
+helm install files oci://ghcr.io/xeome/slimserve-helm --version 3.0.0 -n slimserve -f values.yaml --wait
+# or, from a checkout of a release tag:
 helm install files ./manifests/helm -n slimserve -f values.yaml --wait
 ```
 
+Install the published chart, or a checkout of a release tag. A checkout of `master` can name an
+image version that is not published yet, so its pod cannot pull the image.
+
 The workload goes in the Helm release namespace. A release in `default` is the exception: its
 workload goes in `slimserve`, so create that namespace before you install or upgrade.
+
+The chart needs Kubernetes 1.30 or later. The values file is checked against `values.schema.json`,
+so a misspelt key fails the install.
 
 ## Storage
 
@@ -28,8 +34,26 @@ The volume must support that group, or already let UID and GID 1001 read the fil
 if you turn on browser edits. `persistence.enabled: false` puts the files in an `emptyDir`, which vanishes
 with the pod, so use it only for a throwaway install.
 
-Local storage runs one replica, because the claim is `ReadWriteOnce`. Pods are replaced during an
-upgrade (`Recreate`), so an upgrade briefly stops service.
+Local storage runs one replica by default. `replicas` above 1 needs persistence on and the cluster
+settings under [Replicas](#replicas). Every pod mounts the same `ReadWriteOnce` claim, so the chart
+pins every pod to the Kubernetes node that holds it, with a required `podAffinity` on
+`app: <release>-main`. Your own `affinity.nodeAffinity` and `affinity.podAntiAffinity` still apply,
+but the chart refuses an `affinity.podAffinity` on local storage. An upgrade starts one new pod
+beside the old ones on that node, so the node needs room for one more pod, or the rollout waits.
+
+The disk's node is the shape's single point of failure. A drain of that node is planned downtime:
+the chart sets no PodDisruptionBudget on local storage, because the pinned pods cannot move. When
+the node dies, its pods stay `Terminating`, and the pin holds their replacements `Pending`, until
+you run `kubectl delete pod <pod> --force --grace-period=0` for each old pod.
+
+To switch from S3 to local storage, at any replica count, first scale to 0 (`--set replicas=0`),
+switch, then set the replica count again. Otherwise the pin places new pods beside the old S3 pods,
+on nodes that may not reach the claim, and they stall. A storage switch is planned downtime.
+
+The root filesystem is read-only. The pod runs as UID and GID 1001 with no capabilities, and
+writes only to `/data`, `/cache` on S3, and an `emptyDir` on `/tmp` for upload temp files, the
+thumbnail cache and crash dumps. So `thumbnail.cacheDir` must sit under `/tmp`, or `/cache` on S3.
+The pod uses its own ServiceAccount with no API token mounted.
 
 The chart sets no memory limit. If you set `resources.limits.main.memory`, size it for the Erlang
 VM on your nodes: 512 MiB, the old Go chart's limit, can keep it from starting.
@@ -43,6 +67,15 @@ The chart sets `SLIMSERVE_HTTPS=true`, so the app redirects plain HTTP to HTTPS.
 an Ingress or terminate TLS. Keep the HTTP backend private, behind a TLS terminator you trust. That
 terminator must pass the public `Host` through and replace any `X-Forwarded-Proto` the client sent
 with the scheme of the original request.
+
+Set `trustedProxies` to the addresses or CIDRs of that terminator and any proxy in front of it. The
+login limit then counts attempts per client address from `X-Forwarded-For`, read right to left past
+those proxies. Without it, every login through the proxy counts against the proxy's address.
+
+The probes call `/.app/healthz` (startup and liveness) and `/.app/readyz` (readiness). On shutdown
+a pod waits 5 s for the Service to drop it, accepts new requests for 5 s more, then lets open
+requests finish. The grace period is 30 s, so a download still running after about 20 s is cut, and
+a browser upload still in flight is cut too, and the user sends it again.
 
 ## Login and secrets
 
@@ -60,6 +93,21 @@ With credentials set, every upgrade restarts the pod, so it reads the updated Se
 password and keep viewer access, remove `auth.writePassword` from your values and upgrade with
 `--reset-values`.
 
+To keep credentials out of your values and the release records, create a Secret yourself and set
+`existingSecret` to its name. The chart then writes no Secret, and the pod reads these keys from
+yours: `SLIMSERVE_PASSWORD`, `SLIMSERVE_WRITE_PASSWORD`, `SECRET_KEY_BASE`, `AWS_ACCESS_KEY_ID`,
+`AWS_SECRET_ACCESS_KEY` and `RELEASE_COOKIE`. A key your settings need (the S3 keys on S3, the
+cookie and `SECRET_KEY_BASE` above 1 replica, `SLIMSERVE_PASSWORD` and `SECRET_KEY_BASE` with a
+viewer login) must be present, or the pod does not start (`CreateContainerConfigError`). The others
+are optional: `SLIMSERVE_WRITE_PASSWORD` turns on browser edits when present. `auth.username` stays
+in your values, and a Secret with a `SLIMSERVE_PASSWORD` key needs it set, or the app refuses to start. To rotate a credential, edit the Secret, then run
+`kubectl rollout restart deployment/<release>-main -n <namespace>`.
+
+```sh
+kubectl create secret generic files-credentials -n slimserve \
+  --from-literal=SLIMSERVE_PASSWORD=... --from-literal=SECRET_KEY_BASE="$(openssl rand -base64 48)"
+```
+
 ## Serving an S3 bucket
 
 Set `storage.backend: s3`, `s3.bucket`, `s3.accessKeyId` and `s3.secretAccessKey`. For anything
@@ -75,14 +123,47 @@ finds its files, and the chart refuses to drop it.
 Each pod caches fetched files up to 100 MB in an `emptyDir` capped at `s3.downloadCacheMB` (default
 1024).
 
-Over S3, `replicas` can be more than 1. That needs `cluster.cookie`, a shared secret the pods join
+Over S3, `replicas` defaults to 2. The pods spread across nodes and zones where they can, and a
+PodDisruptionBudget keeps all but one running through a node drain. Set `replicas: 1` to run one
+pod without the cluster settings below.
+
+## Replicas
+
+More than one replica, on either storage, needs `cluster.cookie`, a shared secret the pods join
 their Erlang cluster with, and a fixed `auth.secretKeyBase`, so a page served by one pod can
-reconnect to any other. The pods find each other through the headless `<release>-nodes` Service,
-which carries no HTTP. The HTTP Service is unchanged.
+reconnect to any other. With `existingSecret`, both come from that Secret instead. The pods find
+each other through the headless `<release>-nodes` Service on port 4370, which carries no HTTP. The
+HTTP Service is unchanged.
+
+Above 1 replica the chart adds a NetworkPolicy: the HTTP port is open to all, and the cluster port
+4370 only to the release's own pods. It takes effect only on a CNI that enforces NetworkPolicy.
+Traffic between the pods is not encrypted, so keep the cluster network private. Set
+`networkPolicy.enabled: false` to write your own.
+
+A single replica never joins a cluster. So during its rollout, for about 20 s, a change made
+through the old pod may show late on the new one. Two replicas avoid that.
+
+## Upgrading from chart 2 to chart 3
+
+Chart 3 needs a SlimServe image that serves `/.app/healthz`, the one it defaults to. If you set
+`image.main.tag`, raise it to that release or later.
+
+1. On S3, `replicas` now defaults to 2. Set `cluster.cookie` and `auth.secretKeyBase`, or
+   `replicas: 1`.
+2. Upgrade with `--reset-then-reuse-values` or `--reset-values -f values.yaml`. Never use
+   `--reuse-values`: it drops the defaults of the new keys.
+3. An S3 release that already ran several replicas does not cluster across its old and new pods
+   during this one rollout, because the cluster port changes to 4370. On a CNI that enforces
+   NetworkPolicy, the new policy also cuts the old pods' own cluster until they are gone. So a
+   change made through an old pod may show late on another pod. When the upgrade finishes, run
+   `kubectl rollout restart deployment/<release>-main -n <namespace>`: the fresh pods start with
+   empty caches and cluster on 4370.
+4. To switch from S3 to local storage in the same upgrade, scale to 0 first, at any replica count,
+   as [Storage](#storage) says.
 
 ## Upgrading from the Go chart
 
-Chart 2.0.0 runs the Elixir image. You can upgrade a Go release in place and keep its data.
+Chart 2 and later run the Elixir image. You can upgrade a Go release in place and keep its data.
 
 1. Back up the claim. Read the old values with `helm get values <release> -n <namespace> -a`. Keep
    the release name, the Helm namespace and `resources.requests.main.storage` unchanged, and keep
@@ -95,6 +176,8 @@ Chart 2.0.0 runs the Elixir image. You can upgrade a Go release in place and kee
    `auth.writePassword` to a password different from the viewer one. With a viewer login, both use
    the same username. If only the Go dashboard was protected, set the write password alone. Supply
    every credential again, even ones the Go chart kept in an external Secret: none carries over.
+   To keep them out of your values, put them in a Secret of your own under the key names in
+   [Login and secrets](#login-and-secrets) and set `existingSecret` to its name.
 4. `main.options`, `main.environments` and `main.ports` do not apply. Map
    `SLIMSERVE_MAX_UPLOAD_SIZE_MB` to `upload.maxMB` and `SLIMSERVE_PORT` to `port` if you changed
    them. The served folder is always `/data`.
