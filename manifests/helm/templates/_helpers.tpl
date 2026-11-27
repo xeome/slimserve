@@ -43,6 +43,12 @@
 {{- end -}}
 {{- end -}}
 
+{{- define "slimserve.persistence" -}}
+{{- if kindIs "invalid" .Values.persistence.enabled -}}
+{{- if ne (toString .Values.storage.backend) "s3" }}true{{ end -}}
+{{- else if eq (toString .Values.persistence.enabled) "true" }}true{{ end -}}
+{{- end -}}
+
 {{- define "slimserve.labels" -}}
 app.kubernetes.io/name: {{ .Chart.Name }}
 app.kubernetes.io/instance: {{ .Release.Name }}

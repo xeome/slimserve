@@ -13,7 +13,7 @@
 {{- if not (has (toString .Values.storage.backend) (list "local" "s3")) -}}
   {{- fail "storage.backend must be local or s3" -}}
 {{- end -}}
-{{- if and $cluster (not $s3) (ne (toString .Values.persistence.enabled) "true") -}}
+{{- if and $cluster (not $s3) (not (include "slimserve.persistence" .)) -}}
   {{- fail "replicas above 1 on local storage need persistence.enabled, so they share one volume" -}}
 {{- end -}}
 {{- if and $cluster (not $existing) (not (and .Values.cluster.cookie $auth.secretKeyBase)) -}}
@@ -47,8 +47,8 @@
 {{- range $key, $value := (get $legacy "options" | default dict) -}}
   {{- $legacyEnv = append $legacyEnv (dict "name" (upper $key) "value" $value) -}}
 {{- end -}}
-{{- if and .Release.IsUpgrade (ne (toString .Values.persistence.enabled) "true") (lookup "v1" "PersistentVolumeClaim" $namespace (include "slimserve.claim" .)) -}}
-  {{- fail "cannot disable persistence on an upgrade with an existing data claim" -}}
+{{- if and .Release.IsUpgrade (not (include "slimserve.persistence" .)) (lookup "v1" "PersistentVolumeClaim" $namespace (include "slimserve.claim" .)) -}}
+  {{- fail "cannot disable persistence on an upgrade with an existing data claim; set persistence.enabled=true to keep it, or delete an unused claim first" -}}
 {{- end -}}
 {{- if .Release.IsUpgrade -}}
   {{- with lookup "apps/v1" "Deployment" $namespace $name -}}
@@ -271,7 +271,7 @@ spec:
             {{- else }}
             - name: {{ printf "%s-data" .Release.Name | quote }}
               mountPath: /data
-              {{- if eq (toString .Values.persistence.enabled) "true" }}
+              {{- if include "slimserve.persistence" . }}
               subPath: subpath
               {{- end }}
             {{- end }}
@@ -280,14 +280,14 @@ spec:
         - name: tmp
           emptyDir: {}
         {{- if $s3 }}
-        # The claim, if any, stays in place but unmounted, so switching back finds the files.
+        # With persistence.enabled=true, the claim stays in place but unmounted, so switching back finds the files.
         # The kubelet counts blocks, not bytes: headroom over the cache's byte cap keeps a full cache from evicting the pod.
         - name: download-cache
           emptyDir:
             sizeLimit: {{ printf "%dMi" (add (div (mul (int .Values.s3.downloadCacheMB) 11) 10) 16) | quote }}
         {{- else }}
         - name: {{ printf "%s-data" .Release.Name | quote }}
-          {{- if eq (toString .Values.persistence.enabled) "true" }}
+          {{- if include "slimserve.persistence" . }}
           persistentVolumeClaim:
             claimName: {{ include "slimserve.claim" . | quote }}
           {{- else }}

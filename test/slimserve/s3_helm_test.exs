@@ -16,6 +16,7 @@ defmodule SlimServe.S3HelmTest do
   @headless "# Source: slimserve-helm/templates/headless.yml"
   @service "# Source: slimserve-helm/templates/service.yml"
   @secret "# Source: slimserve-helm/templates/secret.yml"
+  @pvc "# Source: slimserve-helm/templates/pvc.yml"
   @pdb "# Source: slimserve-helm/templates/pdb.yml"
   @network_policy "# Source: slimserve-helm/templates/networkpolicy.yml"
   @service_account "# Source: slimserve-helm/templates/serviceaccount.yml"
@@ -96,17 +97,26 @@ defmodule SlimServe.S3HelmTest do
     end)
   end
 
-  test "S3 leaves the data claim exactly as local mode renders it, and does not mount /data", %{tmp_dir: tmp_dir} do
+  test "S3 with default values renders no data claim and does not mount /data", %{tmp_dir: tmp_dir} do
     local = render!(tmp_dir, ["--is-upgrade"])
     s3 = render!(tmp_dir, ["--is-upgrade", "--set", "replicas=1" | @s3])
-    pvc = "# Source: slimserve-helm/templates/pvc.yml"
 
-    assert local[pvc] =~ "kind: PersistentVolumeClaim"
-    assert s3[pvc] == local[pvc]
+    assert local[@pvc] =~ "kind: PersistentVolumeClaim"
+    assert local[@deployment] =~ "mountPath: /data\n              subPath: subpath\n"
+    assert local[@deployment] =~ ~s(claimName: "files-data-pvc")
+    refute Map.has_key?(s3, @pvc)
 
-    assert local[@deployment] =~ "mountPath: /data"
     refute s3[@deployment] =~ "/data"
     assert s3[@deployment] =~ "mountPath: /cache"
+  end
+
+  test "S3 with persistence.enabled=true renders the data claim exactly as local mode does", %{tmp_dir: tmp_dir} do
+    local = render!(tmp_dir, ["--is-upgrade"])
+    s3 = render!(tmp_dir, ["--is-upgrade", "--set", "replicas=1,persistence.enabled=true" | @s3])
+
+    assert local[@pvc] =~ "kind: PersistentVolumeClaim"
+    assert s3[@pvc] == local[@pvc]
+    refute s3[@deployment] =~ "/data"
   end
 
   test "Scenario: Replicas cluster on either storage, with a shared cookie and signing key, beside the HTTP Service", %{
@@ -383,7 +393,11 @@ defmodule SlimServe.S3HelmTest do
   end
 
   test "labels every resource the standard way and keeps the Deployment selector", %{tmp_dir: tmp_dir} do
-    docs = render!(tmp_dir, @s3 ++ @cluster ++ ["--set-string", "auth.username=alice,auth.password=pw"])
+    docs =
+      render!(
+        tmp_dir,
+        @s3 ++ @cluster ++ ["--set-string", "auth.username=alice,auth.password=pw", "--set", "persistence.enabled=true"]
+      )
 
     labels =
       ~r/  namespace: "files"\n  labels:\n    app\.kubernetes\.io\/name: slimserve-helm\n    app\.kubernetes\.io\/instance: files\n    app\.kubernetes\.io\/version: "\d+\.\d+\.\d+"\n    app\.kubernetes\.io\/component: server\n    app\.kubernetes\.io\/managed-by: Helm\n    helm\.sh\/chart: slimserve-helm-\d+\.\d+\.\d+\n/
@@ -505,6 +519,37 @@ defmodule SlimServe.S3HelmTest do
 
       Agent.update(claim?, fn _ -> false end)
       assert {_out, 0} = helm(tmp_dir, drop)
+    end
+
+    test "refuses an S3 upgrade with default persistence over an existing data claim, and names the setting", %{
+      tmp_dir: tmp_dir,
+      claim?: claim?,
+      preview: preview
+    } do
+      args = preview ++ @s3 ++ ["--set", "replicas=1"]
+
+      assert {out, 1} = helm(tmp_dir, args)
+      assert out =~ "persistence.enabled=true"
+      assert_received {:get, "/api/v1/namespaces/files/persistentvolumeclaims/files-data-pvc"}
+
+      Agent.update(claim?, fn _ -> false end)
+      assert {_out, 0} = helm(tmp_dir, args)
+    end
+
+    test "keeps the data claim on a local upgrade with default values over an existing claim", %{
+      tmp_dir: tmp_dir,
+      preview: preview
+    } do
+      assert {out, 0} = helm(tmp_dir, preview)
+      assert out =~ "kind: PersistentVolumeClaim"
+    end
+
+    test "keeps the data claim on an S3 upgrade with persistence.enabled=true over an existing claim", %{
+      tmp_dir: tmp_dir,
+      preview: preview
+    } do
+      assert {out, 0} = helm(tmp_dir, preview ++ @s3 ++ ["--set", "persistence.enabled=true,replicas=1"])
+      assert out =~ "kind: PersistentVolumeClaim"
     end
   end
 
