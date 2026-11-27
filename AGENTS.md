@@ -7,11 +7,12 @@ SlimServe on Phoenix 1.8: a server-rendered web app, no database.
 - `inotifywait` from inotify-tools, installed on the host: `SlimServe.Watcher` runs it, and the app
   does not boot without it.
 - Gates, in two Mix aliases. `mix precommit` runs in seconds: compile with warnings as errors,
-  `deps.unlock --check-unused`, Styler (through `mix format`), Credo and the tests. `mix ci` runs
-  those plus `hex.audit`, Sobelow at medium confidence, mix_audit, Dialyzer, the coverage floor
-  and the strict OpenSpec validate of `openspec/specs/`, on bun. CI runs `mix ci`.
+  a check that every test `Scenario:` title names a spec scenario, `deps.unlock --check-unused`,
+  Styler (through `mix format`), Credo and the tests. `mix ci` runs those plus `hex.audit`,
+  Sobelow at medium confidence, mix_audit, Dialyzer, the coverage floor and the strict OpenSpec
+  validate of `openspec/specs/`, on bun. CI runs `mix ci`.
 - Specs in `openspec/specs/` are the behaviour list. A behaviour change edits its spec in the same
-  commit, and a test that covers a scenario carries `Scenario: <exact title>`.
+  commit, and a test that covers a scenario has a name that is `Scenario: <exact title>`.
 
 ## Project rules
 
