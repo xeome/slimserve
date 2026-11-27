@@ -159,7 +159,7 @@ pins them there.
 ## Development
 
 ```sh
-mise install                   # Erlang, Elixir, bun and actionlint, pinned in .tool-versions
+mise install                   # Erlang, Elixir, bun, actionlint and Helm, pinned in .tool-versions
 sudo pacman -S inotify-tools   # or apt-get; the app does not start without inotifywait
 mix setup                      # deps, the Tailwind and esbuild binaries, a first asset build
 SLIMSERVE_ROOT=~/Pictures mix phx.server   # http://localhost:4000

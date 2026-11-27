@@ -76,7 +76,7 @@ defmodule SlimServe.S3HelmTest do
 
   defp render!(tmp_dir, args) do
     assert {out, 0} = helm(tmp_dir, args)
-    out |> String.split(~r/^---\n/m, trim: true) |> Map.new(&{&1 |> String.split("\n", parts: 2) |> hd(), &1})
+    out |> String.split(~r/^\n?---\n/m, trim: true) |> Map.new(&{&1 |> String.split("\n", parts: 2) |> hd(), &1})
   end
 
   defp refused(tmp_dir, args) do
@@ -574,6 +574,10 @@ defmodule SlimServe.S3HelmTest do
     case path do
       "/version" ->
         json(conn, 200, %{major: "1", minor: "33", gitVersion: "v1.33.0"})
+
+      # Helm 4 reads this as protobuf: an empty body is an empty schema, so the server dry-run skips validation.
+      "/openapi/v2" ->
+        send_resp(conn, 200, "")
 
       "/api" ->
         json(conn, 200, %{kind: "APIVersions", versions: ["v1"], serverAddressByClientCIDRs: []})

@@ -13,12 +13,12 @@ jobs:
     env:
       MIX_ENV: test
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: erlef/setup-beam@v1
         with:
           version-file: .tool-versions
           version-type: strict
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: |
             deps
@@ -34,16 +34,16 @@ jobs:
         with:
           bun-version-file: .tool-versions
       - run: mix ci
-      - uses: azure/setup-helm@v4
+      - uses: azure/setup-helm@v5
         with:
-          version: v3.19.0
+          version-file: .tool-versions
       - run: mix test --only helm
 
   kind:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4
       - uses: docker/build-push-action@v7
         with:
@@ -52,16 +52,17 @@ jobs:
           tags: slimserve:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - uses: azure/setup-helm@v4
+      - uses: azure/setup-helm@v5
         with:
-          version: v3.19.0
-      # Pinned: the floating tags install kind v0.31.0, kubectl v1.35.0 and ct 3.14.0.
+          version-file: .tool-versions
+      # Pinned, not left to the action's defaults, which install kind v0.33.0 but an older kubectl v1.37.1.
+      # kind-action @v1 is v1.14.0, so it takes the exact v1.15.2 tag.
       # chart-testing-action @v2 (v2.8.0) cannot install ct 3.15.0, which publishes only a Sigstore bundle.
-      - uses: helm/kind-action@v1
+      - uses: helm/kind-action@v1.15.2
         with:
           install_only: true
           version: v0.33.0
-          kubectl_version: v1.37.1
+          kubectl_version: v1.37.3
       - uses: helm/chart-testing-action@v2.9.0
         with:
           version: 3.15.0
@@ -77,7 +78,7 @@ jobs:
   actionlint:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Run actionlint
         run: |
           bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash) 1.7.12
