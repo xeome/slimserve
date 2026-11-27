@@ -160,6 +160,11 @@ Chart 3 needs a SlimServe image that serves `/.app/healthz`, the one it defaults
    empty caches and cluster on 4370.
 4. To switch from S3 to local storage in the same upgrade, scale to 0 first, at any replica count,
    as [Storage](#storage) says.
+5. A container now runs no Erlang distribution unless `RELEASE_DISTRIBUTION` is `name` or
+   `sname`, and with distribution on it refuses to start without `RELEASE_COOKIE`. So a remote
+   shell on a single container needs both set. A chart release with 1 replica does not set
+   `RELEASE_DISTRIBUTION`, so `bin/slimserve remote`, `rpc`, `stop` and `pid` cannot reach its pod.
+   Above 1 replica the chart sets both.
 
 ## Upgrading from the Go chart
 
