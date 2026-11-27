@@ -1,0 +1,6 @@
+chart-dirs:
+  - manifests
+validate-maintainers: false
+# CI runs on every push, and scripts/bump-chart.sh steps the version at release.
+check-version-increment: false
+helm-extra-args: --timeout 2m

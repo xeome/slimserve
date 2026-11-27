@@ -77,6 +77,8 @@ a pod waits 5 s for the Service to drop it, accepts new requests for 5 s more, t
 requests finish. The grace period is 30 s, so a download still running after about 20 s is cut, and
 a browser upload still in flight is cut too, and the user sends it again.
 
+`helm test <release>` checks `/.app/healthz` through the Service.
+
 ## Login and secrets
 
 Set `auth.username`, `auth.password` and a fixed `auth.secretKeyBase` (`openssl rand -base64 48`)
