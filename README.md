@@ -144,8 +144,13 @@ pins them there.
     find each other by IP, so every replica needs the same name before the `@`.
   - `DNS_CLUSTER_QUERY` to a DNS name whose A records are the replicas' IPs, such as a headless
     Service.
-  - `RELEASE_COOKIE` to a secret that every replica shares. The image has a built-in cookie, but
-    anyone who pulls the image can read it.
+  - `RELEASE_COOKIE` to a secret that every replica shares. Without it the release refuses to
+    start, because anyone who pulls the image can read its built-in cookie.
+- Unless `RELEASE_DISTRIBUTION` is `name` or `sname`, the release runs no Erlang distribution and
+  takes no cluster connection. An empty value also means none. So `bin/slimserve remote`, `rpc`,
+  `stop` and `pid` cannot reach it, because each one connects to the node. For a live shell on one
+  container, start it with `-e RELEASE_DISTRIBUTION=sname -e RELEASE_COOKIE=<a secret>`, then run
+  `docker exec -it <name> bin/slimserve remote`.
 - On SIGTERM, `/.app/readyz` answers 503 for 5 seconds while the replica still takes requests.
   Then it stops accepting and lets every open download run to its end. An upload still in progress
   is cut, and the user sends it again. So give the pod a grace period that fits your longest

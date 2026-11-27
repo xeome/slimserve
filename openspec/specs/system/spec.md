@@ -95,8 +95,9 @@ empty that node's S3 cache, so its next request reads the bucket.
 ### Requirement: Fixed cluster ports
 
 A release SHALL run with no epmd and take cluster connections on port 4370 only, so a network
-policy can name the one port. `bin/slimserve remote` and `bin/slimserve rpc` SHALL reach a running
-node without taking that port.
+policy can name the one port. On a node started with distribution on (`RELEASE_DISTRIBUTION` set
+to `name` or `sname`) and its own `RELEASE_COOKIE`, `bin/slimserve remote` and `bin/slimserve rpc`
+SHALL reach it without taking that port.
 
 #### Scenario: Two replicas cluster through port 4370 with nothing on 4369
 
@@ -104,3 +105,23 @@ node without taking that port.
   cookie, and one connects to the other through `bin/slimserve rpc`
 - **THEN** each lists the other
 - **AND** each listens on 4370 and nothing listens on 4369
+
+### Requirement: Distribution off by default
+
+A container started from the image SHALL take no cluster connection unless the operator sets
+`RELEASE_DISTRIBUTION` to `name` or `sname`.
+
+#### Scenario: A container started with no distribution setting takes no cluster connection
+
+- **WHEN** a container starts from the image with no env
+- **THEN** nothing listens on 4370 or 4369
+- **AND** `/.app/healthz` answers 200
+
+### Requirement: Distribution needs a cookie
+
+A node started with distribution on and no `RELEASE_COOKIE` SHALL refuse to start.
+
+#### Scenario: A node started with distribution but no cookie refuses to start
+
+- **WHEN** a container starts with `RELEASE_DISTRIBUTION=sname` and no `RELEASE_COOKIE`
+- **THEN** it exits non-zero before it listens on 4370
