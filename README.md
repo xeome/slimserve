@@ -139,8 +139,9 @@ Two gates:
   coverage floor, and the OpenSpec validate, which runs on bun. The first Dialyzer run builds its
   PLTs in `priv/plts` and takes a few minutes.
 
-CI also runs the S3 suite against a throwaway MinIO (`scripts/test-s3.sh`, needs Docker) and the
-chart suite (`mix test --only helm`, needs `helm`).
+CI also runs the chart suite (`mix test --only helm`, needs `helm`). The S3 suite runs only
+locally, against a throwaway MinIO: `scripts/test-s3.sh mix test --only s3`. It needs Docker and a
+cached or pullable MinIO image. CI cannot pull that image, so it skips the S3 suite.
 
 What the app does, behaviour by behaviour, is in `openspec/specs/`. How a request flows is in
 `docs/architecture.md`, and the project rules are in `AGENTS.md`.

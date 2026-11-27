@@ -34,7 +34,6 @@ jobs:
         with:
           bun-version-file: .tool-versions
       - run: mix ci
-      - run: scripts/test-s3.sh mix test --only s3
       - uses: azure/setup-helm@v4
         with:
           version: v3.19.0
