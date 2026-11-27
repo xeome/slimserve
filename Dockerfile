@@ -1,8 +1,8 @@
 # Builder and runner tags: https://bob.hex.pm/docker?repo=hexpm/elixir&os=debian
 # Keep the versions in step with .tool-versions.
 ARG ELIXIR_VERSION=1.20.5
-ARG OTP_VERSION=29.1.2
-ARG DEBIAN_VERSION=trixie-20261104-slim
+ARG OTP_VERSION=29.1.3
+ARG DEBIAN_VERSION=trixie-20261123-slim
 
 ARG BUILDER_IMAGE="docker.io/hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-debian-${DEBIAN_VERSION}"
 ARG RUNNER_IMAGE="docker.io/debian:${DEBIAN_VERSION}"

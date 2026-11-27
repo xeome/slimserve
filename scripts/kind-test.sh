@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Needs docker, kind, kubectl, helm 3.19.0 and kubeconform on PATH. Without ct on PATH, ct runs
-# from its image, which bundles yamllint, yamale and ct's lint config. Run from the repository root.
+# Needs docker, kind, kubectl, helm and kubeconform on PATH. Without ct on PATH, ct runs from its
+# image, which bundles yamllint, yamale and ct's lint config. Run from the repository root as
+# `mise exec kind@0.33.0 kubeconform@0.8.0 -- bash scripts/kind-test.sh`, which also puts the
+# static helm from .tool-versions on PATH.
 # SKIP_BUILD=1 uses the slimserve:ci image already loaded, as CI does; otherwise it builds one.
 set -euo pipefail
 
@@ -53,9 +55,10 @@ ct() {
   if type -P ct >/dev/null; then
     command ct "$@"
   else
-    # shortcut: here ct runs on the image's helm 3.16.4 and kubectl 1.32, in CI on 3.19.0; mount a static helm if they diverge.
+    # The image's helm is 3.16.4, so ct runs on the host's helm, which must be a static binary for the Alpine image.
+    # shortcut: ct runs on the image's kubectl 1.32; mount the host's if a node version stops accepting it.
     docker run --rm --network host --user "$(id -u):$(id -g)" -e HOME=/tmp -e KUBECONFIG=/kubeconfig \
-      -v "$KUBECONFIG:/kubeconfig:ro" -v "$PWD:/work:ro" -w /work "$ct_image" ct "$@"
+      -v "$KUBECONFIG:/kubeconfig:ro" -v "$(type -P helm):/usr/local/bin/helm:ro" -v "$PWD:/work:ro" -w /work "$ct_image" ct "$@"
   fi
 }
 

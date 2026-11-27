@@ -40,7 +40,7 @@ config :slimserve,
   generators: [timestamp_type: :utc_datetime]
 
 config :tailwind,
-  version: "4.3.3",
+  version: "4.3.5",
   slimserve: [
     args: ~w(
       --input=assets/css/app.css
