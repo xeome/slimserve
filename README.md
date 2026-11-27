@@ -68,6 +68,7 @@ Everything is set through environment variables.
 | `SLIMSERVE_THUMB_MAX_FILE_SIZE_MB` | `10` | Images larger than this get no thumbnail. |
 | `SLIMSERVE_THUMB_CACHE_MB`, `SLIMSERVE_CACHE_DIR` | `100`, the temp dir | The thumbnail cache on disk. |
 | `SLIMSERVE_STORAGE` | `local` | `s3` serves a bucket instead of `SLIMSERVE_ROOT`. See below. |
+| `SLIMSERVE_TRUSTED_PROXIES` | unset | Comma-separated addresses and CIDRs of proxies whose `X-Forwarded-For` names the client. See below. |
 
 ### Login
 
@@ -121,6 +122,32 @@ node. A change made in the bucket directly can take up to 10 minutes to show.
 If the store lets a write overwrite an existing key, uploads and new folders are off, with a warning
 at start. A move or delete that fails part-way says so and leaves what it already did. The full
 rules are in [openspec/specs/s3-storage/spec.md](openspec/specs/s3-storage/spec.md).
+
+### Running several replicas
+
+Several replicas can serve one S3 bucket behind a proxy or an Ingress.
+
+- Probe `GET /.app/healthz` for liveness and `GET /.app/readyz` for readiness. Both answer without
+  login, and over plain HTTP with `SLIMSERVE_HTTPS=true`. Neither reaches the bucket.
+- Set `SLIMSERVE_TRUSTED_PROXIES` to the proxies' own addresses or the proxy pods' CIDR, such as
+  `10.42.7.0/28` or `10.0.0.5, 10.0.0.6`. Without it the login rate limit sees every client as the
+  proxy. With it, the client is the right-most `X-Forwarded-For` address that is not a trusted
+  proxy, so a client cannot forge its own. Never list a range that also holds clients: a client
+  inside it counts as a proxy, so it can forge its address and dodge the limit. The limit spans
+  every replica, a moment late.
+- The replicas cluster on port 4370, with no epmd. Open 4370 between the pods only, never on the
+  public Service. To cluster, set on every replica:
+  - `RELEASE_DISTRIBUTION=name`.
+  - `RELEASE_NODE=<one name>@<the replica's own IP>`, such as `slimserve@$(POD_IP)`. The replicas
+    find each other by IP, so every replica needs the same name before the `@`.
+  - `DNS_CLUSTER_QUERY` to a DNS name whose A records are the replicas' IPs, such as a headless
+    Service.
+  - `RELEASE_COOKIE` to a secret that every replica shares. The image has a built-in cookie, but
+    anyone who pulls the image can read it.
+- On SIGTERM, `/.app/readyz` answers 503 for 5 seconds while the replica still takes requests.
+  Then it stops accepting and lets every open download run to its end. An upload still in progress
+  is cut, and the user sends it again. So give the pod a grace period that fits your longest
+  download.
 
 ## Development
 

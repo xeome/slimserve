@@ -1,0 +1,2 @@
+## No epmd: every node listens for the cluster on 4370, so a NetworkPolicy can name the port.
+-start_epmd false -erl_epmd_port 4370

@@ -27,7 +27,9 @@ defmodule SlimServe.Application do
          max_bytes: Application.fetch_env!(:slimserve, :download_cache_bytes)},
       s3? && Application.get_env(:slimserve, :write_password) != nil && SlimServe.Storage.S3.Capabilities,
       not s3? && root && {SlimServe.Watcher, root: root},
-      SlimServeWeb.Endpoint
+      SlimServeWeb.Endpoint,
+      # After the Endpoint, so it stops first and holds the listener open while /.app/readyz says 503.
+      SlimServe.Readiness
     ]
 
     opts = [strategy: :one_for_one, name: SlimServe.Supervisor]

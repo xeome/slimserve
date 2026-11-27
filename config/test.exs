@@ -15,6 +15,9 @@ config :slimserve, SlimServeWeb.Endpoint,
   secret_key_base: "hfGnos88mk6PwrAwSuQjWhzaRVRYO/HGS91BUY9Ez87VjFS9rVbrA1QJBmc8d0gr",
   server: false
 
+# `mix test` exits without the shutdown accept window.
+config :slimserve, shutdown_wait_ms: 0
+
 # Small thumbnail limits, so the tests need only small fixtures.
 config :slimserve,
   thumb_max_dim: 64,
