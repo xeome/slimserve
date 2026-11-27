@@ -119,6 +119,16 @@ defmodule SlimServe.S3HelmTest do
     refute s3[@deployment] =~ "/data"
   end
 
+  test "persistence set to null keeps each backend's default claim", %{tmp_dir: tmp_dir} do
+    local = render!(tmp_dir, ["--set", "persistence=null"])
+    s3 = render!(tmp_dir, ["--set", "persistence=null,replicas=1" | @s3])
+
+    assert local[@pvc] =~ "kind: PersistentVolumeClaim"
+    assert local[@deployment] =~ ~s(claimName: "files-data-pvc")
+    refute Map.has_key?(s3, @pvc)
+    refute s3[@deployment] =~ "claimName"
+  end
+
   test "Scenario: Replicas cluster on either storage, with a shared cookie and signing key, beside the HTTP Service", %{
     tmp_dir: tmp_dir
   } do
@@ -436,6 +446,21 @@ defmodule SlimServe.S3HelmTest do
       end
     end
 
+    test "refuses persistence.enabled=True as a string, and names the key", %{tmp_dir: tmp_dir} do
+      assert refused(tmp_dir, ["--set-string", "persistence.enabled=True"]) =~ "/persistence/enabled"
+    end
+
+    test "refuses persistence.enabled=false as a string, and names the key", %{tmp_dir: tmp_dir} do
+      assert refused(tmp_dir, ["--set-string", "persistence.enabled=false"]) =~ "/persistence/enabled"
+    end
+
+    test "without the schema, still refuses persistence.enabled=false as a string, and names the key", %{
+      tmp_dir: tmp_dir
+    } do
+      args = @s3 ++ ["--skip-schema-validation", "--set", "replicas=1", "--set-string", "persistence.enabled=false"]
+      assert refused(tmp_dir, args) =~ "persistence.enabled"
+    end
+
     test "passes through what Kubernetes and the Go chart define", %{tmp_dir: tmp_dir} do
       render!(tmp_dir, [
         "--set-string",
@@ -453,10 +478,9 @@ defmodule SlimServe.S3HelmTest do
       docs =
         render!(tmp_dir, [
           "--set-string",
-          "persistence.enabled=true,auth.enabled=false,port=8080,upload.maxMB=100,replicas=1"
+          "auth.enabled=false,port=8080,upload.maxMB=100,replicas=1"
         ])
 
-      assert docs["# Source: slimserve-helm/templates/pvc.yml"] =~ "kind: PersistentVolumeClaim"
       assert docs[@deployment] =~ "  replicas: 1\n"
 
       render!(tmp_dir, @s3 ++ ["--set-string", "replicas=1,s3.downloadCacheMB=512"])

@@ -24,7 +24,7 @@
     "persistence": {
       "type": "object",
       "additionalProperties": false,
-      "properties": { "enabled": { "type": ["boolean", "null", "string"] } }
+      "properties": { "enabled": { "type": ["boolean", "null"] } }
     },
     "replicas": { "type": ["integer", "null", "string"], "minimum": 0 },
     "storage": {

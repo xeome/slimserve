@@ -180,6 +180,14 @@ Chart 3 needs a SlimServe image that serves `/.app/healthz`, the one it defaults
    access, such as Argo CD with pruning on or `helm template | kubectl apply --prune`, gets no
    refusal and deletes the claim. So if the claim is Bound and holds files, set
    `persistence.enabled=true` before you sync.
+7. `persistence.enabled` now takes only a boolean or null. So a values file that quotes `"true"` or
+   `"false"` for it must drop the quotes, and `--set-string persistence.enabled=...` becomes
+   `--set persistence.enabled=...`. Otherwise the chart refuses the values. Chart 2 turned
+   persistence on only for exactly `true`. So any other stored value, such as `"True"`, `"yes"` or
+   `""`, meant off and should become `false`. `--reset-then-reuse-values` carries a stored quoted
+   value into chart 3, which refuses it. So if `helm get values <release>` shows
+   `persistence.enabled` in quotes, pass `--set persistence.enabled=true` or `=false` on the
+   upgrade command.
 
 ## Upgrading from the Go chart
 
