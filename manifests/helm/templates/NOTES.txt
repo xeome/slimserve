@@ -1,0 +1,15 @@
+SlimServe serves https://{{ .Values.host }}/ through the "{{ include "slimserve.main" . }}" Service in namespace "{{ include "slimserve.namespace" . }}", {{ include "slimserve.replicas" . }} replica(s).
+{{- $set := list -}}
+{{- range include "slimserve.credentials" . | fromYamlArray -}}
+{{- if index . 2 }}{{ $set = append $set (index . 1) }}{{ end -}}
+{{- end -}}
+{{- if and $set (not .Values.existingSecret) }}
+
+Warning: the credentials come from your values, so the Helm release records hold them.
+Set existingSecret to read them from a Secret you manage instead.
+{{- end }}
+{{- if and $set .Values.existingSecret }}
+
+Warning: existingSecret is set, so the chart ignores {{ join ", " $set }} in your values.
+Remove them, and keep those credentials in the Secret.
+{{- end }}

@@ -4,6 +4,8 @@ kind: PersistentVolumeClaim
 metadata:
   name: {{ include "slimserve.claim" . | quote }}
   namespace: {{ include "slimserve.namespace" . | quote }}
+  labels:
+    {{- include "slimserve.labels" . | nindent 4 }}
 spec:
   accessModes:
     - ReadWriteOnce

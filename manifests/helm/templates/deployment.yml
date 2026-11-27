@@ -1,18 +1,44 @@
 {{- $name := include "slimserve.main" . -}}
 {{- $namespace := include "slimserve.namespace" . -}}
 {{- $auth := .Values.auth -}}
-{{- $hasCredentials := include "slimserve.credentials" . | fromYaml -}}
+{{- $credentials := include "slimserve.credentials" . | fromYamlArray -}}
 {{- $s3 := eq (toString .Values.storage.backend) "s3" -}}
-{{- $replicas := int .Values.replicas -}}
+{{- $replicas := include "slimserve.replicas" . | int -}}
+{{- $cluster := include "slimserve.cluster" . -}}
+{{- $existing := .Values.existingSecret -}}
+{{- $hasCredentials := false -}}
+{{- range $credentials -}}
+  {{- if and (not $existing) (index . 2) }}{{ $hasCredentials = true }}{{ end -}}
+{{- end -}}
 {{- if not (has (toString .Values.storage.backend) (list "local" "s3")) -}}
   {{- fail "storage.backend must be local or s3" -}}
 {{- end -}}
-{{- if and (gt $replicas 1) (not $s3) -}}
-  {{- fail "replicas above 1 need storage.backend: s3; the /data claim is ReadWriteOnce" -}}
+{{- if and $cluster (not $s3) (ne (toString .Values.persistence.enabled) "true") -}}
+  {{- fail "replicas above 1 on local storage need persistence.enabled, so they share one volume" -}}
 {{- end -}}
-{{- if and (gt $replicas 1) (not (and .Values.cluster.cookie $auth.secretKeyBase)) -}}
-  {{- fail "replicas above 1 need cluster.cookie and auth.secretKeyBase" -}}
+{{- if and $cluster (not $existing) (not (and .Values.cluster.cookie $auth.secretKeyBase)) -}}
+  {{- fail "replicas above 1 need cluster.cookie and auth.secretKeyBase, or existingSecret; on S3 replicas default to 2" -}}
 {{- end -}}
+{{- $affinity := deepCopy (.Values.affinity | default dict) -}}
+{{- if not $s3 -}}
+  {{- if hasKey $affinity "podAffinity" -}}
+    {{- fail "on local storage the chart pins every pod to the disk's node with its own podAffinity; remove affinity.podAffinity" -}}
+  {{- end -}}
+  {{- /* Every pod, the rollout's surge pod too, runs on the node that holds the ReadWriteOnce claim. */ -}}
+  {{- $_ := set $affinity "podAffinity" (dict "requiredDuringSchedulingIgnoredDuringExecution" (list (dict "labelSelector" (dict "matchLabels" (dict "app" $name)) "topologyKey" "kubernetes.io/hostname"))) -}}
+{{- else -}}
+  {{- /* The zone as a preference, not a spread constraint: spread scoring skips every node that lacks a constraint's key. */ -}}
+  {{- $anti := get $affinity "podAntiAffinity" | default dict -}}
+  {{- $zone := dict "weight" 100 "podAffinityTerm" (dict "labelSelector" (dict "matchLabels" (dict "app" $name)) "topologyKey" "topology.kubernetes.io/zone") -}}
+  {{- $_ := set $anti "preferredDuringSchedulingIgnoredDuringExecution" (append (get $anti "preferredDuringSchedulingIgnoredDuringExecution" | default list) $zone) -}}
+  {{- $_ := set $affinity "podAntiAffinity" $anti -}}
+{{- end -}}
+{{- $writable := ternary (list "/tmp/" "/cache/") (list "/tmp/") $s3 -}}
+{{- $cacheDir := printf "%s/" (clean (toString .Values.thumbnail.cacheDir)) -}}
+{{- if not (or (hasPrefix "/tmp/" $cacheDir) (and $s3 (hasPrefix "/cache/" $cacheDir))) -}}
+  {{- fail (printf "thumbnail.cacheDir must be under %s, the pod's writable roots; the root filesystem is read-only" (join " or " $writable)) -}}
+{{- end -}}
+{{- $viewerLogin := false -}}
 {{- $legacy := .Values.main | default dict -}}
 {{- $viewer := dig "auth" "enabled" false $legacy -}}
 {{- $writer := dig "dashboard" "enabled" false $legacy -}}
@@ -37,14 +63,16 @@
     {{- $_ := set $legacyFlags .name true -}}
   {{- end -}}
 {{- end -}}
-{{- if and (or (eq (toString $viewer) "true") $legacyFlags.SLIMSERVE_ENABLE_AUTH) (not (and $auth.username $auth.password $auth.secretKeyBase)) -}}
+{{- $writeLogin := or (eq (toString $writer) "true") $legacyFlags.SLIMSERVE_ENABLE_ADMIN -}}
+{{- if and (or (eq (toString $viewer) "true") $legacyFlags.SLIMSERVE_ENABLE_AUTH) (not (and $auth.username (or $existing (and $auth.password $auth.secretKeyBase)))) -}}
   {{- fail "legacy Go viewer login requires auth.username, auth.password and auth.secretKeyBase" -}}
 {{- end -}}
-{{- if and (or (eq (toString $writer) "true") $legacyFlags.SLIMSERVE_ENABLE_ADMIN) (not $auth.writePassword) -}}
+{{- if and $writeLogin (not (or $existing $auth.writePassword)) -}}
   {{- fail "legacy Go dashboard requires auth.writePassword" -}}
 {{- end -}}
-{{- if or (eq (toString $auth.enabled) "true") $auth.username $auth.password -}}
-  {{- if not (and $auth.username $auth.password $auth.secretKeyBase) -}}
+{{- if or (eq (toString $auth.enabled) "true") (eq (toString $viewer) "true") $legacyFlags.SLIMSERVE_ENABLE_AUTH $auth.username $auth.password -}}
+  {{- $viewerLogin = true -}}
+  {{- if not (and $auth.username (or $existing (and $auth.password $auth.secretKeyBase))) -}}
     {{- fail "viewer login requires auth.username, auth.password and auth.secretKeyBase" -}}
   {{- end -}}
 {{- end -}}
@@ -56,10 +84,16 @@ kind: Deployment
 metadata:
   name: {{ $name | quote }}
   namespace: {{ $namespace | quote }}
+  labels:
+    {{- include "slimserve.labels" . | nindent 4 }}
 spec:
   replicas: {{ $replicas }}
+  minReadySeconds: 10
   strategy:
-    type: Recreate
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       app: {{ $name | quote }}
@@ -67,20 +101,39 @@ spec:
     metadata:
       labels:
         app: {{ $name | quote }}
+        {{- include "slimserve.labels" . | nindent 8 }}
       {{- if $hasCredentials }}
       annotations:
         slimserve/credentials-revision: {{ .Release.Revision | quote }}
       {{- end }}
     spec:
+      serviceAccountName: {{ $name | quote }}
+      # 5 s preStop, the app's 5 s accept window, then 20 s for open downloads.
+      terminationGracePeriodSeconds: 30
+      # Numeric: the image's USER is a name, which the kubelet cannot check as non-root.
       securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
         fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.affinity }}
+      {{- with $affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if $s3 }}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: {{ $name | quote }}
       {{- end }}
       {{- with .Values.tolerations }}
       tolerations:
@@ -93,6 +146,10 @@ spec:
           ports:
             - name: http
               containerPort: {{ int .Values.port }}
+            {{- if $cluster }}
+            - name: dist
+              containerPort: 4370
+            {{- end }}
           env:
             - name: PHX_HOST
               value: {{ required "host is required; set it to the public hostname" .Values.host | quote }}
@@ -115,13 +172,15 @@ spec:
               value: {{ .Values.s3.downloadCacheMB | quote }}
             - name: SLIMSERVE_DOWNLOAD_CACHE_DIR
               value: /cache
+            {{- if not $existing }}
             {{- $_ := required "s3.accessKeyId is required with storage.backend: s3" .Values.s3.accessKeyId }}
             {{- $_ := required "s3.secretAccessKey is required with storage.backend: s3" .Values.s3.secretAccessKey }}
+            {{- end }}
             {{- else }}
             - name: SLIMSERVE_ROOT
               value: /data
             {{- end }}
-            {{- if gt $replicas 1 }}
+            {{- if $cluster }}
             # Each pod is slimserve@<its IP>; DNSCluster finds the others through the headless Service.
             - name: POD_IP
               valueFrom:
@@ -150,22 +209,53 @@ spec:
             - name: SLIMSERVE_USERNAME
               value: {{ . | quote }}
             {{- end }}
+            {{- with .Values.trustedProxies }}
+            - name: SLIMSERVE_TRUSTED_PROXIES
+              value: {{ join "," . | quote }}
+            {{- end }}
+            - name: ERL_CRASH_DUMP
+              value: /tmp/erl_crash.dump
+            {{- if $existing }}
+            {{- $required := dict "SLIMSERVE_PASSWORD" $viewerLogin "SLIMSERVE_WRITE_PASSWORD" $writeLogin "SECRET_KEY_BASE" (or $cluster $viewerLogin) "AWS_ACCESS_KEY_ID" $s3 "AWS_SECRET_ACCESS_KEY" $s3 "RELEASE_COOKIE" $cluster }}
+            {{- /* One entry per key, not envFrom, so a key the shape needs stops the pod when the Secret lacks it. */}}
+            {{- range $credentials }}
+            {{- $key := index . 0 }}
+            - name: {{ $key }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $existing | quote }}
+                  key: {{ $key }}
+                  optional: {{ not (get $required $key) }}
+            {{- end }}
+            {{- end }}
           {{- if $hasCredentials }}
           envFrom:
             - secretRef:
                 name: {{ include "slimserve.secret" . | quote }}
           {{- end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: 5
+          startupProbe:
+            httpGet:
+              path: /.app/healthz
+              port: http
+            periodSeconds: 2
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /.app/healthz
+              port: http
           readinessProbe:
             httpGet:
-              path: /
-              port: http
-              httpHeaders:
-                - name: Host
-                  value: localhost
-                - name: Accept
-                  value: text/html
-          livenessProbe:
-            tcpSocket:
+              path: /.app/readyz
               port: http
           {{- with .Values.resources.limits.main }}
           resources:
@@ -173,6 +263,8 @@ spec:
               {{- toYaml . | nindent 14 }}
           {{- end }}
           volumeMounts:
+            - name: tmp
+              mountPath: /tmp
             {{- if $s3 }}
             - name: download-cache
               mountPath: /cache
@@ -184,6 +276,9 @@ spec:
               {{- end }}
             {{- end }}
       volumes:
+        # Upload temp files, thumbnails and crash dumps: the root filesystem is read-only.
+        - name: tmp
+          emptyDir: {}
         {{- if $s3 }}
         # The claim, if any, stays in place but unmounted, so switching back finds the files.
         # The kubelet counts blocks, not bytes: headroom over the cache's byte cap keeps a full cache from evicting the pod.

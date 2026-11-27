@@ -1,0 +1,24 @@
+{{- if and .Values.networkPolicy.enabled (include "slimserve.cluster" .) }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "slimserve.main" . | quote }}
+  namespace: {{ include "slimserve.namespace" . | quote }}
+  labels:
+    {{- include "slimserve.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: {{ include "slimserve.main" . | quote }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        - port: http
+    - from:
+        - podSelector:
+            matchLabels:
+              app: {{ include "slimserve.main" . | quote }}
+      ports:
+        - port: dist
+{{- end }}

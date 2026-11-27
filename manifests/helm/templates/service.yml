@@ -3,6 +3,8 @@ kind: Service
 metadata:
   name: {{ include "slimserve.main" . | quote }}
   namespace: {{ include "slimserve.namespace" . | quote }}
+  labels:
+    {{- include "slimserve.labels" . | nindent 4 }}
 spec:
   type: {{ .Values.service.type | quote }}
   selector:

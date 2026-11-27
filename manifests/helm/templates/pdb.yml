@@ -1,0 +1,15 @@
+{{- /* S3 only: local-storage pods are pinned to one node, and a PDB there would hang its drain. */ -}}
+{{- if eq (toString .Values.storage.backend) "s3" }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "slimserve.main" . | quote }}
+  namespace: {{ include "slimserve.namespace" . | quote }}
+  labels:
+    {{- include "slimserve.labels" . | nindent 4 }}
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: {{ include "slimserve.main" . | quote }}
+{{- end }}
